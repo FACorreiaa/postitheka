@@ -1,0 +1,9 @@
+package: httpapi
+output: internal/httpapi/api.gen.go
+generate:
+  models: true
+  chi-server: true
+  # Handlers return typed response objects instead of writing to the
+  # ResponseWriter, so a status code missing from the spec does not compile.
+  strict-server: true
+  embedded-spec: true

@@ -1,0 +1,155 @@
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  MIGRATIONS_DIR: ./migrations
+  # Pinned and run through `go run`, so nobody needs a matching global install.
+  SQLC: go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+
+tasks:
+  # ---------------------------------------------------------------------------
+  # Development
+  # ---------------------------------------------------------------------------
+  dev:
+    desc: Run the API and publish workers (expects the stack to be up)
+    cmds:
+      - go run ./cmd/server
+
+  web:dev:
+    desc: Run the web app with hot reload on :5173 (proxies /v1 to the API on :8095)
+    dir: web
+    cmds:
+      - npm run dev
+
+  web:build:
+    desc: Build the web app into web/dist, where the server binary embeds it from
+    dir: web
+    cmds:
+      - npm ci --no-fund --no-audit
+      - npm run build
+
+  dev:up:
+    desc: Start Postgres and S3, then the API
+    cmds:
+      - task: db:up
+      - task: db:wait
+      - task: dev
+
+  user:create:
+    desc: "Create a user and print an API token. Usage: task user:create -- you@example.com"
+    cmds:
+      - go run ./cmd/server user create {{.CLI_ARGS}}
+
+  # ---------------------------------------------------------------------------
+  # Infrastructure
+  # ---------------------------------------------------------------------------
+  db:up:
+    desc: Start Postgres and S3 (RustFS)
+    cmds:
+      - docker compose up -d --remove-orphans
+      - docker compose ps
+
+  db:down:
+    desc: Stop Postgres and S3 (keeps volumes)
+    cmds:
+      - docker compose down --remove-orphans
+
+  db:reset:
+    desc: Destroy and recreate the local database and object storage
+    prompt: This deletes all local database and object storage data. Continue?
+    cmds:
+      - docker compose down -v --remove-orphans
+      - task: db:up
+      - task: db:wait
+
+  db:wait:
+    desc: Block until Postgres accepts connections
+    cmds:
+      - |
+        for i in $(seq 1 30); do
+          if docker compose exec -T postgres pg_isready -U postitheka -d postitheka >/dev/null 2>&1; then
+            echo "postgres ready"; exit 0
+          fi
+          sleep 1
+        done
+        echo "postgres did not become ready in 30s" >&2; exit 1
+
+  psql:
+    desc: Open a psql shell against the local database
+    interactive: true
+    cmds:
+      - docker compose exec postgres psql -U postitheka -d postitheka
+
+  # ---------------------------------------------------------------------------
+  # Migrations (goose; River's tables are migrated by the binary)
+  # ---------------------------------------------------------------------------
+  migrate:up:
+    desc: Apply pending migrations, including River's
+    cmds:
+      - go run ./cmd/server migrate
+
+  migrate:status:
+    desc: Show application migration status
+    cmds:
+      - go tool goose -dir {{.MIGRATIONS_DIR}} postgres "$DATABASE_URL" status
+
+  migrate:new:
+    desc: "Create a new migration. Usage: task migrate:new -- add_x_tokens"
+    cmds:
+      - go tool goose -dir {{.MIGRATIONS_DIR}} create {{.CLI_ARGS}} sql
+
+  # ---------------------------------------------------------------------------
+  # Codegen
+  # ---------------------------------------------------------------------------
+  api:gen:
+    desc: Regenerate the Go server and the web app's types from api/openapi.yaml
+    cmds:
+      - go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
+      - cd web && npm run api:gen
+
+  sqlc:
+    desc: Regenerate database access code from SQL
+    cmds:
+      - "{{.SQLC}} generate"
+
+  generate:
+    desc: Run every code generator
+    cmds:
+      - task: api:gen
+      - task: sqlc
+
+  # ---------------------------------------------------------------------------
+  # Quality
+  # ---------------------------------------------------------------------------
+  fmt:
+    desc: Format Go with gofumpt
+    cmds:
+      - go tool gofumpt -w .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  test:
+    desc: Run the test suite (database tests need `task db:up`; they skip without DATABASE_URL)
+    cmds:
+      - go test ./... -count=1
+
+  check:
+    desc: The gate — generated code is current, formatting, vet, tests, build
+    cmds:
+      - task: generate
+      - git diff --exit-code -- internal/httpapi/api.gen.go internal/db web/src/schema.d.ts
+      - 'test -z "$(go tool gofumpt -l .)" || (go tool gofumpt -l . && echo "run: task fmt" >&2 && exit 1)'
+      - task: vet
+      - cd web && npm run typecheck
+      - go test ./... -count=1
+      - go build ./...
+
+  build:
+    desc: Build the server binary with the web app inside it
+    cmds:
+      - task: web:build
+      - CGO_ENABLED=0 go build -o server ./cmd/server

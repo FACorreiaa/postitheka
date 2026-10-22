@@ -1,0 +1,37 @@
+# Builds the image on every push to main and pushes it to GHCR tagged with the
+# commit SHA. Production runs the SHA pinned in platform/infra, so this
+# deploys nothing on its own; promoting a SHA is a change in the infra repo.
+name: Image
+
+on:
+  push:
+    branches: [main]
+    # A docs-only push gets no image, so its SHA is not a rollback target.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/facorreiaa/postitheka:${{ github.sha }}
+            ghcr.io/facorreiaa/postitheka:latest

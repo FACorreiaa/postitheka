@@ -1,0 +1,35 @@
+version: "2"
+
+sql:
+  - engine: postgresql
+    queries: internal/db/queries.sql
+    schema: migrations
+    gen:
+      go:
+        package: db
+        out: internal/db
+        sql_package: pgx/v5
+
+        # A nullable column with no type override becomes *T rather than a
+        # wrapper, so a missing value reads as nil at the call site instead of
+        # needing a .Valid check nobody remembers.
+        emit_pointers_for_null_types: true
+
+        # A query returning no rows gives []T{} rather than nil, which encodes
+        # as [] rather than null in a JSON response.
+        emit_empty_slices: true
+
+        # Only the non-nullable forms are overridden. sqlc cannot combine an
+        # override with emit_pointers_for_null_types into *time.Time (Seshat's
+        # sqlc.yaml has the measurements), so a nullable timestamptz stays
+        # pgtype.Timestamptz and is converted at the edge.
+        overrides:
+          - db_type: "uuid"
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: "uuid"
+            nullable: true
+            go_type:
+              import: "github.com/google/uuid"
+              type: "NullUUID"
+          - db_type: "timestamptz"
+            go_type: "time.Time"

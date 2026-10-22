@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    container_name: postitheka-postgres
+    # Throwaway credentials, local only. They are committed on purpose (secret
+    # scanners flag them; they are not secrets), so the ports below bind to
+    # loopback: anyone on the LAN or tailnet would otherwise know the password.
+    environment:
+      POSTGRES_USER: postitheka
+      POSTGRES_PASSWORD: postitheka
+      POSTGRES_DB: postitheka
+    ports:
+      # 5452 rather than 5432 so this stack runs alongside Seshat's (5442)
+      # and North's without either one being stopped first.
+      - "127.0.0.1:5452:5432"
+    volumes:
+      - postitheka-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postitheka -d postitheka"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # Stands in for Cloudflare R2: both speak the S3 API, so the app code is the
+  # same and only the endpoint and keys differ.
+  #
+  # RustFS rather than MinIO: MinIO stopped publishing images (minio/minio is
+  # gone from Docker Hub, quay.io/minio/minio refuses anonymous pulls), so a
+  # MinIO service fails on any machine without a cached copy.
+  s3:
+    image: rustfs/rustfs:1.0.3
+    restart: unless-stopped
+    container_name: postitheka-s3
+    environment:
+      RUSTFS_ACCESS_KEY: postitheka
+      RUSTFS_SECRET_KEY: postitheka-dev
+    ports:
+      - "127.0.0.1:9020:9000"
+      - "127.0.0.1:9021:9001"
+    volumes:
+      - postitheka-s3-data:/data
+
+volumes:
+  postitheka-postgres-data:
+  postitheka-s3-data:

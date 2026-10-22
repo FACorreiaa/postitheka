@@ -32,6 +32,8 @@ served at :8095.
    are checked first (each upload is confirmed in storage with the size and type
    it was declared with); if any target would reject the post, the response is
    a 422 listing every issue, and nothing is created.
+   With an `Idempotency-Key` header, a retry returns the post the first
+   request created rather than making a second one.
 3. The post, one `post_targets` row per account, and one River job per target
    commit in a single transaction.
 4. Each job publishes to one platform and records the outcome on its target:

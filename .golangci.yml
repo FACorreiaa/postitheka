@@ -1,0 +1,25 @@
+# Keep this thin: gofumpt and go vet defaults over a large rule farm.
+version: "2"
+
+run:
+  timeout: 45m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    govet:
+      enable:
+        - shadow
+  exclusions:
+    generated: lax
+
+formatters:
+  enable:
+    - gofumpt
+  exclusions:
+    generated: lax
