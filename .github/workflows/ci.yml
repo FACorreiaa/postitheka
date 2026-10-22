@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: task check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postitheka
+          POSTGRES_PASSWORD: postitheka
+          POSTGRES_DB: postitheka
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postitheka -d postitheka"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    # testdb fails rather than skips when CI is set and no database is
+    # configured, so these tests cannot quietly stop running here.
+    env:
+      DATABASE_URL: postgres://postitheka:postitheka@localhost:5432/postitheka?sslmode=disable
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.54.0
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # task check regenerates the TypeScript types and typechecks, so the web
+      # dependencies have to be installed first.
+      - name: Install web dependencies
+        working-directory: web
+        run: npm ci --no-fund --no-audit
+
+      - name: task check
+        run: task check
+
+      # The image is what deploys; a Dockerfile that no longer builds should
+      # fail the pull request, not the merge.
+      - name: Build the image
+        run: docker build -t postitheka:ci .

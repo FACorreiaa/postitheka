@@ -1,0 +1,449 @@
+# The contract between the API, the web app and the iOS app.
+#
+# This file is the source of truth: the Go server interface is generated from
+# it (`task api:gen`), and so are the TypeScript and Swift clients. Change the
+# spec first and let the compiler point at what has to follow.
+#
+# Every operation here requires a bearer token. The generated router has no
+# per-operation security hook, so authentication wraps all of it, and the
+# unauthenticated /healthz probe is served outside the spec (cmd/server).
+openapi: 3.0.3
+info:
+  title: Postitheka API
+  version: 0.1.0
+security:
+  - bearerAuth: []
+
+paths:
+  /v1/platforms:
+    get:
+      operationId: listPlatforms
+      description: >
+        The platforms this server can publish to, with the rules a post must
+        meet for each. Clients validate against these while the user writes,
+        so the limits live in one place.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlatformInfo"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/accounts:
+    get:
+      operationId: listAccounts
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/accounts/discord:
+    post:
+      operationId: connectDiscord
+      description: >
+        Connects a Discord channel by its webhook URL. Discord needs no OAuth or
+        app review for this; the URL is checked against Discord before it is
+        stored, and stored encrypted, since anyone holding it can post.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectDiscordRequest"
+      responses:
+        "201":
+          description: Connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/accounts/{accountId}:
+    delete:
+      operationId: deleteAccount
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "204":
+          description: Disconnected
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/media:
+    post:
+      operationId: createUpload
+      description: >
+        Reserves a media id and returns a short-lived URL to PUT the file to.
+        The file goes straight to object storage, never through this API. Send
+        the same Content-Type with the PUT as declared here; the upload is
+        checked against both when the media is first attached to a post.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUploadRequest"
+      responses:
+        "201":
+          description: Upload reserved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Upload"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/posts:
+    get:
+      operationId: listPosts
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Post"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createPost
+      description: >
+        Creates a post and queues one publish job per account. Returns as soon
+        as the jobs are queued; poll the post to follow each target's status.
+        Nothing is created if any target would reject the post.
+
+        Send an Idempotency-Key to make retries safe: a repeat with the same
+        key returns the post the first request created, with its current
+        status, instead of creating and publishing a second one.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          description: >
+            A unique value per post, such as a UUID, chosen by the client.
+            Reusing a key for a different post is a 422.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostRequest"
+      responses:
+        "201":
+          description: Created and queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: >
+            At least one target would reject the post, or the Idempotency-Key
+            was already used for a different post.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValidationError"
+
+  /v1/posts/{postId}:
+    get:
+      operationId: getPost
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  parameters:
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: The request is malformed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or unknown bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: No such resource for this user.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Platform:
+      type: string
+      enum: [discord, x, instagram, facebook, tiktok]
+
+    PlatformInfo:
+      type: object
+      required: [platform, rules]
+      properties:
+        platform:
+          $ref: "#/components/schemas/Platform"
+        rules:
+          $ref: "#/components/schemas/Rules"
+
+    Rules:
+      type: object
+      required:
+        - max_text_length
+        - max_media
+        - max_media_bytes
+        - max_total_media_bytes
+        - media_types
+        - requires_text
+        - requires_media
+      properties:
+        max_text_length:
+          type: integer
+          description: In Unicode code points unless the platform says otherwise.
+        max_media:
+          type: integer
+        max_media_bytes:
+          type: integer
+          format: int64
+          description: Per file.
+        max_total_media_bytes:
+          type: integer
+          format: int64
+          description: Across all files in one post. 0 means no extra limit.
+        media_types:
+          type: array
+          items:
+            type: string
+        requires_text:
+          type: boolean
+        requires_media:
+          type: boolean
+
+    Account:
+      type: object
+      required: [id, platform, display_name, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        platform:
+          $ref: "#/components/schemas/Platform"
+        display_name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    ConnectDiscordRequest:
+      type: object
+      required: [webhook_url]
+      properties:
+        webhook_url:
+          type: string
+          example: https://discord.com/api/webhooks/123/abc
+        display_name:
+          type: string
+          description: Defaults to the webhook's own name.
+
+    CreateUploadRequest:
+      type: object
+      required: [content_type, size_bytes]
+      properties:
+        content_type:
+          type: string
+          example: image/jpeg
+        size_bytes:
+          type: integer
+          format: int64
+
+    Upload:
+      type: object
+      required: [media_id, upload_url, method, headers, expires_at]
+      properties:
+        media_id:
+          type: string
+          format: uuid
+        upload_url:
+          type: string
+        method:
+          type: string
+          enum: [PUT]
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: Send these with the upload.
+        expires_at:
+          type: string
+          format: date-time
+
+    CreatePostRequest:
+      type: object
+      required: [account_ids]
+      properties:
+        text:
+          type: string
+        media_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: In display order.
+        account_ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+        scheduled_at:
+          type: string
+          format: date-time
+          description: Omit to publish now.
+
+    Post:
+      type: object
+      required: [id, text, media_ids, scheduled_at, created_at, targets]
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+        media_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        scheduled_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        targets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Target"
+
+    Target:
+      type: object
+      required: [id, platform, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        account_id:
+          type: string
+          format: uuid
+          description: Absent once the account has been disconnected.
+        platform:
+          $ref: "#/components/schemas/Platform"
+        status:
+          type: string
+          enum: [pending, publishing, published, failed]
+        last_error:
+          type: string
+        remote_url:
+          type: string
+        published_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+
+    ValidationError:
+      type: object
+      required: [message, issues]
+      properties:
+        message:
+          type: string
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/Issue"
+
+    Issue:
+      type: object
+      required: [field, message]
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        platform:
+          $ref: "#/components/schemas/Platform"
+        field:
+          type: string
+          example: text
+        message:
+          type: string

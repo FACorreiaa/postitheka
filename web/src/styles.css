@@ -1,0 +1,702 @@
+/* Post office, not SaaS: cool paper, navy ink, cancellation blue. The one
+   loud element is the postmark on a published post; everything else stays
+   quiet so it can be. */
+
+:root {
+  --paper: #edf0f3;
+  --sheet: #ffffff;
+  --ink: #1a2838;
+  --muted: #677386;
+  --rule: #d3d9e0;
+  --postmark: #2b5ba6;
+  --cancel: #b9302c;
+  --focus: #2b5ba6;
+
+  --font: "Schibsted Grotesk Variable", system-ui, sans-serif;
+  /* A 1.25 scale off a 17px base. */
+  --s-1: 0.8rem;
+  --s0: 1rem;
+  --s1: 1.25rem;
+  --s2: 1.5625rem;
+  --s3: 1.953rem;
+
+  --gap: 1.5rem;
+  --radius: 4px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #131c27;
+    --sheet: #1b2635;
+    --ink: #e4e9ef;
+    --muted: #93a0b2;
+    --rule: #2c3a4c;
+    --postmark: #7fa6e6;
+    --cancel: #f07a72;
+    --focus: #7fa6e6;
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 106.25%; /* 17px */
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.15;
+  margin: 0;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+code {
+  font-size: 0.92em;
+  background: var(--paper);
+  padding: 0.05em 0.3em;
+  border-radius: 3px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.wordmark {
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  font-size: var(--s1);
+}
+
+.help {
+  color: var(--muted);
+  font-size: var(--s-1);
+  margin: 0.25rem 0 0;
+}
+
+.error {
+  color: var(--cancel);
+  font-size: var(--s-1);
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.banner {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Buttons ------------------------------------------------------------ */
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+.primary {
+  background: var(--ink);
+  color: var(--paper);
+  padding: 0.6rem 1.25rem;
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.primary:disabled {
+  opacity: 0.35;
+}
+
+.quiet {
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+
+.quiet:hover {
+  color: var(--ink);
+}
+
+.danger:hover {
+  color: var(--cancel);
+}
+
+input:not([type="file"]) {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+}
+
+label {
+  font-weight: 600;
+  font-size: var(--s-1);
+}
+
+/* Sign in ------------------------------------------------------------ */
+
+.signin {
+  max-width: 26rem;
+  margin: 18vh auto 0;
+  padding: 0 1rem;
+}
+
+.signin .wordmark {
+  font-size: var(--s3);
+}
+
+.signin .lede {
+  color: var(--muted);
+  margin: 0.4rem 0 2rem;
+}
+
+.signin form {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.signin .primary {
+  justify-self: start;
+  margin-top: 1rem;
+}
+
+/* Workspace ---------------------------------------------------------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.bar nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.desk {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: calc(var(--gap) * 2);
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0.5rem 1rem 4rem;
+  align-items: start;
+}
+
+@media (max-width: 52rem) {
+  .desk {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Composer ----------------------------------------------------------- */
+
+.composer {
+  display: grid;
+  gap: var(--gap);
+}
+
+.sheet {
+  width: 100%;
+  resize: vertical;
+  min-height: 11rem;
+  padding: 1.25rem 1.4rem;
+  font-size: var(--s1);
+  line-height: 1.45;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: 0 1px 0 var(--rule);
+}
+
+.sheet::placeholder {
+  color: var(--muted);
+}
+
+.attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.thumb {
+  position: relative;
+  margin: 0;
+  width: 6.5rem;
+  height: 6.5rem;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+}
+
+.thumb img,
+.thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumb progress {
+  position: absolute;
+  inset: auto 0.4rem 0.4rem;
+  width: calc(100% - 0.8rem);
+  height: 4px;
+  accent-color: var(--postmark);
+}
+
+.thumb.failed {
+  border-color: var(--cancel);
+}
+
+.thumb figcaption {
+  position: absolute;
+  inset: auto 0 0;
+  padding: 0.3rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  background: var(--sheet);
+  color: var(--cancel);
+}
+
+.thumb .remove {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.25rem;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  line-height: 1;
+}
+
+.add-media {
+  display: grid;
+  place-items: center;
+  width: 6.5rem;
+  height: 6.5rem;
+  padding: 0.5rem;
+  text-align: center;
+  border: 1px dashed var(--muted);
+  border-radius: var(--radius);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.add-media:hover,
+.add-media:focus-within {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.add-media:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.add-media input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.destinations {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.destinations legend {
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.empty p {
+  margin: 0;
+}
+
+/* Stamps: a destination is a stamp you affix to the post. The perforated
+   edge is half-circles of page colour bitten out of each side. */
+
+.stamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.stamp-wrap {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 13rem;
+}
+
+.stamp {
+  --hole: 3.5px;
+  --step: 10px;
+  position: relative;
+  display: grid;
+  gap: 0.1rem;
+  min-width: 9.5rem;
+  padding: 1rem 1.15rem 0.95rem;
+  text-align: left;
+  background:
+    radial-gradient(circle, var(--paper) var(--hole), transparent calc(var(--hole) + 0.5px)) 0 calc(var(--step) / -2) / var(--step) var(--step) repeat-x,
+    radial-gradient(circle, var(--paper) var(--hole), transparent calc(var(--hole) + 0.5px)) 0 calc(100% + var(--step) / 2) / var(--step) var(--step) repeat-x,
+    radial-gradient(circle, var(--paper) var(--hole), transparent calc(var(--hole) + 0.5px)) calc(var(--step) / -2) 0 / var(--step) var(--step) repeat-y,
+    radial-gradient(circle, var(--paper) var(--hole), transparent calc(var(--hole) + 0.5px)) calc(100% + var(--step) / 2) 0 / var(--step) var(--step) repeat-y,
+    var(--sheet);
+  filter: drop-shadow(0 1px 0 var(--rule));
+  transition: transform 160ms ease;
+}
+
+/* The printed frame inside the perforations. A pseudo-element rather than an
+   inset shadow: inset shadows paint over the background, perforations and all. */
+.stamp::after {
+  content: "";
+  position: absolute;
+  inset: 8px;
+  border: 1px solid var(--rule);
+  pointer-events: none;
+  transition: border-color 160ms ease;
+}
+
+.stamp .platform {
+  font-size: var(--s-1);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.stamp .name {
+  font-weight: 650;
+}
+
+.stamp .count {
+  font-size: var(--s-1);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  margin-top: 0.3rem;
+}
+
+.stamp .count.over {
+  color: var(--cancel);
+  font-weight: 600;
+}
+
+/* Affixed: the frame inks in and the stamp settles at a slight angle, the
+   way one does when it is stuck on by hand. */
+.stamp.on {
+  transform: rotate(-1.5deg);
+}
+
+.stamp.on::after {
+  border: 2px solid var(--ink);
+}
+
+.stamp.on.trouble::after {
+  border-color: var(--cancel);
+}
+
+.stamp-issues {
+  margin: 0;
+  padding: 0 0.25rem;
+  list-style: none;
+  color: var(--cancel);
+  font-size: var(--s-1);
+  line-height: 1.35;
+}
+
+.send {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding-top: var(--gap);
+  border-top: 1px solid var(--rule);
+}
+
+.schedule {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--muted);
+}
+
+.schedule input {
+  width: auto;
+}
+
+/* Sent --------------------------------------------------------------- */
+
+.sent h2 {
+  font-size: var(--s0);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.letter {
+  padding: 1rem 0 1.1rem;
+  border-top: 1px solid var(--rule);
+}
+
+.excerpt {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.excerpt em {
+  color: var(--muted);
+}
+
+.meta {
+  margin: 0.2rem 0 0.6rem;
+  color: var(--muted);
+  font-size: var(--s-1);
+}
+
+.targets {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.target {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: var(--s-1);
+}
+
+.target a {
+  color: inherit;
+  text-underline-offset: 3px;
+}
+
+.target .reason {
+  display: block;
+  color: var(--muted);
+}
+
+.target.failed .reason {
+  color: var(--cancel);
+}
+
+.pill {
+  flex: none;
+  min-width: 5.5rem;
+  text-align: center;
+  padding: 0.15rem 0.6rem;
+  border: 1px dashed var(--muted);
+  border-radius: 999px;
+  color: var(--muted);
+}
+
+.target.failed .pill {
+  border: 1px solid var(--cancel);
+  color: var(--cancel);
+}
+
+.target.publishing .pill {
+  border-style: solid;
+  color: var(--postmark);
+  border-color: var(--postmark);
+}
+
+/* The postmark. Struck at an angle in cancellation ink, multiplied into
+   the page so it reads as ink on paper rather than a badge on top of it. */
+
+.postmark {
+  flex: none;
+  width: 7.5rem;
+  height: auto;
+  color: var(--postmark);
+  transform: rotate(-9deg);
+  mix-blend-mode: multiply;
+  opacity: 0.9;
+}
+
+@media (prefers-color-scheme: dark) {
+  .postmark {
+    mix-blend-mode: normal;
+  }
+}
+
+.postmark circle,
+.postmark path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.postmark .inner {
+  stroke-width: 0.75;
+}
+
+.postmark path {
+  stroke-width: 1.5;
+}
+
+.postmark text {
+  fill: currentColor;
+  text-anchor: middle;
+  font-family: var(--font);
+}
+
+.postmark .pm-label {
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+.postmark .pm-day {
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.postmark .pm-time {
+  font-size: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Accounts dialog ---------------------------------------------------- */
+
+.accounts {
+  width: min(32rem, calc(100vw - 2rem));
+  padding: 1.5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--sheet);
+  color: var(--ink);
+}
+
+.accounts::backdrop {
+  background: rgb(19 28 39 / 0.45);
+}
+
+.accounts > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.accounts h2 {
+  font-size: var(--s1);
+}
+
+.accounts h3 {
+  font-size: var(--s0);
+}
+
+.account-list {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.account-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--rule);
+}
+
+.account-list li > span {
+  display: grid;
+}
+
+.account-list .help {
+  margin: 0;
+}
+
+.connect {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.connect .help {
+  margin: 0 0 0.6rem;
+}
+
+.connect input + label {
+  margin-top: 0.5rem;
+}
+
+.connect .primary {
+  justify-self: start;
+  margin-top: 0.75rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp {
+    transition: none;
+  }
+  .stamp.on {
+    transform: none;
+  }
+}

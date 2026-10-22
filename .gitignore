@@ -1,0 +1,16 @@
+.env
+
+# Local build output
+/server
+
+# macOS Finder droppings
+.DS_Store
+
+# Per-machine Claude Code settings.
+.claude/settings.local.json
+
+# Built by `task web:build` and embedded into the binary. The placeholder keeps
+# //go:embed compiling on a fresh clone.
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep
