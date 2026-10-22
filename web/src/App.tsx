@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Accounts } from "./Accounts";
 import { type Account, api, messageOf, type PlatformInfo, type Post, readToken, setUnauthorizedHandler, writeToken } from "./api";
+import lockupDark from "./assets/lockup-horizontal-on-dark.svg";
+import lockupLight from "./assets/lockup-horizontal-on-light.svg";
 import { Composer } from "./Composer";
 import { Sent } from "./Sent";
+
+// The lockup's colours are baked into each file, so the theme picks the file.
+// Sources live in brand/; these are copies.
+function Logo() {
+  return (
+    <picture>
+      <source srcSet={lockupDark} media="(prefers-color-scheme: dark)" />
+      <img className="logo" src={lockupLight} alt="Postitheka" />
+    </picture>
+  );
+}
 
 export function App() {
   const [token, setToken] = useState(readToken);
@@ -32,7 +45,9 @@ function SignIn({ onSignIn }: { onSignIn: (token: string) => void }) {
 
   return (
     <main className="signin">
-      <h1 className="wordmark">Postitheka</h1>
+      <h1 className="wordmark">
+        <Logo />
+      </h1>
       <p className="lede">Write once. Post everywhere you’re connected.</p>
       <form
         onSubmit={async (e) => {
@@ -109,7 +124,9 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
   return (
     <>
       <header className="bar">
-        <span className="wordmark">Postitheka</span>
+        <span className="wordmark">
+          <Logo />
+        </span>
         <nav>
           <button className="quiet" onClick={() => accountsDialog.current?.showModal()}>
             Accounts{accounts && accounts.length > 0 ? ` (${accounts.length})` : ""}

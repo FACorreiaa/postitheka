@@ -94,9 +94,15 @@ code {
 }
 
 .wordmark {
-  font-weight: 750;
-  letter-spacing: -0.02em;
-  font-size: var(--s1);
+  line-height: 0;
+}
+
+/* Sized by height: the mark is 2.2x the lettering, so this keeps the
+   name near body size. */
+.wordmark .logo {
+  display: block;
+  height: 2.25rem;
+  width: auto;
 }
 
 .help {
@@ -178,8 +184,8 @@ label {
   padding: 0 1rem;
 }
 
-.signin .wordmark {
-  font-size: var(--s3);
+.signin .wordmark .logo {
+  height: 3.5rem;
 }
 
 .signin .lede {

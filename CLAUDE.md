@@ -69,6 +69,7 @@ postitheka/
     service/                # application behaviour: accounts, uploads, posts, tokens
   migrations/               # goose SQL; never edit one that has been applied
   web/                      # the composer; web/embed.go serves web/dist
+  brand/                    # logo, icons, mascot; brand/README.md says which file goes where
   docs/platform-research.md # what each platform allows (dated; re-check before building)
   CLAUDE.md  ARCHITECTURE.md  BACKLOG.md  README.md
 ```
