@@ -59,11 +59,16 @@ public func problems(_ rules: Rules, _ draft: Draft) -> [String] {
     if draft.media.count > rules.max_media { out.append("At most \(rules.max_media) files") }
 
     var total: Int64 = 0
+    var videos = 0
     for m in draft.media {
         if !rules.media_types.contains(m.contentType) { out.append("Cannot take \(m.contentType)") }
-        if m.size > rules.max_media_bytes { out.append("A file is over \(formatBytes(rules.max_media_bytes))") }
+        let video = m.contentType.hasPrefix("video/")
+        let limit = video && rules.max_video_bytes > 0 ? rules.max_video_bytes : rules.max_media_bytes
+        if m.size > limit { out.append("A \(video ? "video" : "file") is over \(formatBytes(limit))") }
+        if video { videos += 1 }
         total += m.size
     }
+    if rules.video_alone && videos > 0 && draft.media.count > 1 { out.append("A video must be posted alone") }
     if rules.max_total_media_bytes > 0 && total > rules.max_total_media_bytes {
         out.append("Files total over \(formatBytes(rules.max_total_media_bytes))")
     }
@@ -81,6 +86,7 @@ extension Platform {
     public var displayName: String {
         switch self {
         case .discord: "Discord"
+        case .linkedin: "LinkedIn"
         case .x: "X"
         case .instagram: "Instagram"
         case .facebook: "Facebook"

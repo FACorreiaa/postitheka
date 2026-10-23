@@ -149,6 +149,19 @@ button:disabled {
   opacity: 0.35;
 }
 
+/* For an action beside a primary one, or one of several equal ones: the
+   same size as .primary, without its weight. */
+.secondary {
+  border: 1px solid var(--ink);
+  padding: calc(0.6rem - 1px) calc(1.25rem - 1px);
+  border-radius: var(--radius);
+  font-weight: 600;
+}
+
+.secondary:disabled {
+  opacity: 0.35;
+}
+
 .quiet {
   padding: 0.4rem 0.6rem;
   border-radius: var(--radius);
@@ -696,6 +709,29 @@ label {
 .connect .primary {
   justify-self: start;
   margin-top: 0.75rem;
+}
+
+/* An OAuth platform section sits above the Discord form; the rule between
+   them is the same one the account list uses. */
+section.connect {
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.connect-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.notice {
+  color: var(--postmark);
+  font-size: var(--s-1);
+}
+
+.accounts > [role="status"] {
+  margin: 0 0 1rem;
 }
 
 @media (prefers-reduced-motion: reduce) {

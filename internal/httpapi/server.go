@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/FACorreiaa/postitheka/internal/db"
+	"github.com/FACorreiaa/postitheka/internal/publisher"
 	"github.com/FACorreiaa/postitheka/internal/service"
 )
 
@@ -90,13 +91,20 @@ func (s *Server) ListPlatforms(ctx context.Context, _ ListPlatformsRequestObject
 	out := ListPlatforms200JSONResponse{}
 	for _, p := range s.svc.Platforms() {
 		r := p.Rules()
+		connect := Webhook
+		if s.svc.ConnectsByOAuth(p.Platform()) {
+			connect = Oauth
+		}
 		out = append(out, PlatformInfo{
 			Platform: Platform(p.Platform()),
+			Connect:  connect,
 			Rules: Rules{
 				MaxTextLength:      r.MaxTextLength,
 				MaxMedia:           r.MaxMedia,
 				MaxMediaBytes:      r.MaxMediaBytes,
 				MaxTotalMediaBytes: r.MaxTotalMediaBytes,
+				MaxVideoBytes:      r.MaxVideoBytes,
+				VideoAlone:         r.VideoAlone,
 				MediaTypes:         r.MediaTypes,
 				RequiresText:       r.RequiresText,
 				RequiresMedia:      r.RequiresMedia,
@@ -127,6 +135,20 @@ func (s *Server) ConnectDiscord(ctx context.Context, req ConnectDiscordRequestOb
 		return nil, err
 	}
 	return ConnectDiscord201JSONResponse(toAccount(acct)), nil
+}
+
+func (s *Server) StartConnect(ctx context.Context, req StartConnectRequestObject) (StartConnectResponseObject, error) {
+	if !req.Body.Client.Valid() {
+		return StartConnect400JSONResponse{BadRequestJSONResponse{Message: "client must be web or ios"}}, nil
+	}
+	url, err := s.svc.StartConnect(ctx, userID(ctx), publisher.Platform(req.Platform), service.ConnectClient(req.Body.Client))
+	if errors.Is(err, service.ErrNotFound) {
+		return StartConnect404JSONResponse{NotFoundJSONResponse{Message: "this server does not connect " + string(req.Platform) + " accounts"}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return StartConnect200JSONResponse{AuthorizeUrl: url}, nil
 }
 
 func (s *Server) DeleteAccount(ctx context.Context, req DeleteAccountRequestObject) (DeleteAccountResponseObject, error) {

@@ -71,7 +71,8 @@ a job cut off mid-request leaves its target `publishing`, and the next attempt f
 
 ```text
 users ─┬─< api_tokens       token_hash (sha256), last_used_at
-       ├─< accounts         platform, display_name, credentials (sealed, AAD = id)
+       ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id
+       ├─< oauth_states     state_hash (sha256), platform, verifier (sealed, AAD = hash), client
        ├─< media            object_key, content_type, size_bytes, verified_at
        └─< posts            text, scheduled_at, idempotency_key + request_hash
               ├─< post_media    (post_id, position) → media
@@ -85,6 +86,12 @@ users ─┬─< api_tokens       token_hash (sha256), last_used_at
 - Disconnecting an account sets `post_targets.account_id` to NULL and keeps the history;
   `platform` is copied onto the target for the same reason. An assisted target (WhatsApp) has
   no account from the start: there is nothing to connect.
+- `accounts.remote_id` is the platform's id for what was connected (a LinkedIn member), unique
+  per user and platform. Connecting it again replaces the credentials of the same row, so its
+  post history stays attached; that is how an expired OAuth token is renewed. NULL for Discord.
+- `oauth_states` holds a consent page that is open: the state is stored only as a hash and the
+  PKCE verifier sealed to it. Taking a state deletes it; one older than 15 minutes is refused,
+  and a user's abandoned ones are cleared when they start another.
 - `posts.idempotency_key` is unique per user (partial index, NULLs allowed). `request_hash` is a
   SHA-256 of the request body, so a key reused for a different post is told apart from a retry.
 - River's tables (`river_job` and the rest) live in the same database, so a job is inserted in
@@ -146,10 +153,52 @@ type Publisher interface {
 - `credentials` are opaque bytes the publisher produced when connecting (JSON of its own shape).
 - `MediaSource` gives `Open(key)` for platforms that take uploads (Discord) and `PublicURL(key,
   ttl)` for platforms that download media themselves (Instagram, Threads, TikTok pull-from-URL).
-- Connecting is platform-specific and lives beside the publisher (`discord.Connect`). An OAuth
-  platform adds an authorize route and a callback route; both end in `service.storeAccount`.
+- Connecting by webhook is platform-specific (`discord.Connect`). An OAuth platform implements
+  `publisher.OAuthConnector` (`AuthorizeURL`, `Exchange`) and shares one flow, below; both end in
+  `service.storeAccount`.
+- `Rules` gives per-file limits (`MaxMediaBytes`, and `MaxVideoBytes` for video when it
+  differs), `VideoAlone` for platforms that take a video only on its own, and `CountText` for
+  platforms that count characters their own way.
 - Registration is one line in `cmd/server/main.go`; `GET /v1/platforms` lists exactly the
   registered set with its rules.
+
+### OAuth connect (built)
+
+```text
+ client ── POST /v1/accounts/{platform}/connect {client: web|ios} ──► server
+        ◄── {authorize_url} ──  (state + PKCE verifier stored, 15 min)
+ browser ──► platform consent page ──► GET /oauth/{platform}/callback?code&state  (no bearer)
+                                       take state → Exchange(code) → storeAccount (upsert by remote_id)
+        ◄── 303 /?connected=linkedin            (web)
+            303 postitheka://connected?platform=linkedin  (iOS: ASWebAuthenticationSession ends)
+            failures: connect_error / error = cancelled | expired | failed
+```
+
+The callback is outside the spec, like `/healthz`: it is a browser redirect with no bearer
+token, and the state is what ties it to a user. It always answers with a redirect to the client
+the flow started from, carrying a code, never a platform's message (that is logged). Redirect
+URL: `PUBLIC_URL/oauth/{platform}/callback`, which each platform's developer app must list. A
+platform is registered only when its client id and secret are set; `GET /v1/platforms` says
+`connect: oauth` for it and clients show a Connect button.
+
+### LinkedIn (built, against a stub)
+
+Personal profile through "Share on LinkedIn" (`w_member_social`) and "Sign In with LinkedIn
+using OpenID Connect" (`openid profile`, for the member id and name from `/v2/userinfo`). Both
+self-serve. Code flow with the client secret; LinkedIn has no PKCE for server apps. Tokens last
+60 days with no refresh token, so renewal is reconnecting. Every `/rest` call pins
+`Linkedin-Version: 202610`; a sunset version answers 426 and is a code change.
+
+Publish: images through `/rest/images?action=initializeUpload` then a PUT of the bytes; video
+through `/rest/videos` (`initializeUpload` with the size, a PUT per byte range LinkedIn chooses,
+keeping each ETag, `finalizeUpload`, then poll until `AVAILABLE`, at most 3 minutes); then
+`POST /rest/posts` with `content.media` (one file) or `content.multiImage` (2 to 20 images).
+The post URN comes back in `x-restli-id`; the link is `linkedin.com/feed/update/{urn}/`.
+Commentary is LinkedIn's "little" format, so `| { } @ [ ] ( ) < > # \ * _ ~` are escaped, except
+a `#` that starts a hashtag. Upload URLs come from LinkedIn's responses and are refused unless
+they are https on a linkedin.com host, so the member's token never leaves LinkedIn. 401 →
+permanent ("reconnect"); 429 → `Retry-After`, else wait for the daily reset at midnight UTC;
+5xx → retry; other 4xx → permanent, except an upload LinkedIn has not finished taking in.
 
 ### Discord (built)
 
@@ -167,9 +216,12 @@ Checked dates matter: re-check a platform's docs before building it.
 | Platform | Mode | Status | Notes |
 | --- | --- | --- | --- |
 | Discord | Direct (webhook) | **Built** | Checked 2026-10-22: 2,000 chars, 10 files, 20 MiB per file. No review. Forum channels need `thread_name` (not yet). |
-| X | Direct (OAuth 2.0 PKCE) | Not started | Paid API tiers; owner decision needed. Text counting is weighted, so it needs its own `CountText`. |
+| LinkedIn | Direct (OAuth 2.0) | **Built** (stub-tested) | Checked 2026-10-23: 3,000 characters, 20 images of 5 MB, or one MP4 up to 500 MB. Self-serve. Needs the owner's developer app to use. |
+| Threads | Direct (OAuth, threads.com) | Not started | Media by public URL. 500 characters (emoji counted in UTF-8 bytes). Testers before App Review. |
+| X | Direct (OAuth 2.0 PKCE) | Not started | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23); owner decision. Weighted `CountText`. |
+| Reddit | Direct (OAuth 2.0) | Not started | Needs Reddit's approval first; text and links only. |
 | Facebook | Direct (Meta OAuth) | Not started | Pages only. Needs Business Verification + App Review. |
-| Instagram | Direct (Meta) | Not started | Business/Creator accounts only. Downloads media from a URL (`PublicURL`). Daily limit. App Review. |
+| Instagram | Direct (Instagram Login) | Not started | Business/Creator accounts, no Page needed. JPEG only, by URL (`PublicURL`). 50–100 posts a day. App Review. |
 | TikTok | Direct (Content Posting API) | Not started | Until the app passes TikTok's audit, posts are private-only. Upload-to-inbox (drafts) is the low-friction first step. Verify current rules. |
 | WhatsApp | Assisted (iOS share sheet) | **Built** | No posting API exists. The server sends nothing; it records the handoff the phone reports. |
 
@@ -202,13 +254,15 @@ real sign-in first (AUTH-001). The middleware runs before the request body is de
 
 ## API
 
-All routes need `Authorization: Bearer`. The spec is `api/openapi.yaml`.
+All routes need `Authorization: Bearer`. The spec is `api/openapi.yaml`. Outside it:
+`GET /healthz` and `GET /oauth/{platform}/callback`.
 
 | Route | Does |
 | --- | --- |
 | `GET /v1/platforms` | Registered platforms and their rules |
 | `GET /v1/accounts` | Connected accounts (never credentials) |
 | `POST /v1/accounts/discord` | Connect a webhook; 400 if Discord does not recognise it |
+| `POST /v1/accounts/{platform}/connect` | Start an OAuth connect: `{client}` → `{authorize_url}`; 404 if the platform does not connect by OAuth here |
 | `DELETE /v1/accounts/{id}` | Disconnect; queued targets for it fail as "disconnected" |
 | `POST /v1/media` | Reserve an upload, get a presigned PUT |
 | `GET /v1/posts?limit=` | Newest first, with targets and media ids |
@@ -266,6 +320,9 @@ The image is multi-stage: Node builds `web/dist`, Go builds a static binary, Alp
 - Credentials: AES-256-GCM with the row id as associated data; a version byte allows key
   rotation later. Losing `TOKEN_ENCRYPTION_KEY` orphans every connected account.
 - Uploaded type is checked against storage, not trusted from the client.
+- OAuth: single-use state, stored hashed, 15 minutes; PKCE verifier sealed; client secrets only in
+  the environment; the callback redirects only to the app's own `/` or the `postitheka://`
+  scheme, never to a URL taken from the request.
 - No rate limiting on the API yet (OPS-002).
 - Analytics (`POSTHOG_API_KEY`, empty means off) records four events, keyed by user id:
   `signed_up` (a user row created), `account_connected` (platform), `target_published`

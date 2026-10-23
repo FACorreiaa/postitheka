@@ -181,7 +181,9 @@ func (r *recordedEvents) reset() {
 	r.events = nil
 }
 
-func setup(t *testing.T) *env {
+// extra publishers are registered beside Discord, for tests of flows that
+// need a platform of another kind.
+func setup(t *testing.T, extra ...publisher.Publisher) *env {
 	t.Helper()
 	pool := testdb.New(t)
 
@@ -201,7 +203,7 @@ func setup(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	discordPub := discord.New(client)
-	registry := publisher.NewRegistry(discordPub)
+	registry := publisher.NewRegistry(append([]publisher.Publisher{discordPub}, extra...)...)
 	storage := &fakeStorage{objects: map[string]fakeObject{}}
 	q := db.New(pool)
 
@@ -219,6 +221,7 @@ func setup(t *testing.T) *env {
 
 	svc := service.New(service.Deps{
 		Pool: pool, River: rc, Box: box, Registry: registry, Storage: storage, Discord: discordPub, Analytics: events,
+		PublicURL: "https://postitheka.test",
 	})
 	return &env{pool: pool, q: q, svc: svc, worker: worker, workers: workers, storage: storage, discord: stub, events: events}
 }

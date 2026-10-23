@@ -34,6 +34,7 @@ import (
 	"github.com/FACorreiaa/postitheka/internal/media"
 	"github.com/FACorreiaa/postitheka/internal/publisher"
 	"github.com/FACorreiaa/postitheka/internal/publisher/discord"
+	"github.com/FACorreiaa/postitheka/internal/publisher/linkedin"
 	"github.com/FACorreiaa/postitheka/internal/secretbox"
 	"github.com/FACorreiaa/postitheka/internal/service"
 	"github.com/FACorreiaa/postitheka/web"
@@ -123,7 +124,13 @@ func serve(cfg config.Config) error {
 	// Every platform this server publishes to is registered here, and only
 	// here. GET /v1/platforms lists exactly this set.
 	discordPub := discord.New(nil)
-	registry := publisher.NewRegistry(discordPub)
+	pubs := []publisher.Publisher{discordPub}
+	// An OAuth platform is offered only when its developer app is configured:
+	// without a client id there is no consent page to send anyone to.
+	if cfg.LinkedInClientID != "" {
+		pubs = append(pubs, linkedin.New(cfg.LinkedInClientID, cfg.LinkedInClientSecret, nil))
+	}
+	registry := publisher.NewRegistry(pubs...)
 
 	workers := river.NewWorkers()
 	events := analytics.New(cfg.PostHogAPIKey, cfg.PostHogHost, slog.Default())
@@ -152,6 +159,7 @@ func serve(cfg config.Config) error {
 		Storage:   store,
 		Discord:   discordPub,
 		Analytics: events,
+		PublicURL: cfg.PublicURL,
 	})
 
 	srv := &http.Server{
@@ -203,6 +211,10 @@ func routes(pool *pgxpool.Pool, svc *service.Service) http.Handler {
 		}
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	// Outside the spec too: platforms redirect the browser here with no
+	// bearer token. The state is what identifies the user.
+	r.Get("/oauth/{platform}/callback", httpapi.OAuthCallback(svc, slog.Default()))
 
 	httpapi.Mount(r, svc, slog.Default())
 

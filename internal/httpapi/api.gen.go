@@ -28,6 +28,7 @@ const (
 	Discord   Platform = "discord"
 	Facebook  Platform = "facebook"
 	Instagram Platform = "instagram"
+	Linkedin  Platform = "linkedin"
 	Tiktok    Platform = "tiktok"
 	Whatsapp  Platform = "whatsapp"
 	X         Platform = "x"
@@ -42,11 +43,49 @@ func (e Platform) Valid() bool {
 		return true
 	case Instagram:
 		return true
+	case Linkedin:
+		return true
 	case Tiktok:
 		return true
 	case Whatsapp:
 		return true
 	case X:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlatformInfoConnect.
+const (
+	Oauth   PlatformInfoConnect = "oauth"
+	Webhook PlatformInfoConnect = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the PlatformInfoConnect enum.
+func (e PlatformInfoConnect) Valid() bool {
+	switch e {
+	case Oauth:
+		return true
+	case Webhook:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StartConnectRequestClient.
+const (
+	Ios StartConnectRequestClient = "ios"
+	Web StartConnectRequestClient = "web"
+)
+
+// Valid indicates whether the value is a known member of the StartConnectRequestClient enum.
+func (e StartConnectRequestClient) Valid() bool {
+	switch e {
+	case Ios:
+		return true
+	case Web:
 		return true
 	default:
 		return false
@@ -167,10 +206,16 @@ type Platform string
 
 // PlatformInfo defines model for PlatformInfo.
 type PlatformInfo struct {
+	// Connect How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
+	Connect PlatformInfoConnect `json:"connect"`
+
 	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
 	Platform Platform `json:"platform"`
 	Rules    Rules    `json:"rules"`
 }
+
+// PlatformInfoConnect How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
+type PlatformInfoConnect string
 
 // Post defines model for Post.
 type Post struct {
@@ -186,17 +231,37 @@ type Post struct {
 type Rules struct {
 	MaxMedia int `json:"max_media"`
 
-	// MaxMediaBytes Per file.
+	// MaxMediaBytes Per file. For video files, max_video_bytes applies instead when it is not 0.
 	MaxMediaBytes int64 `json:"max_media_bytes"`
 
 	// MaxTextLength In Unicode code points unless the platform says otherwise.
 	MaxTextLength int `json:"max_text_length"`
 
 	// MaxTotalMediaBytes Across all files in one post. 0 means no extra limit.
-	MaxTotalMediaBytes int64    `json:"max_total_media_bytes"`
-	MediaTypes         []string `json:"media_types"`
-	RequiresMedia      bool     `json:"requires_media"`
-	RequiresText       bool     `json:"requires_text"`
+	MaxTotalMediaBytes int64 `json:"max_total_media_bytes"`
+
+	// MaxVideoBytes Per video file (a media type starting video/). 0 means max_media_bytes.
+	MaxVideoBytes int64    `json:"max_video_bytes"`
+	MediaTypes    []string `json:"media_types"`
+	RequiresMedia bool     `json:"requires_media"`
+	RequiresText  bool     `json:"requires_text"`
+
+	// VideoAlone A video must be the only file in the post.
+	VideoAlone bool `json:"video_alone"`
+}
+
+// StartConnectRequest defines model for StartConnectRequest.
+type StartConnectRequest struct {
+	// Client Where to send the user once the platform is done.
+	Client StartConnectRequestClient `json:"client"`
+}
+
+// StartConnectRequestClient Where to send the user once the platform is done.
+type StartConnectRequestClient string
+
+// StartConnectResponse defines model for StartConnectResponse.
+type StartConnectResponse struct {
+	AuthorizeUrl string `json:"authorize_url"`
 }
 
 // Target defines model for Target.
@@ -264,6 +329,9 @@ type CreatePostParams struct {
 // ConnectDiscordJSONRequestBody defines body for ConnectDiscord for application/json ContentType.
 type ConnectDiscordJSONRequestBody = ConnectDiscordRequest
 
+// StartConnectJSONRequestBody defines body for StartConnect for application/json ContentType.
+type StartConnectJSONRequestBody = StartConnectRequest
+
 // CreateUploadJSONRequestBody defines body for CreateUpload for application/json ContentType.
 type CreateUploadJSONRequestBody = CreateUploadRequest
 
@@ -284,6 +352,9 @@ type ServerInterface interface {
 
 	// (DELETE /v1/accounts/{accountId})
 	DeleteAccount(w http.ResponseWriter, r *http.Request, accountId AccountId)
+
+	// (POST /v1/accounts/{platform}/connect)
+	StartConnect(w http.ResponseWriter, r *http.Request, platform Platform)
 
 	// (POST /v1/media)
 	CreateUpload(w http.ResponseWriter, r *http.Request)
@@ -320,6 +391,11 @@ func (_ Unimplemented) ConnectDiscord(w http.ResponseWriter, r *http.Request) {
 
 // (DELETE /v1/accounts/{accountId})
 func (_ Unimplemented) DeleteAccount(w http.ResponseWriter, r *http.Request, accountId AccountId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /v1/accounts/{platform}/connect)
+func (_ Unimplemented) StartConnect(w http.ResponseWriter, r *http.Request, platform Platform) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -407,6 +483,32 @@ func (siw *ServerInterfaceWrapper) DeleteAccount(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteAccount(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartConnect operation middleware
+func (siw *ServerInterfaceWrapper) StartConnect(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "platform" -------------
+	var platform Platform
+
+	err = runtime.BindStyledParameterWithOptions("simple", "platform", chi.URLParam(r, "platform"), &platform, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "platform", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartConnect(w, r, platform)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -693,6 +795,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/v1/accounts/discord", wrapper.ConnectDiscord)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/accounts/{platform}/connect", wrapper.StartConnect)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/v1/accounts/{accountId}", wrapper.DeleteAccount)
 	})
 	r.Group(func(r chi.Router) {
@@ -838,6 +943,71 @@ func (response DeleteAccount401JSONResponse) VisitDeleteAccountResponse(w http.R
 type DeleteAccount404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteAccount404JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartConnectRequestObject struct {
+	Platform Platform `json:"platform"`
+	Body     *StartConnectJSONRequestBody
+}
+
+type StartConnectResponseObject interface {
+	VisitStartConnectResponse(w http.ResponseWriter) error
+}
+
+type StartConnect200JSONResponse StartConnectResponse
+
+func (response StartConnect200JSONResponse) VisitStartConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartConnect400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response StartConnect400JSONResponse) VisitStartConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartConnect401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response StartConnect401JSONResponse) VisitStartConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartConnect404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response StartConnect404JSONResponse) VisitStartConnectResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1162,6 +1332,9 @@ type StrictServerInterface interface {
 	// (DELETE /v1/accounts/{accountId})
 	DeleteAccount(ctx context.Context, request DeleteAccountRequestObject) (DeleteAccountResponseObject, error)
 
+	// (POST /v1/accounts/{platform}/connect)
+	StartConnect(ctx context.Context, request StartConnectRequestObject) (StartConnectResponseObject, error)
+
 	// (POST /v1/media)
 	CreateUpload(ctx context.Context, request CreateUploadRequestObject) (CreateUploadResponseObject, error)
 
@@ -1294,6 +1467,39 @@ func (sh *strictHandler) DeleteAccount(w http.ResponseWriter, r *http.Request, a
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteAccountResponseObject); ok {
 		if err := validResponse.VisitDeleteAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartConnect operation middleware
+func (sh *strictHandler) StartConnect(w http.ResponseWriter, r *http.Request, platform Platform) {
+	var request StartConnectRequestObject
+
+	request.Platform = platform
+
+	var body StartConnectJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartConnect(ctx, request.(StartConnectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartConnect")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartConnectResponseObject); ok {
+		if err := validResponse.VisitStartConnectResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1479,51 +1685,60 @@ func (sh *strictHandler) CompleteHandoff(w http.ResponseWriter, r *http.Request,
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
+	"qh/+TrwRd9pGXh27DaM/rrZX2/8OAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

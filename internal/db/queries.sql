@@ -16,9 +16,33 @@ WHERE token_hash = $1
 RETURNING user_id;
 
 -- name: CreateAccount :one
-INSERT INTO accounts (id, user_id, platform, display_name, credentials)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO accounts (id, user_id, platform, display_name, credentials, remote_id)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, user_id, platform, display_name, created_at;
+
+-- name: GetAccountByRemoteID :one
+SELECT id, user_id, platform, display_name, created_at
+FROM accounts
+WHERE user_id = $1 AND platform = $2 AND remote_id = $3;
+
+-- name: ReplaceAccountCredentials :one
+UPDATE accounts SET credentials = $3, display_name = $4
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, platform, display_name, created_at;
+
+-- name: CreateOAuthState :exec
+INSERT INTO oauth_states (state_hash, user_id, platform, verifier, client)
+VALUES ($1, $2, $3, $4, $5);
+
+-- Taking a state deletes it, so a callback replayed with the same state
+-- finds nothing.
+-- name: TakeOAuthState :one
+DELETE FROM oauth_states
+WHERE state_hash = $1 AND platform = $2
+RETURNING *;
+
+-- name: DeleteStaleOAuthStates :exec
+DELETE FROM oauth_states WHERE user_id = $1 AND created_at < $2;
 
 -- name: ListAccounts :many
 SELECT id, user_id, platform, display_name, created_at

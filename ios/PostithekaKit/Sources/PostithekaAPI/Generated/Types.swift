@@ -26,6 +26,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/accounts/discord`.
     /// - Remark: Generated from `#/paths//v1/accounts/discord/post(connectDiscord)`.
     func connectDiscord(_ input: Operations.connectDiscord.Input) async throws -> Operations.connectDiscord.Output
+    /// Starts connecting an account on a platform that uses OAuth (its PlatformInfo has connect: oauth). Returns the platform's consent page; send the user there. The platform redirects back to this server, which stores the account and sends the user on to the client they started from: the web app at /?connected={platform}, or the iOS app at postitheka://connected?platform={platform}. On failure the redirect carries connect_error (web) or error (iOS) instead: cancelled, expired or failed. Connecting an account that is already connected renews its credentials and keeps it as the same account.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/accounts/{platform}/connect`.
+    /// - Remark: Generated from `#/paths//v1/accounts/{platform}/connect/post(startConnect)`.
+    func startConnect(_ input: Operations.startConnect.Input) async throws -> Operations.startConnect.Output
     /// - Remark: HTTP `DELETE /v1/accounts/{accountId}`.
     /// - Remark: Generated from `#/paths//v1/accounts/{accountId}/delete(deleteAccount)`.
     func deleteAccount(_ input: Operations.deleteAccount.Input) async throws -> Operations.deleteAccount.Output
@@ -81,6 +87,22 @@ extension APIProtocol {
         body: Operations.connectDiscord.Input.Body
     ) async throws -> Operations.connectDiscord.Output {
         try await connectDiscord(Operations.connectDiscord.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Starts connecting an account on a platform that uses OAuth (its PlatformInfo has connect: oauth). Returns the platform's consent page; send the user there. The platform redirects back to this server, which stores the account and sends the user on to the client they started from: the web app at /?connected={platform}, or the iOS app at postitheka://connected?platform={platform}. On failure the redirect carries connect_error (web) or error (iOS) instead: cancelled, expired or failed. Connecting an account that is already connected renews its credentials and keeps it as the same account.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/accounts/{platform}/connect`.
+    /// - Remark: Generated from `#/paths//v1/accounts/{platform}/connect/post(startConnect)`.
+    public func startConnect(
+        path: Operations.startConnect.Input.Path,
+        headers: Operations.startConnect.Input.Headers = .init(),
+        body: Operations.startConnect.Input.Body
+    ) async throws -> Operations.startConnect.Output {
+        try await startConnect(Operations.startConnect.Input(
+            path: path,
             headers: headers,
             body: body
         ))

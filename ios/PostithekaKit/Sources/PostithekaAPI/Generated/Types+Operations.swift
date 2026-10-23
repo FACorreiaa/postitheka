@@ -444,6 +444,213 @@ public enum Operations {
             }
         }
     }
+    /// Starts connecting an account on a platform that uses OAuth (its PlatformInfo has connect: oauth). Returns the platform's consent page; send the user there. The platform redirects back to this server, which stores the account and sends the user on to the client they started from: the web app at /?connected={platform}, or the iOS app at postitheka://connected?platform={platform}. On failure the redirect carries connect_error (web) or error (iOS) instead: cancelled, expired or failed. Connecting an account that is already connected renews its credentials and keeps it as the same account.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/accounts/{platform}/connect`.
+    /// - Remark: Generated from `#/paths//v1/accounts/{platform}/connect/post(startConnect)`.
+    public enum startConnect {
+        public static let id: Swift.String = "startConnect"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/accounts/{platform}/connect/POST/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/accounts/{platform}/connect/POST/path/platform`.
+                public var platform: Components.Schemas.Platform
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - platform:
+                public init(platform: Components.Schemas.Platform) {
+                    self.platform = platform
+                }
+            }
+            public var path: Operations.startConnect.Input.Path
+            /// - Remark: Generated from `#/paths/v1/accounts/{platform}/connect/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.startConnect.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.startConnect.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.startConnect.Input.Headers
+            /// - Remark: Generated from `#/paths/v1/accounts/{platform}/connect/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/accounts/{platform}/connect/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.StartConnectRequest)
+            }
+            public var body: Operations.startConnect.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.startConnect.Input.Path,
+                headers: Operations.startConnect.Input.Headers = .init(),
+                body: Operations.startConnect.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/accounts/{platform}/connect/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/accounts/{platform}/connect/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.StartConnectResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.StartConnectResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.startConnect.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.startConnect.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// The consent page to open
+            ///
+            /// - Remark: Generated from `#/paths//v1/accounts/{platform}/connect/post(startConnect)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.startConnect.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.startConnect.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// The request is malformed.
+            ///
+            /// - Remark: Generated from `#/paths//v1/accounts/{platform}/connect/post(startConnect)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses.BadRequest)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses.BadRequest {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Missing or unknown bearer token.
+            ///
+            /// - Remark: Generated from `#/paths//v1/accounts/{platform}/connect/post(startConnect)/responses/401`.
+            ///
+            /// HTTP response code: `401 unauthorized`.
+            case unauthorized(Components.Responses.Unauthorized)
+            /// The associated value of the enum case if `self` is `.unauthorized`.
+            ///
+            /// - Throws: An error if `self` is not `.unauthorized`.
+            /// - SeeAlso: `.unauthorized`.
+            public var unauthorized: Components.Responses.Unauthorized {
+                get throws {
+                    switch self {
+                    case let .unauthorized(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unauthorized",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// No such resource for this user.
+            ///
+            /// - Remark: Generated from `#/paths//v1/accounts/{platform}/connect/post(startConnect)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses.NotFound)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses.NotFound {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// - Remark: HTTP `DELETE /v1/accounts/{accountId}`.
     /// - Remark: Generated from `#/paths//v1/accounts/{accountId}/delete(deleteAccount)`.
     public enum deleteAccount {

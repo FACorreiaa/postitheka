@@ -51,7 +51,10 @@ type Service struct {
 	storage  Storage
 	discord  DiscordConnector
 	events   analytics.Client
-	now      func() time.Time
+	// publicURL is where platforms redirect back to after their consent
+	// screen.
+	publicURL string
+	now       func() time.Time
 }
 
 type Deps struct {
@@ -63,6 +66,8 @@ type Deps struct {
 	Discord  DiscordConnector
 	// Analytics may be nil, which records nothing.
 	Analytics analytics.Client
+	// PublicURL is the server's external base URL, for OAuth redirects.
+	PublicURL string
 }
 
 func New(d Deps) *Service {
@@ -71,15 +76,16 @@ func New(d Deps) *Service {
 		events = analytics.Nop()
 	}
 	return &Service{
-		events:   events,
-		pool:     d.Pool,
-		q:        db.New(d.Pool),
-		river:    d.River,
-		box:      d.Box,
-		registry: d.Registry,
-		storage:  d.Storage,
-		discord:  d.Discord,
-		now:      time.Now,
+		events:    events,
+		pool:      d.Pool,
+		q:         db.New(d.Pool),
+		river:     d.River,
+		box:       d.Box,
+		registry:  d.Registry,
+		storage:   d.Storage,
+		discord:   d.Discord,
+		publicURL: d.PublicURL,
+		now:       time.Now,
 	}
 }
 

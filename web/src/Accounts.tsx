@@ -1,18 +1,45 @@
 import { type Ref, useState } from "react";
-import { type Account, api, messageOf } from "./api";
+import { type Account, api, messageOf, type PlatformInfo } from "./api";
 import { platformNames } from "./rules";
+
+/** What came back from a platform's consent page, read from the URL. */
+export interface ConnectOutcome {
+  ok: boolean;
+  text: string;
+}
 
 interface Props {
   ref: Ref<HTMLDialogElement>;
   accounts: Account[];
+  platforms: PlatformInfo[];
+  outcome: ConnectOutcome | null;
   onChanged: () => Promise<void>;
 }
 
-export function Accounts({ ref, accounts, onChanged }: Props) {
+export function Accounts({ ref, accounts, platforms, outcome, onChanged }: Props) {
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [leaving, setLeaving] = useState("");
+  const oauth = platforms.filter((p) => p.connect === "oauth");
+
+  // The platform's consent page replaces this one; the server sends the user
+  // back to /?connected=… when it is done.
+  async function connectOAuth(platform: PlatformInfo["platform"]) {
+    setLeaving(platform);
+    setError("");
+    const { data, error: err } = await api.POST("/v1/accounts/{platform}/connect", {
+      params: { path: { platform } },
+      body: { client: "web" },
+    });
+    if (!data) {
+      setLeaving("");
+      setError(messageOf(err));
+      return;
+    }
+    window.location.assign(data.authorize_url);
+  }
 
   async function connect(e: React.FormEvent) {
     e.preventDefault();
@@ -62,6 +89,32 @@ export function Accounts({ ref, accounts, onChanged }: Props) {
             </li>
           ))}
         </ul>
+      )}
+
+      {outcome && (
+        <p className={outcome.ok ? "notice" : "error"} role="status">
+          {outcome.text}
+        </p>
+      )}
+
+      {oauth.length > 0 && (
+        <section className="connect">
+          <h3>Connect an account</h3>
+          <p className="help">You sign in on the platform’s own page; Postitheka never sees your password.</p>
+          <div className="connect-buttons">
+            {oauth.map((p) => (
+              <button
+                key={p.platform}
+                type="button"
+                className="secondary"
+                disabled={leaving !== ""}
+                onClick={() => void connectOAuth(p.platform)}
+              >
+                {leaving === p.platform ? "Opening…" : `Connect ${platformNames[p.platform] ?? p.platform}`}
+              </button>
+            ))}
+          </div>
+        </section>
       )}
 
       <form className="connect" onSubmit={connect}>

@@ -36,11 +36,16 @@ export function problems(rules: Rules, draft: Draft): string[] {
   if (draft.media.length > rules.max_media) out.push(`At most ${rules.max_media} files`);
 
   let total = 0;
+  let videos = 0;
   for (const m of draft.media) {
     if (!rules.media_types.includes(m.contentType)) out.push(`Cannot take ${m.contentType}`);
-    if (m.size > rules.max_media_bytes) out.push(`A file is over ${formatBytes(rules.max_media_bytes)}`);
+    const video = m.contentType.startsWith("video/");
+    const limit = video && rules.max_video_bytes > 0 ? rules.max_video_bytes : rules.max_media_bytes;
+    if (m.size > limit) out.push(`A ${video ? "video" : "file"} is over ${formatBytes(limit)}`);
+    if (video) videos++;
     total += m.size;
   }
+  if (rules.video_alone && videos > 0 && draft.media.length > 1) out.push("A video must be posted alone");
   if (rules.max_total_media_bytes > 0 && total > rules.max_total_media_bytes) {
     out.push(`Files total over ${formatBytes(rules.max_total_media_bytes)}`);
   }
@@ -55,6 +60,7 @@ export function formatBytes(n: number): string {
 
 export const platformNames: Record<string, string> = {
   discord: "Discord",
+  linkedin: "LinkedIn",
   x: "X",
   instagram: "Instagram",
   facebook: "Facebook",

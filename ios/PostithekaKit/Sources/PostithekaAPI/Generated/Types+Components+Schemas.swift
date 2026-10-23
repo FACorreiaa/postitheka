@@ -18,6 +18,7 @@ extension Components {
         /// - Remark: Generated from `#/components/schemas/Platform`.
         @frozen public enum Platform: String, Codable, Hashable, Sendable, CaseIterable {
             case discord = "discord"
+            case linkedin = "linkedin"
             case x = "x"
             case instagram = "instagram"
             case facebook = "facebook"
@@ -28,22 +29,39 @@ extension Components {
         public struct PlatformInfo: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/PlatformInfo/platform`.
             public var platform: Components.Schemas.Platform
+            /// How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PlatformInfo/connect`.
+            @frozen public enum connectPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case webhook = "webhook"
+                case oauth = "oauth"
+            }
+            /// How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/PlatformInfo/connect`.
+            public var connect: Components.Schemas.PlatformInfo.connectPayload
             /// - Remark: Generated from `#/components/schemas/PlatformInfo/rules`.
             public var rules: Components.Schemas.Rules
             /// Creates a new `PlatformInfo`.
             ///
             /// - Parameters:
             ///   - platform:
+            ///   - connect: How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
             ///   - rules:
             public init(
                 platform: Components.Schemas.Platform,
+                connect: Components.Schemas.PlatformInfo.connectPayload,
                 rules: Components.Schemas.Rules
             ) {
                 self.platform = platform
+                self.connect = connect
                 self.rules = rules
             }
             public enum CodingKeys: String, CodingKey {
                 case platform
+                case connect
                 case rules
             }
         }
@@ -55,10 +73,14 @@ extension Components {
             public var max_text_length: Swift.Int
             /// - Remark: Generated from `#/components/schemas/Rules/max_media`.
             public var max_media: Swift.Int
-            /// Per file.
+            /// Per file. For video files, max_video_bytes applies instead when it is not 0.
             ///
             /// - Remark: Generated from `#/components/schemas/Rules/max_media_bytes`.
             public var max_media_bytes: Swift.Int64
+            /// Per video file (a media type starting video/). 0 means max_media_bytes.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/max_video_bytes`.
+            public var max_video_bytes: Swift.Int64
             /// Across all files in one post. 0 means no extra limit.
             ///
             /// - Remark: Generated from `#/components/schemas/Rules/max_total_media_bytes`.
@@ -69,41 +91,53 @@ extension Components {
             public var requires_text: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/Rules/requires_media`.
             public var requires_media: Swift.Bool
+            /// A video must be the only file in the post.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/video_alone`.
+            public var video_alone: Swift.Bool
             /// Creates a new `Rules`.
             ///
             /// - Parameters:
             ///   - max_text_length: In Unicode code points unless the platform says otherwise.
             ///   - max_media:
-            ///   - max_media_bytes: Per file.
+            ///   - max_media_bytes: Per file. For video files, max_video_bytes applies instead when it is not 0.
+            ///   - max_video_bytes: Per video file (a media type starting video/). 0 means max_media_bytes.
             ///   - max_total_media_bytes: Across all files in one post. 0 means no extra limit.
             ///   - media_types:
             ///   - requires_text:
             ///   - requires_media:
+            ///   - video_alone: A video must be the only file in the post.
             public init(
                 max_text_length: Swift.Int,
                 max_media: Swift.Int,
                 max_media_bytes: Swift.Int64,
+                max_video_bytes: Swift.Int64,
                 max_total_media_bytes: Swift.Int64,
                 media_types: [Swift.String],
                 requires_text: Swift.Bool,
-                requires_media: Swift.Bool
+                requires_media: Swift.Bool,
+                video_alone: Swift.Bool
             ) {
                 self.max_text_length = max_text_length
                 self.max_media = max_media
                 self.max_media_bytes = max_media_bytes
+                self.max_video_bytes = max_video_bytes
                 self.max_total_media_bytes = max_total_media_bytes
                 self.media_types = media_types
                 self.requires_text = requires_text
                 self.requires_media = requires_media
+                self.video_alone = video_alone
             }
             public enum CodingKeys: String, CodingKey {
                 case max_text_length
                 case max_media
                 case max_media_bytes
+                case max_video_bytes
                 case max_total_media_bytes
                 case media_types
                 case requires_text
                 case requires_media
+                case video_alone
             }
         }
         /// - Remark: Generated from `#/components/schemas/Account`.
@@ -164,6 +198,45 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case webhook_url
                 case display_name
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StartConnectRequest`.
+        public struct StartConnectRequest: Codable, Hashable, Sendable {
+            /// Where to send the user once the platform is done.
+            ///
+            /// - Remark: Generated from `#/components/schemas/StartConnectRequest/client`.
+            @frozen public enum clientPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case web = "web"
+                case ios = "ios"
+            }
+            /// Where to send the user once the platform is done.
+            ///
+            /// - Remark: Generated from `#/components/schemas/StartConnectRequest/client`.
+            public var client: Components.Schemas.StartConnectRequest.clientPayload
+            /// Creates a new `StartConnectRequest`.
+            ///
+            /// - Parameters:
+            ///   - client: Where to send the user once the platform is done.
+            public init(client: Components.Schemas.StartConnectRequest.clientPayload) {
+                self.client = client
+            }
+            public enum CodingKeys: String, CodingKey {
+                case client
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/StartConnectResponse`.
+        public struct StartConnectResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StartConnectResponse/authorize_url`.
+            public var authorize_url: Swift.String
+            /// Creates a new `StartConnectResponse`.
+            ///
+            /// - Parameters:
+            ///   - authorize_url:
+            public init(authorize_url: Swift.String) {
+                self.authorize_url = authorize_url
+            }
+            public enum CodingKeys: String, CodingKey {
+                case authorize_url
             }
         }
         /// - Remark: Generated from `#/components/schemas/CreateUploadRequest`.

@@ -1,10 +1,14 @@
+import AuthenticationServices
 import PostithekaKit
 import SwiftUI
 
 /// Connected destinations. Disconnecting keeps the history of what was sent.
 struct AccountsView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.webAuthenticationSession) private var webAuthentication
     @State private var connecting = false
+    @State private var opening: Platform?
+    @State private var outcome: ConnectOutcome?
 
     var body: some View {
         NavigationStack {
@@ -28,8 +32,27 @@ struct AccountsView: View {
                     if !model.accounts.isEmpty { Text("Swipe to disconnect. Posts already sent stay in Sent.") }
                 }
 
+                if let outcome {
+                    Section {
+                        switch outcome {
+                        case .connected(let platform): Text("\(platform.displayName) connected.").foregroundStyle(.tint)
+                        case .failed(let message): Text(message).foregroundStyle(.red)
+                        }
+                    }
+                }
+
                 Section {
+                    ForEach(model.platforms.filter { $0.connect == .oauth }, id: \.platform) { info in
+                        Button(opening == info.platform ? "Opening…" : "Connect \(info.platform.displayName)") {
+                            Task { await connect(info.platform) }
+                        }
+                        .disabled(opening != nil)
+                    }
                     Button("Connect a Discord channel") { connecting = true }
+                } footer: {
+                    if model.platforms.contains(where: { $0.connect == .oauth }) {
+                        Text("You sign in on the platform’s own page; Postitheka never sees your password.")
+                    }
                 }
 
                 Section {
@@ -46,6 +69,17 @@ struct AccountsView: View {
             .navigationTitle("Accounts")
             .sheet(isPresented: $connecting) { ConnectDiscordView() }
         }
+    }
+
+    private func connect(_ platform: Platform) async {
+        opening = platform
+        outcome = nil
+        outcome = await model.connect(platform) { url in
+            // Closing the page throws canceledLogin: the user changed their
+            // mind, which needs no message.
+            try? await webAuthentication.authenticate(using: url, callbackURLScheme: connectCallbackScheme)
+        }
+        opening = nil
     }
 }
 

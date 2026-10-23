@@ -55,14 +55,16 @@ only the owner can create. Build against stubs and configuration until they arri
 
 | What | Unblocks | Notes |
 | --- | --- | --- |
-| Merge PR #1 | REL-002 (first image) | Deploys nothing |
 | R2 bucket + API token | REL-003, REL-004 | Agent writes the CORS rule |
 | Public hostname | REL-004, AUTH-001 (web Services ID) | Deferred 2026-10-22 |
 | Sign in with Apple key (.p8) | AUTH-001 | One-time download, straight into a sealed secret |
 | PostHog project key | OPS-001 seen working | Sealed secret `POSTHOG_API_KEY` |
-| X developer app + API tier | X-001 used for real | Code is built against stubs; client id and secret go in env |
-| TikTok developer app | TT-001 used for real, TT-002 | Same |
-| Meta app, Business Verification, App Review | FB-001, IG-001 used for real | Weeks; needs PRV-001 live |
+| LinkedIn developer app with "Share on LinkedIn" and "Sign In with LinkedIn using OpenID Connect" | LI-001 used for real | Self-serve. `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` in `.env`; redirect `http://localhost:8095/oauth/linkedin/callback` locally, `PUBLIC_URL/oauth/linkedin/callback` in production |
+| X developer app + credits | X-001 used for real | Pay-per-use: $0.015 a post, $0.20 with a URL (2026-10-23) |
+| TikTok developer app | TT-001 used for real, TT-002 | Photos also need a domain verified with TikTok |
+| Reddit API access request | RDT-001 | Approval required since Nov 2025; commercial use needs an agreement |
+| Threads app testers | THR-001 used before review | The owner adds their own account as a Threads Tester |
+| Meta app, Business Verification, App Review | THR-001, IG-001 for strangers; FB-001 at all | Weeks; needs PRV-001 live |
 | Approve privacy policy and terms text | PRV-001 | Agent drafts |
 
 ## Status (2026-10-23)
@@ -70,8 +72,8 @@ only the owner can create. Build against stubs and configuration until they arri
 | Phase | Done | Gate | What blocks it |
 | --- | --- | --- | --- |
 | **P0 · Foundations** | 6/6 | **Met** | Nothing |
-| **P1 · First stranger** | 3/13 (3 built, unverified) | Not met | Not deployed; no real sign-in |
-| **P2 · Platforms** | 0/8 | Not met | Needs P1 deployed; X needs an owner decision; Meta and TikTok need review |
+| **P1 · First stranger** | 4/12 (2 built, unverified) | Not met | Not deployed; no real sign-in |
+| **P2 · Platforms** | 0/15 (2 built, unverified) | Not met | Needs P1 deployed; X needs credits, Reddit approval; Meta and TikTok need review |
 | **P3 · iOS** | 0/6 (3 built, unverified) | Not met | IOS-002 needs AUTH-001; nothing tested on a device |
 
 Strangers who have published a post: **0**.
@@ -87,7 +89,7 @@ Strangers who have published a post: **0**.
 | FND-005 | Done | `migrations/20261022170000_post_media_cascade.sql`; `TestDeletingAUserRemovesEverything` | |
 | FND-006 | Done | `Dockerfile`; image built, 50 MB, web app embedded | Never run in the cluster |
 | REL-001 | Done | PR #1: CI green, `internal/service` tests ran (3.6 s, none skipped), image built | |
-| REL-002 | Built, unverified | `.github/workflows/image.yml` | Never run; the GHCR package may need its visibility set on first push |
+| REL-002 | Done | Image workflow run 39870125984 on `main` (38a1c3a) after PR #1 merged, 2026-10-22 | Package visibility not checked |
 | REL-003 | Open | | Owner: Cloudflare account |
 | REL-004 | Open | | Hostname deferred by the owner |
 | AUTH-001 | Open | App ID `com.fernandocorreia.postitheka` registered | Needs hostname and the key (Owner) |
@@ -95,17 +97,23 @@ Strangers who have published a post: **0**.
 | MED-001 | Done | `internal/jobs/sweep.go`; `TestSweepDeletesOnlyOldUnattachedUploads` in CI; live run against RustFS removed row and object | |
 | WEB-001 | Open | | |
 | WEB-002 | Built, unverified | `web/src/styles.css` dark tokens | Never looked at in dark mode |
-| DSC-001 | Open | | |
 | PRV-001 | Open | | Owner approves the text |
 | OPS-001 | Built, unverified | `internal/analytics`; `TestProductEventsCarryNoPersonalData`, events asserted in `TestWorkerOutcomes`; empty key is a no-op (`TestNoAPIKeyMeansNothingIsSent`) | Needs production and a PostHog project key (Owner) to see an event arrive |
 | OPS-002 | Open | | |
-| META-001 | Open | | Owner |
-| X-001 | Open | | OPEN: API tier |
+| OAUTH-001 | Built, unverified | `internal/service/connect.go`, `internal/httpapi/oauth.go`, `migrations/20261023150000_oauth_connect.sql`; `TestOAuthConnect` (start, callback, replay, cancel, expiry, reconnect, two users); web Accounts checked headless at 1400 and 390 px, light and dark; iOS kit `ConnectTests` | Never run against a real platform; iOS connect screen built, not looked at on a simulator |
 | X-002 | Open | | |
+| ACC-001 | Open | | |
+| LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
+| DSC-001 | Open | | |
+| META-001 | Open | | Owner |
+| THR-001 | Open | | |
+| X-001 | Open | | OPEN: buy credits |
 | TT-001 | Open | | |
 | TT-002 | Open | | Owner |
 | FB-001 | Open | | Needs META-001 |
-| IG-001 | Open | | Needs META-001 |
+| IG-001 | Open | | META-001 for strangers; role holders can use it before |
+| RDT-001 | Open | | Owner |
+| RDT-002 | Open | | OPEN: title and subreddit |
 | VID-001 | Open | | |
 | IOS-001 | Built, unverified | `ios/`: Xcode project + `PostithekaKit` with the client generated by swift-openapi-generator 1.14.0; `task ios:check` green locally (16 kit tests, app builds) | CI job not yet run on GitHub |
 | IOS-002 | Open | | Needs AUTH-001; a pasted token stands in |
@@ -237,13 +245,6 @@ The dark tokens exist but have never been looked at.
 **Done when:** every screen is checked in dark mode at desktop and phone width, with
 screenshots, and contrast passes WCAG AA for text.
 
-### DSC-001 · Discord forum channels · S
-Forum and media channels need `thread_name`; today they fail permanently with a 400. Detect the
-channel type when connecting (from the webhook's channel) and send a thread name taken from the
-post's first line.
-
-**Done when:** a stubbed forum webhook receives `thread_name`, and a normal channel does not.
-
 ### PRV-001 · Privacy policy and terms · S
 Public pages served by the app. Needed for strangers and required by Meta's review (META-001).
 The agent drafts; the owner approves the text.
@@ -268,56 +269,144 @@ on unauthenticated requests.
 
 # P2 · Platforms
 
-**Gate:** the same post reaches Discord and at least two of X, TikTok, Facebook and Instagram
-from production, for a user who is not the owner.
+**Gate:** the same post reaches Discord and at least two of LinkedIn, X, Threads, Instagram,
+TikTok and Facebook from production, for a user who is not the owner.
+
+What each platform allows, with sources and the date checked, is in
+`docs/platform-research.md` (re-checked 2026-10-23). Every platform below except Discord connects
+through OAuth, so OAUTH-001 comes first. Order after it: LinkedIn (self-serve, usable as soon as
+the owner creates the app), Threads and Instagram (usable by app testers before review), X
+(code now, pay-per-use credits to use), TikTok (private-only until audited), Reddit (needs
+Reddit's approval first).
+
+### OAUTH-001 · OAuth connect flow · M
+Shared by every OAuth platform. `POST /v1/accounts/{platform}/connect` returns the consent URL;
+the platform redirects to `GET /oauth/{platform}/callback` (outside the spec: a browser redirect
+with no bearer token), which stores the account and redirects to the client the user started
+from (`/?connected=` on the web, `postitheka://connected` on iOS). State is single-use, stored
+hashed, 15 minutes; the PKCE verifier is sealed. Reconnecting the same platform user renews the
+credentials of the existing account (`accounts.remote_id`) instead of adding a second one.
+`GET /v1/platforms` says how each platform connects (`webhook` or `oauth`). `PUBLIC_URL` is the
+redirect base; client ids and secrets are per-platform environment variables, and a platform
+without them is not registered.
+
+**Done when:** start, callback, cancel, expired and replayed state, and reconnect are tested
+against a stub platform; the web and iOS Accounts screens open the consent page for an `oauth`
+platform and show the outcome.
+
+### X-002 · Token refresh for OAuth platforms · S
+**Needs:** OAUTH-001. Refresh before publishing, under a row lock on the account, and store the
+result sealed before publishing: X rotates refresh tokens, so two jobs refreshing at once would
+lock the account out. Refresh is the publisher's: X and TikTok use a refresh token, Threads and
+Instagram refresh the long-lived token itself (only once it is 24 hours old), LinkedIn has none.
+
+**Done when:** a publish with an expired access token refreshes it and succeeds, and two
+concurrent publishes for one account refresh once (tests).
+
+### ACC-001 · Accounts that need reconnecting · S
+**Needs:** OAUTH-001. A token that has expired and cannot be refreshed (LinkedIn after 60 days,
+Threads and Instagram after 60 days unused, any revoked grant) fails every target until the user
+reconnects. Mark the account, fail its targets with "reconnect LinkedIn", and show Reconnect on
+the account and its stamp.
+
+**Done when:** a 401 from a stubbed platform marks the account, the composer shows the stamp as
+needing reconnection, and reconnecting clears it (tests and a browser check).
+
+### LI-001 · LinkedIn publisher · M
+**Needs:** OAUTH-001. Personal profile through "Share on LinkedIn" (`w_member_social`,
+self-serve, no review). Posts API (`/rest/posts`, pinned `Linkedin-Version`), images through the
+Images API (one image, or 2 to 20 as a multi-image post), video through the Videos API (4 MB
+parts, finalize, wait for processing). Tokens last 60 days with no refresh, so renewal is
+reconnecting (ACC-001). Company Pages need the Community Management API: not in scope.
+
+**Done when:** tests against a stub cover connect, text, one image, several images, video and
+error classes; the owner posts to their own profile from a local server once the app exists.
+
+### DSC-001 · Discord forum channels · S
+Forum and media channels need `thread_name`; today they fail permanently with a 400. Detect the
+channel type when connecting (from the webhook's channel) and send a thread name taken from the
+post's first line.
+
+**Done when:** a stubbed forum webhook receives `thread_name`, and a normal channel does not.
 
 ### META-001 · Meta Business Verification and App Review · L · Owner
 **Needs:** PRV-001 and a deployed build (REL-004). Weeks of waiting, so start as soon as P1
-deploys. The agent prepares the permissions list, the use-case text and a screen recording of
-the flow; the owner submits.
+deploys. One review covers the Threads permissions (`threads_basic`,
+`threads_content_publish`), Instagram's (`instagram_business_basic`,
+`instagram_business_content_publish`) and Pages'. The agent prepares the permissions list, the
+use-case text and a screen recording of the flow; the owner submits.
 
-**Done when:** the Meta app is approved for the Pages and Instagram publishing permissions.
+**Done when:** the Meta app is approved for the Threads, Instagram and Pages publishing
+permissions.
+
+### THR-001 · Threads publisher · M
+**Needs:** OAUTH-001, X-002. Threads API: create a container, poll until `FINISHED`, publish.
+Media is fetched by Meta from a URL (presigned GET), never uploaded. 500 characters with emoji
+counted in UTF-8 bytes (`Rules.CountText`), at most 5 links, carousels of 2 to 20, JPEG/PNG up to
+8 MB, MP4/MOV up to 5 minutes and 1 GB, 250 posts a day. Before review only Threads testers can
+connect, which is enough for the owner.
+
+**Done when:** tests against a stub cover connect, the container lifecycle (including `ERROR`,
+`EXPIRED` and a publish that timed out), carousels and error classes; the owner posts to their
+own account from a local server.
+
+### IG-001 · Instagram publisher · M
+**Needs:** OAUTH-001, X-002. Instagram API with Instagram Login: Business and Creator accounts,
+no Facebook Page needed. Same container model as Threads. Images are JPEG only and fetched by
+URL; video can be uploaded (resumable). The docs give both 50 and 100 posts a day: read
+`content_publishing_limit` instead. Captions on carousels go on the parent only. Role holders can
+connect before review.
+
+**Done when:** tests against a stub pass, and a photo post lands on the owner's account.
 
 ### X-001 · X publisher · M
-**OPEN:** which X API tier to pay for, if any. Publisher with OAuth 2.0 PKCE connect, text and
-media upload, and X's weighted character counting as `Rules.CountText`. Check X's current docs
-and pricing first and date them in `Rules()`.
+**OPEN:** whether to buy X API credits. X is pay-per-use as of 2026-10-23: $0.015 per post,
+$0.20 for a post containing a URL, no subscription. Publisher with OAuth 2.0 PKCE (the code
+lives 30 seconds, so the callback exchanges at once), media through the v2 chunked upload
+(`media.write`), and X's weighted character counting as `Rules.CountText`. The code is built
+against stubs; only real use waits on the decision.
 
 **Done when:** tests against a stub cover connect, token refresh, text, media and error classes,
-and the owner posts to a real X account from production.
-
-### X-002 · Token refresh for OAuth platforms · S
-**Needs:** X-001. OAuth platforms issue expiring tokens. Refresh them before publishing and
-store the new pair, sealed. Shared by every OAuth publisher.
-
-**Done when:** a publish with an expired access token refreshes it and succeeds (test).
+and the owner posts to a real X account.
 
 ### TT-001 · TikTok upload to inbox · M
-TikTok's Content Posting API can upload a video to the user's TikTok drafts, which they finish
-in the app. This works before TikTok's audit. Check the current docs first.
+**Needs:** OAUTH-001, X-002, VID-001. Upload a video to the user's TikTok drafts
+(`video.upload`), which they finish in the app. Chunked upload (5 to 64 MB chunks, in order).
+Photos can only be pulled from a domain verified with TikTok, so they wait for a custom domain on
+the bucket. At most 5 pending drafts a day. Access tokens last 24 hours, refresh tokens a year.
 
 **Done when:** a stubbed upload-to-inbox flow is tested, and the owner sees a draft in their
 TikTok app.
 
 ### TT-002 · TikTok audit for direct posting · L · Owner
-**Needs:** TT-001. Until audited, direct posts are private-only. The agent prepares the audit
-material; the owner submits.
+**Needs:** TT-001. Until audited, direct posts are private-only and at most 5 users a day can
+post. Direct posting also requires a set UI (creator info, a privacy choice with no default,
+interaction toggles off). The agent prepares the audit material; the owner submits.
 
 **Done when:** TikTok approves direct posting with public visibility.
+
+### RDT-001 · Reddit API access · S · Owner
+Since November 2025 Reddit approves every new Data API client, and commercial use needs a
+separate written agreement. Native image and video upload is not in Reddit's official API docs,
+so under "official APIs only" Reddit is text and link posts. The owner requests access.
+
+**Done when:** Reddit approves the app for posting on users' behalf.
+
+### RDT-002 · Reddit publisher · M
+**OPEN:** Reddit posts need a title and a subreddit, which a post does not have. Either an
+account is one subreddit and the title is the post's first line, or the composer gets a title
+field. **Needs:** RDT-001 for real use, OAUTH-001, X-002. Text and link posts only, checked
+against the subreddit's `post_requirements` (flair, title length, banned domains) when the post
+is created.
+
+**Done when:** tests against a stub cover connect, a text post, a link post, a subreddit that
+requires flair, and error classes.
 
 ### FB-001 · Facebook Pages publisher · M
 **Needs:** META-001. Pages only: posting to personal profiles is not possible. Connect lists the
 user's Pages and creates one account per chosen Page.
 
 **Done when:** tests against a stub pass, and a post lands on a real Page from production.
-
-### IG-001 · Instagram publisher · M
-**Needs:** META-001. Business and Creator accounts only. Instagram downloads media from a URL,
-so this is the first user of `MediaSource.PublicURL`; the presigned GET must outlive the
-download. Mind the daily publishing limit.
-
-**Done when:** tests against a stub pass, and a photo post lands on a real account from
-production.
 
 ### VID-001 · Video rules · M
 Platforms limit video duration, aspect ratio and codec, which `Rules` cannot express today. Add

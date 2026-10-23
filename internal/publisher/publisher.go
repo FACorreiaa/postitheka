@@ -16,6 +16,7 @@ type Platform string
 
 const (
 	Discord   Platform = "discord"
+	LinkedIn  Platform = "linkedin"
 	X         Platform = "x"
 	Instagram Platform = "instagram"
 	Facebook  Platform = "facebook"
@@ -66,6 +67,22 @@ type Result struct {
 type Connection struct {
 	DisplayName string
 	Credentials []byte
+	// RemoteID is the platform's id for what was connected, when it has one.
+	// Connecting the same RemoteID again replaces the stored credentials
+	// rather than adding a second account.
+	RemoteID string
+}
+
+// OAuthConnector is implemented by a publisher whose accounts connect through
+// the platform's consent screen. The service mints and checks the state and
+// the PKCE verifier; the publisher knows the platform's endpoints, scopes and
+// whatever it deviates from the standard on.
+type OAuthConnector interface {
+	// AuthorizeURL is where the user is sent to grant access.
+	AuthorizeURL(state, verifier, redirectURL string) string
+	// Exchange trades the code from the callback for credentials, and looks
+	// up who was connected for the display name and RemoteID.
+	Exchange(ctx context.Context, code, verifier, redirectURL string) (Connection, error)
 }
 
 type Publisher interface {
@@ -133,7 +150,7 @@ func (r *Registry) AcceptsUpload(contentType string, size int64) error {
 			continue
 		}
 		typeKnown = true
-		if size <= rules.MaxMediaBytes {
+		if size <= rules.MaxBytes(contentType) {
 			return nil
 		}
 	}

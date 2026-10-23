@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Accounts } from "./Accounts";
+import { Accounts, type ConnectOutcome } from "./Accounts";
 import { type Account, api, messageOf, type PlatformInfo, type Post, readToken, setUnauthorizedHandler, writeToken } from "./api";
 import lockupDark from "./assets/lockup-horizontal-on-dark.svg";
 import lockupLight from "./assets/lockup-horizontal-on-light.svg";
 import { Composer } from "./Composer";
+import { platformNames } from "./rules";
 import { Sent } from "./Sent";
 
 // The lockup's colours are baked into each file, so the theme picks the file.
@@ -94,6 +95,15 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [loadError, setLoadError] = useState("");
   const accountsDialog = useRef<HTMLDialogElement>(null);
+  const [outcome] = useState(readConnectOutcome);
+
+  // Back from a platform's consent page: show how it went, then drop the
+  // query so a reload does not show it again.
+  useEffect(() => {
+    if (!outcome) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    accountsDialog.current?.showModal();
+  }, [outcome]);
 
   const loadAccounts = useCallback(async () => {
     const { data, error } = await api.GET("/v1/accounts");
@@ -155,7 +165,31 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
         <Sent posts={posts} accounts={accounts ?? []} />
       </main>
 
-      <Accounts ref={accountsDialog} accounts={accounts ?? []} onChanged={loadAccounts} />
+      <Accounts
+        ref={accountsDialog}
+        accounts={accounts ?? []}
+        platforms={platforms}
+        outcome={outcome}
+        onChanged={loadAccounts}
+      />
     </>
   );
+}
+
+// The redirect names no platform on failure: the server only knows the
+// outcome, and the platform's own message never travels in a URL.
+const connectFailed = "Not connected: the platform did not accept the sign-in. Try again.";
+const connectFailures: Record<string, string> = {
+  cancelled: "Not connected: access was not granted on the platform’s page.",
+  expired: "Not connected: the sign-in page was open too long. Try again.",
+  failed: connectFailed,
+};
+
+function readConnectOutcome(): ConnectOutcome | null {
+  const q = new URLSearchParams(window.location.search);
+  const connected = q.get("connected");
+  if (connected) return { ok: true, text: `${platformNames[connected] ?? connected} connected.` };
+  const failure = q.get("connect_error");
+  if (failure) return { ok: false, text: connectFailures[failure] ?? connectFailed };
+  return null;
 }

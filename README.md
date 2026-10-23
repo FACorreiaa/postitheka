@@ -53,6 +53,7 @@ again") rather than risk a duplicate post.
 | `cmd/server` | Entrypoint: `server`, `server migrate`, `server user create EMAIL` |
 | `internal/publisher` | `Publisher` interface, `Rules`, validation, error classes |
 | `internal/publisher/discord` | Discord webhooks: the first platform |
+| `internal/publisher/linkedin` | LinkedIn member posts through OAuth |
 | `internal/service` | Application behaviour: accounts, uploads, posts, tokens |
 | `internal/jobs` | River workers: publish one target, sweep unattached uploads, expire unreported handoffs |
 | `internal/secretbox` | AES-256-GCM for credentials at rest, bound to the row id |
@@ -66,18 +67,24 @@ again") rather than risk a duplicate post.
 
 1. A package under `internal/publisher/<name>` implementing `Publisher`, with
    its `Rules` taken from the platform's current docs, with the date checked.
-2. A connect flow: a service method that produces a `publisher.Connection` and
-   calls `storeAccount`, plus its route in the spec (OAuth platforms need an
-   authorize and a callback route).
-3. Register it in `cmd/server/main.go`. `GET /v1/platforms` picks it up.
+2. A connect flow. An OAuth platform implements `publisher.OAuthConnector`
+   (`AuthorizeURL`, `Exchange`) and gets the shared connect routes for free;
+   its client id and secret come from the environment through `internal/config`.
+   A webhook-style platform needs its own service method and route.
+3. Register it in `cmd/server/main.go` (OAuth platforms only when configured).
+   `GET /v1/platforms` picks it up.
 
 Tests stub the platform's HTTP API; see `discord_test.go`. Never a real token.
 
 ## Not done yet
 
 - **Sign in with Apple.** Tokens come from `server user create` until then.
-- **X, TikTok, Instagram, Facebook.** Start Meta Business Verification and the
-  TikTok audit early; both take weeks.
+- **LinkedIn** is built and tested against a stub; to use it, create a
+  LinkedIn developer app and set `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET`
+  in `.env` (see `.env.example`).
+- **X, Threads, Instagram, TikTok, Reddit, Facebook.** Order and blockers are in
+  `BACKLOG.md` (P2). Start Meta Business Verification and the TikTok audit
+  early; both take weeks.
 - **Discord forum channels** need `thread_name`; they fail permanently today.
 - **iOS:** the share extension and on-device video conversion. The composer,
   Sent, accounts and the WhatsApp handoff are built; WhatsApp has no posting

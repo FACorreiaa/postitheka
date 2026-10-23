@@ -74,3 +74,35 @@ struct APITests {
         }
     }
 }
+
+struct ConnectTests {
+    let base = URL(string: "http://localhost:8095")!
+
+    @Test func startConnectAsksForTheIOSReturnAndGivesTheConsentPage() async throws {
+        let stub = StubTransport([(200, #"{"authorize_url":"https://www.linkedin.com/oauth/v2/authorization?state=s"}"#)])
+        let api = API(baseURL: base, tokens: MemoryTokenStore("pk_test"), transport: stub)
+
+        let url = try await api.startConnect(platform: .linkedin)
+
+        #expect(url.host() == "www.linkedin.com")
+        #expect(stub.sent[0].request.path == "/v1/accounts/linkedin/connect")
+        #expect(stub.sent[0].body.contains(#""client":"ios""#) || stub.sent[0].body.contains(#""client" : "ios""#))
+    }
+
+    @Test func aConsentPageThatIsNotHTTPSIsRefused() async {
+        let stub = StubTransport([(200, #"{"authorize_url":"javascript:alert(1)"}"#)])
+        let api = API(baseURL: base, tokens: MemoryTokenStore("pk_test"), transport: stub)
+        await #expect(throws: APIError.self) { try await api.startConnect(platform: .linkedin) }
+    }
+
+    @Test func theCallbackSaysHowItEnded() {
+        #expect(ConnectOutcome(callback: URL(string: "postitheka://connected?platform=linkedin")!) == .connected(.linkedin))
+        guard case .failed(let cancelled) = ConnectOutcome(callback: URL(string: "postitheka://connected?error=cancelled")!) else {
+            Issue.record("cancelled read as connected"); return
+        }
+        #expect(cancelled.contains("not granted"))
+        guard case .failed = ConnectOutcome(callback: URL(string: "postitheka://connected?platform=myspace")!) else {
+            Issue.record("an unknown platform read as connected"); return
+        }
+    }
+}

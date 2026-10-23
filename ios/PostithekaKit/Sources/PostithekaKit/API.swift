@@ -78,6 +78,27 @@ public struct API: Sendable {
         }
     }
 
+    /// The consent page for connecting an account on an OAuth platform. Open
+    /// it in a web authentication session that ends on `connectCallbackScheme`;
+    /// the server sends the user there with the outcome.
+    public func startConnect(platform: Platform) async throws(APIError) -> URL {
+        let out = try await call {
+            try await client.startConnect(path: .init(platform: platform), body: .json(.init(client: .ios)))
+        }
+        switch out {
+        case .ok(let r):
+            let raw = try body { try r.body.json.authorize_url }
+            guard let url = URL(string: raw), url.scheme == "https" else {
+                throw .message("The server sent a sign-in address that cannot be opened.")
+            }
+            return url
+        case .badRequest(let r): throw .message(try body { try r.body.json.message })
+        case .notFound(let r): throw .message(try body { try r.body.json.message })
+        case .unauthorized: throw .unauthorized
+        case .undocumented(let code, _): throw Self.unexpected(code)
+        }
+    }
+
     public func disconnect(accountID: String) async throws(APIError) {
         let out = try await call { try await client.deleteAccount(path: .init(accountId: accountID)) }
         switch out {

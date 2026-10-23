@@ -54,6 +54,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/accounts/{platform}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Starts connecting an account on a platform that uses OAuth (its PlatformInfo has connect: oauth). Returns the platform's consent page; send the user there. The platform redirects back to this server, which stores the account and sends the user on to the client they started from: the web app at /?connected={platform}, or the iOS app at postitheka://connected?platform={platform}. On failure the redirect carries connect_error (web) or error (iOS) instead: cancelled, expired or failed. Connecting an account that is already connected renews its credentials and keeps it as the same account. */
+        post: operations["startConnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/accounts/{accountId}": {
         parameters: {
             query?: never;
@@ -148,9 +165,14 @@ export interface components {
          * @description whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
          * @enum {string}
          */
-        Platform: "discord" | "x" | "instagram" | "facebook" | "tiktok" | "whatsapp";
+        Platform: "discord" | "linkedin" | "x" | "instagram" | "facebook" | "tiktok" | "whatsapp";
         PlatformInfo: {
             platform: components["schemas"]["Platform"];
+            /**
+             * @description How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
+             * @enum {string}
+             */
+            connect: "webhook" | "oauth";
             rules: components["schemas"]["Rules"];
         };
         Rules: {
@@ -159,9 +181,14 @@ export interface components {
             max_media: number;
             /**
              * Format: int64
-             * @description Per file.
+             * @description Per file. For video files, max_video_bytes applies instead when it is not 0.
              */
             max_media_bytes: number;
+            /**
+             * Format: int64
+             * @description Per video file (a media type starting video/). 0 means max_media_bytes.
+             */
+            max_video_bytes: number;
             /**
              * Format: int64
              * @description Across all files in one post. 0 means no extra limit.
@@ -170,6 +197,8 @@ export interface components {
             media_types: string[];
             requires_text: boolean;
             requires_media: boolean;
+            /** @description A video must be the only file in the post. */
+            video_alone: boolean;
         };
         Account: {
             /** Format: uuid */
@@ -184,6 +213,17 @@ export interface components {
             webhook_url: string;
             /** @description Defaults to the webhook's own name. */
             display_name?: string;
+        };
+        StartConnectRequest: {
+            /**
+             * @description Where to send the user once the platform is done.
+             * @enum {string}
+             */
+            client: "web" | "ios";
+        };
+        StartConnectResponse: {
+            /** Format: uri */
+            authorize_url: string;
         };
         CreateUploadRequest: {
             /** @example image/jpeg */
@@ -372,6 +412,35 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    startConnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: components["schemas"]["Platform"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartConnectRequest"];
+            };
+        };
+        responses: {
+            /** @description The consent page to open */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartConnectResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     deleteAccount: {

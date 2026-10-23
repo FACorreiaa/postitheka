@@ -92,6 +92,24 @@ final class AppModel {
         }
     }
 
+    /// Connects an account on an OAuth platform. `authenticate` shows the
+    /// platform's consent page and returns the URL the server ended on; nil
+    /// means the user closed the page, which is not an error to show.
+    /// Returns what to tell the user.
+    func connect(_ platform: Platform, authenticate: (URL) async throws -> URL?) async -> ConnectOutcome? {
+        let consent: URL
+        do {
+            consent = try await api.startConnect(platform: platform)
+        } catch {
+            if error == .unauthorized { signOut() }
+            return .failed(error.localizedDescription)
+        }
+        guard let callback = try? await authenticate(consent) else { return nil }
+        let outcome = ConnectOutcome(callback: callback)
+        if case .connected = outcome { await refresh() }
+        return outcome
+    }
+
     func disconnect(_ account: Account) async {
         await run {
             try await api.disconnect(accountID: account.id)
