@@ -22,6 +22,11 @@ type Config struct {
 
 	ListenAddr string
 
+	// PublicURL is where users reach this server, without a trailing slash.
+	// OAuth platforms redirect back to PublicURL + /oauth/{platform}/callback,
+	// and each platform's developer app must list exactly that URL.
+	PublicURL string
+
 	DatabaseURL string
 	AutoMigrate bool
 
@@ -44,6 +49,17 @@ type Config struct {
 	// so this is a bandwidth knob more than a CPU one.
 	PublishWorkers int
 
+	// LinkedIn developer app ("Share on LinkedIn" and "Sign In with LinkedIn
+	// using OpenID Connect"). Both empty: LinkedIn is not offered. The secret
+	// is a credential like any other and comes only from the environment.
+	LinkedInClientID     string
+	LinkedInClientSecret string
+
+	// PostHog product analytics. An empty key disables capture entirely:
+	// nothing is sent, and no credential is needed to develop.
+	PostHogAPIKey string
+	PostHogHost   string
+
 	LogLevel  string
 	LogFormat string
 
@@ -59,17 +75,22 @@ func Load() (Config, error) {
 	c := Config{
 		Env:                env("GO_ENV", "development"),
 		ListenAddr:         env("LISTEN_ADDR", ":8095"),
+		PublicURL:          strings.TrimSuffix(env("PUBLIC_URL", ""), "/"),
 		DatabaseURL:        env("DATABASE_URL", ""),
 		TokenEncryptionKey: env("TOKEN_ENCRYPTION_KEY", ""),
 		S3Endpoint:         env("S3_ENDPOINT", ""),
 		// R2 accepts "auto" and nothing else meaningful; MinIO ignores it.
-		S3Region:        env("S3_REGION", "auto"),
-		S3Bucket:        env("S3_BUCKET", ""),
-		S3AccessKey:     env("S3_ACCESS_KEY", ""),
-		S3SecretKey:     env("S3_SECRET_KEY", ""),
-		LogLevel:        env("LOG_LEVEL", "info"),
-		LogFormat:       env("LOG_FORMAT", ""),
-		ShutdownTimeout: 30 * time.Second,
+		S3Region:             env("S3_REGION", "auto"),
+		S3Bucket:             env("S3_BUCKET", ""),
+		S3AccessKey:          env("S3_ACCESS_KEY", ""),
+		S3SecretKey:          env("S3_SECRET_KEY", ""),
+		LinkedInClientID:     env("LINKEDIN_CLIENT_ID", ""),
+		LinkedInClientSecret: env("LINKEDIN_CLIENT_SECRET", ""),
+		PostHogAPIKey:        env("POSTHOG_API_KEY", ""),
+		PostHogHost:          strings.TrimSuffix(env("POSTHOG_HOST", "https://eu.i.posthog.com"), "/"),
+		LogLevel:             env("LOG_LEVEL", "info"),
+		LogFormat:            env("LOG_FORMAT", ""),
+		ShutdownTimeout:      30 * time.Second,
 	}
 
 	var err error
@@ -84,6 +105,16 @@ func Load() (Config, error) {
 	}
 	if c.PublishWorkers < 1 {
 		return Config{}, fmt.Errorf("config: PUBLISH_WORKERS must be at least 1, got %d", c.PublishWorkers)
+	}
+
+	if (c.LinkedInClientID == "") != (c.LinkedInClientSecret == "") {
+		return Config{}, fmt.Errorf("config: set both LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET, or neither")
+	}
+
+	if c.PublicURL == "" && !c.IsProduction() {
+		// Production has no sensible default: a wrong one would send every
+		// consent screen back to a host the platform rejects.
+		c.PublicURL = "http://localhost:8095"
 	}
 
 	if c.LogFormat == "" {
@@ -104,6 +135,7 @@ func Load() (Config, error) {
 		"S3_BUCKET":            c.S3Bucket,
 		"S3_ACCESS_KEY":        c.S3AccessKey,
 		"S3_SECRET_KEY":        c.S3SecretKey,
+		"PUBLIC_URL":           c.PublicURL,
 	} {
 		if v == "" {
 			missing = append(missing, name)

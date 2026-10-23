@@ -42,7 +42,9 @@ export function Sent({ posts, accounts }: { posts: Post[] | null; accounts: Acco
 function TargetRow({ target: t, name }: { target: Target; name: string | undefined }) {
   const where = `${platformNames[t.platform] ?? t.platform}${name ? `, ${name}` : ""}`;
 
-  if (t.status === "published" && t.published_at) {
+  // A handoff gets its postmark too: the user sent it from WhatsApp's own app,
+  // so there is no link to show, only where and when.
+  if ((t.status === "published" || t.status === "handed_off") && t.published_at) {
     const at = new Date(t.published_at);
     return (
       <li className="target published">
@@ -55,13 +57,22 @@ function TargetRow({ target: t, name }: { target: Target; name: string | undefin
           ) : (
             where
           )}
+          {t.status === "handed_off" && <span className="reason">Sent from the phone</span>}
         </span>
       </li>
     );
   }
 
   const status =
-    t.status === "failed" ? "Not sent" : t.status === "publishing" ? "Sending" : t.last_error ? "Retrying" : "Waiting";
+    t.status === "failed"
+      ? "Not sent"
+      : t.status === "publishing"
+        ? "Sending"
+        : t.status === "handing_off"
+          ? "On the phone"
+          : t.last_error
+            ? "Retrying"
+            : "Waiting";
   return (
     <li className={`target ${t.status}`}>
       <span className="pill">{status}</span>

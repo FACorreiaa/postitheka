@@ -74,6 +74,45 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /v1/accounts/{platform}/connect:
+    post:
+      operationId: startConnect
+      description: >
+        Starts connecting an account on a platform that uses OAuth (its
+        PlatformInfo has connect: oauth). Returns the platform's consent page;
+        send the user there. The platform redirects back to this server, which
+        stores the account and sends the user on to the client they started
+        from: the web app at /?connected={platform}, or the iOS app at
+        postitheka://connected?platform={platform}. On failure the redirect
+        carries connect_error (web) or error (iOS) instead: cancelled,
+        expired or failed. Connecting an account that is already connected
+        renews its credentials and keeps it as the same account.
+      parameters:
+        - name: platform
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/Platform"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartConnectRequest"
+      responses:
+        "200":
+          description: The consent page to open
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartConnectResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /v1/accounts/{accountId}:
     delete:
       operationId: deleteAccount
@@ -181,6 +220,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/ValidationError"
 
+  /v1/targets/{targetId}/handoff:
+    post:
+      operationId: completeHandoff
+      description: >
+        Records what happened to an assisted target once the share sheet
+        closed. sent=true marks it handed_off; false marks it failed. Only a
+        target still handing_off can be completed; repeating the same outcome
+        is accepted.
+      parameters:
+        - name: targetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteHandoffRequest"
+      responses:
+        "200":
+          description: The post, with the target updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The target is not an assisted target waiting for its handoff.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /v1/posts/{postId}:
     get:
       operationId: getPost
@@ -241,14 +319,24 @@ components:
   schemas:
     Platform:
       type: string
-      enum: [discord, x, instagram, facebook, tiktok]
+      enum: [discord, linkedin, x, instagram, facebook, tiktok, whatsapp]
+      description: >
+        whatsapp is assisted only: it has no posting API, so the iOS app hands
+        the post to WhatsApp and the user sends it there.
 
     PlatformInfo:
       type: object
-      required: [platform, rules]
+      required: [platform, connect, rules]
       properties:
         platform:
           $ref: "#/components/schemas/Platform"
+        connect:
+          type: string
+          enum: [webhook, oauth]
+          description: >
+            How an account is connected. webhook: paste a URL
+            (POST /v1/accounts/discord). oauth: open the platform's consent
+            page (POST /v1/accounts/{platform}/connect).
         rules:
           $ref: "#/components/schemas/Rules"
 
@@ -259,9 +347,11 @@ components:
         - max_media
         - max_media_bytes
         - max_total_media_bytes
+        - max_video_bytes
         - media_types
         - requires_text
         - requires_media
+        - video_alone
       properties:
         max_text_length:
           type: integer
@@ -271,7 +361,11 @@ components:
         max_media_bytes:
           type: integer
           format: int64
-          description: Per file.
+          description: Per file. For video files, max_video_bytes applies instead when it is not 0.
+        max_video_bytes:
+          type: integer
+          format: int64
+          description: Per video file (a media type starting video/). 0 means max_media_bytes.
         max_total_media_bytes:
           type: integer
           format: int64
@@ -284,6 +378,9 @@ components:
           type: boolean
         requires_media:
           type: boolean
+        video_alone:
+          type: boolean
+          description: A video must be the only file in the post.
 
     Account:
       type: object
@@ -310,6 +407,23 @@ components:
         display_name:
           type: string
           description: Defaults to the webhook's own name.
+
+    StartConnectRequest:
+      type: object
+      required: [client]
+      properties:
+        client:
+          type: string
+          enum: [web, ios]
+          description: Where to send the user once the platform is done.
+
+    StartConnectResponse:
+      type: object
+      required: [authorize_url]
+      properties:
+        authorize_url:
+          type: string
+          format: uri
 
     CreateUploadRequest:
       type: object
@@ -346,6 +460,7 @@ components:
     CreatePostRequest:
       type: object
       required: [account_ids]
+      description: At least one account or one assisted platform.
       properties:
         text:
           type: string
@@ -357,14 +472,31 @@ components:
           description: In display order.
         account_ids:
           type: array
-          minItems: 1
           items:
             type: string
             format: uuid
+        assisted:
+          type: array
+          description: >
+            Platforms the client will hand the post to itself (WhatsApp, from
+            iOS). Each gets a target in handing_off and no publish job; the
+            client reports the outcome with POST /v1/targets/{targetId}/handoff.
+            Not allowed with a future scheduled_at: a handoff happens now, on
+            the device.
+          items:
+            $ref: "#/components/schemas/Platform"
         scheduled_at:
           type: string
           format: date-time
           description: Omit to publish now.
+
+    CompleteHandoffRequest:
+      type: object
+      required: [sent]
+      properties:
+        sent:
+          type: boolean
+          description: True when the user sent the post from the platform's app.
 
     Post:
       type: object
@@ -406,7 +538,11 @@ components:
           $ref: "#/components/schemas/Platform"
         status:
           type: string
-          enum: [pending, publishing, published, failed]
+          enum: [pending, publishing, published, failed, handing_off, handed_off]
+          description: >
+            handing_off and handed_off are for assisted platforms: the client
+            is showing the share sheet, or the user sent the post from the
+            platform's own app.
         last_error:
           type: string
         remote_url:

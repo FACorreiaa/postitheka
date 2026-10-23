@@ -14,6 +14,43 @@ permissions:
   contents: read
 
 jobs:
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The whole history: a secret committed and then deleted is still
+          # in the repo for anyone who clones it.
+          fetch-depth: 0
+
+      - name: gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.1 \
+            git /repo --no-banner --redact --exit-code 1
+
+  ios:
+    name: iOS (client current, kit tests, app builds)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26.4"
+
+      - uses: arduino/setup-task@v2
+        with:
+          version: 3.54.0
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # The UI test needs a running server and a token, so it is local only
+      # (task ios:uitest); here it would skip.
+      - name: task ios:check
+        run: task ios:check
+
   check:
     name: task check
     runs-on: ubuntu-latest

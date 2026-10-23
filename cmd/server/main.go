@@ -25,6 +25,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/FACorreiaa/postitheka/internal/analytics"
 	"github.com/FACorreiaa/postitheka/internal/config"
 	"github.com/FACorreiaa/postitheka/internal/database"
 	"github.com/FACorreiaa/postitheka/internal/db"
@@ -33,6 +34,7 @@ import (
 	"github.com/FACorreiaa/postitheka/internal/media"
 	"github.com/FACorreiaa/postitheka/internal/publisher"
 	"github.com/FACorreiaa/postitheka/internal/publisher/discord"
+	"github.com/FACorreiaa/postitheka/internal/publisher/linkedin"
 	"github.com/FACorreiaa/postitheka/internal/secretbox"
 	"github.com/FACorreiaa/postitheka/internal/service"
 	"github.com/FACorreiaa/postitheka/web"
@@ -122,16 +124,24 @@ func serve(cfg config.Config) error {
 	// Every platform this server publishes to is registered here, and only
 	// here. GET /v1/platforms lists exactly this set.
 	discordPub := discord.New(nil)
-	registry := publisher.NewRegistry(discordPub)
+	pubs := []publisher.Publisher{discordPub}
+	// An OAuth platform is offered only when its developer app is configured:
+	// without a client id there is no consent page to send anyone to.
+	if cfg.LinkedInClientID != "" {
+		pubs = append(pubs, linkedin.New(cfg.LinkedInClientID, cfg.LinkedInClientSecret, nil))
+	}
+	registry := publisher.NewRegistry(pubs...)
 
 	workers := river.NewWorkers()
-	river.AddWorker(workers, jobs.NewPublishWorker(db.New(pool), box, registry, store, slog.Default()))
+	events := analytics.New(cfg.PostHogAPIKey, cfg.PostHogHost, slog.Default())
+	river.AddWorker(workers, jobs.NewPublishWorker(db.New(pool), box, registry, store, events, slog.Default()))
 	river.AddWorker(workers, jobs.NewSweepMediaWorker(pool, store, slog.Default()))
+	river.AddWorker(workers, jobs.NewExpireHandoffsWorker(db.New(pool), slog.Default()))
 
 	rc, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Queues:       map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: cfg.PublishWorkers}},
 		Workers:      workers,
-		PeriodicJobs: []*river.PeriodicJob{jobs.PeriodicSweepMedia()},
+		PeriodicJobs: []*river.PeriodicJob{jobs.PeriodicSweepMedia(), jobs.PeriodicExpireHandoffs()},
 		Logger:       slog.Default(),
 	})
 	if err != nil {
@@ -142,12 +152,14 @@ func serve(cfg config.Config) error {
 	}
 
 	svc := service.New(service.Deps{
-		Pool:     pool,
-		River:    rc,
-		Box:      box,
-		Registry: registry,
-		Storage:  store,
-		Discord:  discordPub,
+		Pool:      pool,
+		River:     rc,
+		Box:       box,
+		Registry:  registry,
+		Storage:   store,
+		Discord:   discordPub,
+		Analytics: events,
+		PublicURL: cfg.PublicURL,
 	})
 
 	srv := &http.Server{
@@ -179,6 +191,9 @@ func serve(cfg config.Config) error {
 	// leave its target 'publishing' and be failed as interrupted, so letting
 	// in-flight posts finish is worth most of the shutdown budget.
 	riverErr := rc.Stop(shutdownCtx)
+	// After River, so the outcomes of the last jobs are flushed too. Bounded
+	// by the same budget: a hung analytics endpoint cannot hold up a deploy.
+	_ = events.Close(shutdownCtx)
 	return errors.Join(httpErr, riverErr)
 }
 
@@ -196,6 +211,10 @@ func routes(pool *pgxpool.Pool, svc *service.Service) http.Handler {
 		}
 		_, _ = w.Write([]byte("ok"))
 	})
+
+	// Outside the spec too: platforms redirect the browser here with no
+	// bearer token. The state is what identifies the user.
+	r.Get("/oauth/{platform}/callback", httpapi.OAuthCallback(svc, slog.Default()))
 
 	httpapi.Mount(r, svc, slog.Default())
 
@@ -220,8 +239,11 @@ func createUser(cfg config.Config, email string) error {
 	}
 	defer pool.Close()
 
-	// No river client or storage: minting a token touches neither.
-	svc := service.New(service.Deps{Pool: pool})
+	// No river client or storage: minting a token touches neither. Analytics
+	// is flushed before exit, so a sign-up from the CLI is not lost.
+	events := analytics.New(cfg.PostHogAPIKey, cfg.PostHogHost, slog.Default())
+	defer func() { _ = events.Close(ctx) }()
+	svc := service.New(service.Deps{Pool: pool, Analytics: events})
 	id, token, err := svc.CreateUserWithToken(ctx, email, "cli")
 	if err != nil {
 		return err

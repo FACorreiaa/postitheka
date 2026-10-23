@@ -54,6 +54,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/accounts/{platform}/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Starts connecting an account on a platform that uses OAuth (its PlatformInfo has connect: oauth). Returns the platform's consent page; send the user there. The platform redirects back to this server, which stores the account and sends the user on to the client they started from: the web app at /?connected={platform}, or the iOS app at postitheka://connected?platform={platform}. On failure the redirect carries connect_error (web) or error (iOS) instead: cancelled, expired or failed. Connecting an account that is already connected renews its credentials and keeps it as the same account. */
+        post: operations["startConnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/accounts/{accountId}": {
         parameters: {
             query?: never;
@@ -107,6 +124,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/targets/{targetId}/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Records what happened to an assisted target once the share sheet closed. sent=true marks it handed_off; false marks it failed. Only a target still handing_off can be completed; repeating the same outcome is accepted. */
+        post: operations["completeHandoff"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/posts/{postId}": {
         parameters: {
             query?: never;
@@ -127,10 +161,18 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** @enum {string} */
-        Platform: "discord" | "x" | "instagram" | "facebook" | "tiktok";
+        /**
+         * @description whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+         * @enum {string}
+         */
+        Platform: "discord" | "linkedin" | "x" | "instagram" | "facebook" | "tiktok" | "whatsapp";
         PlatformInfo: {
             platform: components["schemas"]["Platform"];
+            /**
+             * @description How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
+             * @enum {string}
+             */
+            connect: "webhook" | "oauth";
             rules: components["schemas"]["Rules"];
         };
         Rules: {
@@ -139,9 +181,14 @@ export interface components {
             max_media: number;
             /**
              * Format: int64
-             * @description Per file.
+             * @description Per file. For video files, max_video_bytes applies instead when it is not 0.
              */
             max_media_bytes: number;
+            /**
+             * Format: int64
+             * @description Per video file (a media type starting video/). 0 means max_media_bytes.
+             */
+            max_video_bytes: number;
             /**
              * Format: int64
              * @description Across all files in one post. 0 means no extra limit.
@@ -150,6 +197,8 @@ export interface components {
             media_types: string[];
             requires_text: boolean;
             requires_media: boolean;
+            /** @description A video must be the only file in the post. */
+            video_alone: boolean;
         };
         Account: {
             /** Format: uuid */
@@ -164,6 +213,17 @@ export interface components {
             webhook_url: string;
             /** @description Defaults to the webhook's own name. */
             display_name?: string;
+        };
+        StartConnectRequest: {
+            /**
+             * @description Where to send the user once the platform is done.
+             * @enum {string}
+             */
+            client: "web" | "ios";
+        };
+        StartConnectResponse: {
+            /** Format: uri */
+            authorize_url: string;
         };
         CreateUploadRequest: {
             /** @example image/jpeg */
@@ -184,16 +244,23 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
         };
+        /** @description At least one account or one assisted platform. */
         CreatePostRequest: {
             text?: string;
             /** @description In display order. */
             media_ids?: string[];
             account_ids: string[];
+            /** @description Platforms the client will hand the post to itself (WhatsApp, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device. */
+            assisted?: components["schemas"]["Platform"][];
             /**
              * Format: date-time
              * @description Omit to publish now.
              */
             scheduled_at?: string;
+        };
+        CompleteHandoffRequest: {
+            /** @description True when the user sent the post from the platform's app. */
+            sent: boolean;
         };
         Post: {
             /** Format: uuid */
@@ -215,8 +282,11 @@ export interface components {
              */
             account_id?: string;
             platform: components["schemas"]["Platform"];
-            /** @enum {string} */
-            status: "pending" | "publishing" | "published" | "failed";
+            /**
+             * @description handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
+             * @enum {string}
+             */
+            status: "pending" | "publishing" | "published" | "failed" | "handing_off" | "handed_off";
             last_error?: string;
             remote_url?: string;
             /** Format: date-time */
@@ -344,6 +414,35 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    startConnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                platform: components["schemas"]["Platform"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartConnectRequest"];
+            };
+        };
+        responses: {
+            /** @description The consent page to open */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StartConnectResponse"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     deleteAccount: {
         parameters: {
             query?: never;
@@ -449,6 +548,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ValidationError"];
+                };
+            };
+        };
+    };
+    completeHandoff: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteHandoffRequest"];
+            };
+        };
+        responses: {
+            /** @description The post, with the target updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Post"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The target is not an assisted target waiting for its handoff. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
         };

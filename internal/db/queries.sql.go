@@ -28,6 +28,50 @@ func (q *Queries) AddPostMedia(ctx context.Context, arg AddPostMediaParams) erro
 	return err
 }
 
+const completeHandoff = `-- name: CompleteHandoff :one
+UPDATE post_targets t
+SET status = $1,
+    last_error = $2,
+    published_at = CASE WHEN $1 = 'handed_off' THEN now() END,
+    updated_at = now()
+FROM posts p
+WHERE t.id = $3 AND p.id = t.post_id AND p.user_id = $4
+  AND t.status = 'handing_off'
+RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at
+`
+
+type CompleteHandoffParams struct {
+	Status    string
+	LastError *string
+	ID        uuid.UUID
+	UserID    uuid.UUID
+}
+
+// Conditional on handing_off, so a late or repeated report cannot overwrite
+// an outcome already recorded.
+func (q *Queries) CompleteHandoff(ctx context.Context, arg CompleteHandoffParams) (PostTarget, error) {
+	row := q.db.QueryRow(ctx, completeHandoff,
+		arg.Status,
+		arg.LastError,
+		arg.ID,
+		arg.UserID,
+	)
+	var i PostTarget
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.AccountID,
+		&i.Platform,
+		&i.Status,
+		&i.LastError,
+		&i.RemoteID,
+		&i.RemoteUrl,
+		&i.PublishedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createAPIToken = `-- name: CreateAPIToken :exec
 INSERT INTO api_tokens (user_id, token_hash, name) VALUES ($1, $2, $3)
 `
@@ -44,8 +88,8 @@ func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) 
 }
 
 const createAccount = `-- name: CreateAccount :one
-INSERT INTO accounts (id, user_id, platform, display_name, credentials)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO accounts (id, user_id, platform, display_name, credentials, remote_id)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING id, user_id, platform, display_name, created_at
 `
 
@@ -55,6 +99,7 @@ type CreateAccountParams struct {
 	Platform    string
 	DisplayName string
 	Credentials []byte
+	RemoteID    *string
 }
 
 type CreateAccountRow struct {
@@ -72,6 +117,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 		arg.Platform,
 		arg.DisplayName,
 		arg.Credentials,
+		arg.RemoteID,
 	)
 	var i CreateAccountRow
 	err := row.Scan(
@@ -80,6 +126,34 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 		&i.Platform,
 		&i.DisplayName,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createAssistedTarget = `-- name: CreateAssistedTarget :one
+INSERT INTO post_targets (post_id, platform, status) VALUES ($1, $2, 'handing_off')
+RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at
+`
+
+type CreateAssistedTargetParams struct {
+	PostID   uuid.UUID
+	Platform string
+}
+
+func (q *Queries) CreateAssistedTarget(ctx context.Context, arg CreateAssistedTargetParams) (PostTarget, error) {
+	row := q.db.QueryRow(ctx, createAssistedTarget, arg.PostID, arg.Platform)
+	var i PostTarget
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.AccountID,
+		&i.Platform,
+		&i.Status,
+		&i.LastError,
+		&i.RemoteID,
+		&i.RemoteUrl,
+		&i.PublishedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -104,6 +178,30 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) error 
 		arg.ObjectKey,
 		arg.ContentType,
 		arg.SizeBytes,
+	)
+	return err
+}
+
+const createOAuthState = `-- name: CreateOAuthState :exec
+INSERT INTO oauth_states (state_hash, user_id, platform, verifier, client)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type CreateOAuthStateParams struct {
+	StateHash []byte
+	UserID    uuid.UUID
+	Platform  string
+	Verifier  []byte
+	Client    string
+}
+
+func (q *Queries) CreateOAuthState(ctx context.Context, arg CreateOAuthStateParams) error {
+	_, err := q.db.Exec(ctx, createOAuthState,
+		arg.StateHash,
+		arg.UserID,
+		arg.Platform,
+		arg.Verifier,
+		arg.Client,
 	)
 	return err
 }
@@ -201,6 +299,20 @@ func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) (i
 	return result.RowsAffected(), nil
 }
 
+const deleteStaleOAuthStates = `-- name: DeleteStaleOAuthStates :exec
+DELETE FROM oauth_states WHERE user_id = $1 AND created_at < $2
+`
+
+type DeleteStaleOAuthStatesParams struct {
+	UserID    uuid.UUID
+	CreatedAt time.Time
+}
+
+func (q *Queries) DeleteStaleOAuthStates(ctx context.Context, arg DeleteStaleOAuthStatesParams) error {
+	_, err := q.db.Exec(ctx, deleteStaleOAuthStates, arg.UserID, arg.CreatedAt)
+	return err
+}
+
 const deleteUnattachedMedia = `-- name: DeleteUnattachedMedia :many
 DELETE FROM media m
 WHERE m.id = ANY($1::uuid[])
@@ -229,6 +341,60 @@ func (q *Queries) DeleteUnattachedMedia(ctx context.Context, ids []uuid.UUID) ([
 		return nil, err
 	}
 	return items, nil
+}
+
+const expireHandoffs = `-- name: ExpireHandoffs :execrows
+UPDATE post_targets
+SET status = 'failed', last_error = $1, updated_at = now()
+WHERE status = 'handing_off' AND updated_at < $2
+`
+
+type ExpireHandoffsParams struct {
+	LastError *string
+	Cutoff    time.Time
+}
+
+// A handoff the phone never reported (app killed with the share sheet open)
+// would otherwise wait forever.
+func (q *Queries) ExpireHandoffs(ctx context.Context, arg ExpireHandoffsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, expireHandoffs, arg.LastError, arg.Cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const getAccountByRemoteID = `-- name: GetAccountByRemoteID :one
+SELECT id, user_id, platform, display_name, created_at
+FROM accounts
+WHERE user_id = $1 AND platform = $2 AND remote_id = $3
+`
+
+type GetAccountByRemoteIDParams struct {
+	UserID   uuid.UUID
+	Platform string
+	RemoteID *string
+}
+
+type GetAccountByRemoteIDRow struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	Platform    string
+	DisplayName string
+	CreatedAt   time.Time
+}
+
+func (q *Queries) GetAccountByRemoteID(ctx context.Context, arg GetAccountByRemoteIDParams) (GetAccountByRemoteIDRow, error) {
+	row := q.db.QueryRow(ctx, getAccountByRemoteID, arg.UserID, arg.Platform, arg.RemoteID)
+	var i GetAccountByRemoteIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Platform,
+		&i.DisplayName,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getAccountsByIDs = `-- name: GetAccountsByIDs :many
@@ -365,7 +531,7 @@ func (q *Queries) GetPostByIdempotencyKey(ctx context.Context, arg GetPostByIdem
 const getTargetForPublish = `-- name: GetTargetForPublish :one
 SELECT
     t.id, t.post_id, t.account_id, t.platform, t.status,
-    p.text,
+    p.user_id, p.text,
     a.credentials
 FROM post_targets t
 JOIN posts p ON p.id = t.post_id
@@ -379,6 +545,7 @@ type GetTargetForPublishRow struct {
 	AccountID   uuid.NullUUID
 	Platform    string
 	Status      string
+	UserID      uuid.UUID
 	Text        string
 	Credentials []byte
 }
@@ -394,8 +561,38 @@ func (q *Queries) GetTargetForPublish(ctx context.Context, id uuid.UUID) (GetTar
 		&i.AccountID,
 		&i.Platform,
 		&i.Status,
+		&i.UserID,
 		&i.Text,
 		&i.Credentials,
+	)
+	return i, err
+}
+
+const getTargetForUser = `-- name: GetTargetForUser :one
+SELECT t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at FROM post_targets t
+JOIN posts p ON p.id = t.post_id
+WHERE t.id = $1 AND p.user_id = $2
+`
+
+type GetTargetForUserParams struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+}
+
+func (q *Queries) GetTargetForUser(ctx context.Context, arg GetTargetForUserParams) (PostTarget, error) {
+	row := q.db.QueryRow(ctx, getTargetForUser, arg.ID, arg.UserID)
+	var i PostTarget
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.AccountID,
+		&i.Platform,
+		&i.Status,
+		&i.LastError,
+		&i.RemoteID,
+		&i.RemoteUrl,
+		&i.PublishedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -692,6 +889,72 @@ func (q *Queries) MarkTargetPublishing(ctx context.Context, id uuid.UUID) (int64
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const replaceAccountCredentials = `-- name: ReplaceAccountCredentials :one
+UPDATE accounts SET credentials = $3, display_name = $4
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, platform, display_name, created_at
+`
+
+type ReplaceAccountCredentialsParams struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	Credentials []byte
+	DisplayName string
+}
+
+type ReplaceAccountCredentialsRow struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	Platform    string
+	DisplayName string
+	CreatedAt   time.Time
+}
+
+func (q *Queries) ReplaceAccountCredentials(ctx context.Context, arg ReplaceAccountCredentialsParams) (ReplaceAccountCredentialsRow, error) {
+	row := q.db.QueryRow(ctx, replaceAccountCredentials,
+		arg.ID,
+		arg.UserID,
+		arg.Credentials,
+		arg.DisplayName,
+	)
+	var i ReplaceAccountCredentialsRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Platform,
+		&i.DisplayName,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const takeOAuthState = `-- name: TakeOAuthState :one
+DELETE FROM oauth_states
+WHERE state_hash = $1 AND platform = $2
+RETURNING state_hash, user_id, platform, verifier, client, created_at
+`
+
+type TakeOAuthStateParams struct {
+	StateHash []byte
+	Platform  string
+}
+
+// Taking a state deletes it, so a callback replayed with the same state
+// finds nothing.
+func (q *Queries) TakeOAuthState(ctx context.Context, arg TakeOAuthStateParams) (OauthState, error) {
+	row := q.db.QueryRow(ctx, takeOAuthState, arg.StateHash, arg.Platform)
+	var i OauthState
+	err := row.Scan(
+		&i.StateHash,
+		&i.UserID,
+		&i.Platform,
+		&i.Verifier,
+		&i.Client,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const useAPIToken = `-- name: UseAPIToken :one

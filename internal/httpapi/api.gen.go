@@ -28,7 +28,9 @@ const (
 	Discord   Platform = "discord"
 	Facebook  Platform = "facebook"
 	Instagram Platform = "instagram"
+	Linkedin  Platform = "linkedin"
 	Tiktok    Platform = "tiktok"
+	Whatsapp  Platform = "whatsapp"
 	X         Platform = "x"
 )
 
@@ -41,9 +43,49 @@ func (e Platform) Valid() bool {
 		return true
 	case Instagram:
 		return true
+	case Linkedin:
+		return true
 	case Tiktok:
 		return true
+	case Whatsapp:
+		return true
 	case X:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PlatformInfoConnect.
+const (
+	Oauth   PlatformInfoConnect = "oauth"
+	Webhook PlatformInfoConnect = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the PlatformInfoConnect enum.
+func (e PlatformInfoConnect) Valid() bool {
+	switch e {
+	case Oauth:
+		return true
+	case Webhook:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for StartConnectRequestClient.
+const (
+	Ios StartConnectRequestClient = "ios"
+	Web StartConnectRequestClient = "web"
+)
+
+// Valid indicates whether the value is a known member of the StartConnectRequestClient enum.
+func (e StartConnectRequestClient) Valid() bool {
+	switch e {
+	case Ios:
+		return true
+	case Web:
 		return true
 	default:
 		return false
@@ -53,6 +95,8 @@ func (e Platform) Valid() bool {
 // Defines values for TargetStatus.
 const (
 	Failed     TargetStatus = "failed"
+	HandedOff  TargetStatus = "handed_off"
+	HandingOff TargetStatus = "handing_off"
 	Pending    TargetStatus = "pending"
 	Published  TargetStatus = "published"
 	Publishing TargetStatus = "publishing"
@@ -62,6 +106,10 @@ const (
 func (e TargetStatus) Valid() bool {
 	switch e {
 	case Failed:
+		return true
+	case HandedOff:
+		return true
+	case HandingOff:
 		return true
 	case Pending:
 		return true
@@ -94,7 +142,15 @@ type Account struct {
 	CreatedAt   time.Time          `json:"created_at"`
 	DisplayName string             `json:"display_name"`
 	Id          openapi_types.UUID `json:"id"`
-	Platform    Platform           `json:"platform"`
+
+	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+	Platform Platform `json:"platform"`
+}
+
+// CompleteHandoffRequest defines model for CompleteHandoffRequest.
+type CompleteHandoffRequest struct {
+	// Sent True when the user sent the post from the platform's app.
+	Sent bool `json:"sent"`
 }
 
 // ConnectDiscordRequest defines model for ConnectDiscordRequest.
@@ -106,9 +162,12 @@ type ConnectDiscordRequest struct {
 	WebhookUrl string `json:"webhook_url"`
 }
 
-// CreatePostRequest defines model for CreatePostRequest.
+// CreatePostRequest At least one account or one assisted platform.
 type CreatePostRequest struct {
 	AccountIds []openapi_types.UUID `json:"account_ids"`
+
+	// Assisted Platforms the client will hand the post to itself (WhatsApp, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
+	Assisted *[]Platform `json:"assisted,omitempty"`
 
 	// MediaIds In display order.
 	MediaIds *[]openapi_types.UUID `json:"media_ids,omitempty"`
@@ -135,19 +194,28 @@ type Issue struct {
 	AccountId *openapi_types.UUID `json:"account_id,omitempty"`
 
 	// Field Example: text
-	Field    string    `json:"field"`
-	Message  string    `json:"message"`
+	Field   string `json:"field"`
+	Message string `json:"message"`
+
+	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
 	Platform *Platform `json:"platform,omitempty"`
 }
 
-// Platform defines model for Platform.
+// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
 type Platform string
 
 // PlatformInfo defines model for PlatformInfo.
 type PlatformInfo struct {
+	// Connect How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
+	Connect PlatformInfoConnect `json:"connect"`
+
+	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
 	Platform Platform `json:"platform"`
 	Rules    Rules    `json:"rules"`
 }
+
+// PlatformInfoConnect How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
+type PlatformInfoConnect string
 
 // Post defines model for Post.
 type Post struct {
@@ -163,32 +231,56 @@ type Post struct {
 type Rules struct {
 	MaxMedia int `json:"max_media"`
 
-	// MaxMediaBytes Per file.
+	// MaxMediaBytes Per file. For video files, max_video_bytes applies instead when it is not 0.
 	MaxMediaBytes int64 `json:"max_media_bytes"`
 
 	// MaxTextLength In Unicode code points unless the platform says otherwise.
 	MaxTextLength int `json:"max_text_length"`
 
 	// MaxTotalMediaBytes Across all files in one post. 0 means no extra limit.
-	MaxTotalMediaBytes int64    `json:"max_total_media_bytes"`
-	MediaTypes         []string `json:"media_types"`
-	RequiresMedia      bool     `json:"requires_media"`
-	RequiresText       bool     `json:"requires_text"`
+	MaxTotalMediaBytes int64 `json:"max_total_media_bytes"`
+
+	// MaxVideoBytes Per video file (a media type starting video/). 0 means max_media_bytes.
+	MaxVideoBytes int64    `json:"max_video_bytes"`
+	MediaTypes    []string `json:"media_types"`
+	RequiresMedia bool     `json:"requires_media"`
+	RequiresText  bool     `json:"requires_text"`
+
+	// VideoAlone A video must be the only file in the post.
+	VideoAlone bool `json:"video_alone"`
+}
+
+// StartConnectRequest defines model for StartConnectRequest.
+type StartConnectRequest struct {
+	// Client Where to send the user once the platform is done.
+	Client StartConnectRequestClient `json:"client"`
+}
+
+// StartConnectRequestClient Where to send the user once the platform is done.
+type StartConnectRequestClient string
+
+// StartConnectResponse defines model for StartConnectResponse.
+type StartConnectResponse struct {
+	AuthorizeUrl string `json:"authorize_url"`
 }
 
 // Target defines model for Target.
 type Target struct {
 	// AccountId Absent once the account has been disconnected.
-	AccountId   *openapi_types.UUID `json:"account_id,omitempty"`
-	Id          openapi_types.UUID  `json:"id"`
-	LastError   *string             `json:"last_error,omitempty"`
-	Platform    Platform            `json:"platform"`
-	PublishedAt *time.Time          `json:"published_at,omitempty"`
-	RemoteUrl   *string             `json:"remote_url,omitempty"`
-	Status      TargetStatus        `json:"status"`
+	AccountId *openapi_types.UUID `json:"account_id,omitempty"`
+	Id        openapi_types.UUID  `json:"id"`
+	LastError *string             `json:"last_error,omitempty"`
+
+	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+	Platform    Platform   `json:"platform"`
+	PublishedAt *time.Time `json:"published_at,omitempty"`
+	RemoteUrl   *string    `json:"remote_url,omitempty"`
+
+	// Status handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
+	Status TargetStatus `json:"status"`
 }
 
-// TargetStatus defines model for Target.Status.
+// TargetStatus handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
 type TargetStatus string
 
 // Upload defines model for Upload.
@@ -237,11 +329,17 @@ type CreatePostParams struct {
 // ConnectDiscordJSONRequestBody defines body for ConnectDiscord for application/json ContentType.
 type ConnectDiscordJSONRequestBody = ConnectDiscordRequest
 
+// StartConnectJSONRequestBody defines body for StartConnect for application/json ContentType.
+type StartConnectJSONRequestBody = StartConnectRequest
+
 // CreateUploadJSONRequestBody defines body for CreateUpload for application/json ContentType.
 type CreateUploadJSONRequestBody = CreateUploadRequest
 
 // CreatePostJSONRequestBody defines body for CreatePost for application/json ContentType.
 type CreatePostJSONRequestBody = CreatePostRequest
+
+// CompleteHandoffJSONRequestBody defines body for CompleteHandoff for application/json ContentType.
+type CompleteHandoffJSONRequestBody = CompleteHandoffRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -254,6 +352,9 @@ type ServerInterface interface {
 
 	// (DELETE /v1/accounts/{accountId})
 	DeleteAccount(w http.ResponseWriter, r *http.Request, accountId AccountId)
+
+	// (POST /v1/accounts/{platform}/connect)
+	StartConnect(w http.ResponseWriter, r *http.Request, platform Platform)
 
 	// (POST /v1/media)
 	CreateUpload(w http.ResponseWriter, r *http.Request)
@@ -269,6 +370,9 @@ type ServerInterface interface {
 
 	// (GET /v1/posts/{postId})
 	GetPost(w http.ResponseWriter, r *http.Request, postId openapi_types.UUID)
+
+	// (POST /v1/targets/{targetId}/handoff)
+	CompleteHandoff(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -287,6 +391,11 @@ func (_ Unimplemented) ConnectDiscord(w http.ResponseWriter, r *http.Request) {
 
 // (DELETE /v1/accounts/{accountId})
 func (_ Unimplemented) DeleteAccount(w http.ResponseWriter, r *http.Request, accountId AccountId) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /v1/accounts/{platform}/connect)
+func (_ Unimplemented) StartConnect(w http.ResponseWriter, r *http.Request, platform Platform) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -312,6 +421,11 @@ func (_ Unimplemented) CreatePost(w http.ResponseWriter, r *http.Request, params
 
 // (GET /v1/posts/{postId})
 func (_ Unimplemented) GetPost(w http.ResponseWriter, r *http.Request, postId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /v1/targets/{targetId}/handoff)
+func (_ Unimplemented) CompleteHandoff(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -369,6 +483,32 @@ func (siw *ServerInterfaceWrapper) DeleteAccount(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteAccount(w, r, accountId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartConnect operation middleware
+func (siw *ServerInterfaceWrapper) StartConnect(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "platform" -------------
+	var platform Platform
+
+	err = runtime.BindStyledParameterWithOptions("simple", "platform", chi.URLParam(r, "platform"), &platform, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "platform", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartConnect(w, r, platform)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -506,6 +646,32 @@ func (siw *ServerInterfaceWrapper) GetPost(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// CompleteHandoff operation middleware
+func (siw *ServerInterfaceWrapper) CompleteHandoff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", chi.URLParam(r, "targetId"), &targetId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteHandoff(w, r, targetId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -629,6 +795,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/v1/accounts/discord", wrapper.ConnectDiscord)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/accounts/{platform}/connect", wrapper.StartConnect)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/v1/accounts/{accountId}", wrapper.DeleteAccount)
 	})
 	r.Group(func(r chi.Router) {
@@ -639,6 +808,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/posts", wrapper.CreatePost)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/targets/{targetId}/handoff", wrapper.CompleteHandoff)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/posts/{postId}", wrapper.GetPost)
@@ -771,6 +943,71 @@ func (response DeleteAccount401JSONResponse) VisitDeleteAccountResponse(w http.R
 type DeleteAccount404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteAccount404JSONResponse) VisitDeleteAccountResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartConnectRequestObject struct {
+	Platform Platform `json:"platform"`
+	Body     *StartConnectJSONRequestBody
+}
+
+type StartConnectResponseObject interface {
+	VisitStartConnectResponse(w http.ResponseWriter) error
+}
+
+type StartConnect200JSONResponse StartConnectResponse
+
+func (response StartConnect200JSONResponse) VisitStartConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartConnect400JSONResponse struct{ BadRequestJSONResponse }
+
+func (response StartConnect400JSONResponse) VisitStartConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartConnect401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response StartConnect401JSONResponse) VisitStartConnectResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartConnect404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response StartConnect404JSONResponse) VisitStartConnectResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response); err != nil {
@@ -1018,6 +1255,71 @@ func (response GetPost404JSONResponse) VisitGetPostResponse(w http.ResponseWrite
 	return err
 }
 
+type CompleteHandoffRequestObject struct {
+	TargetId openapi_types.UUID `json:"targetId"`
+	Body     *CompleteHandoffJSONRequestBody
+}
+
+type CompleteHandoffResponseObject interface {
+	VisitCompleteHandoffResponse(w http.ResponseWriter) error
+}
+
+type CompleteHandoff200JSONResponse Post
+
+func (response CompleteHandoff200JSONResponse) VisitCompleteHandoffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteHandoff401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CompleteHandoff401JSONResponse) VisitCompleteHandoffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteHandoff404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CompleteHandoff404JSONResponse) VisitCompleteHandoffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteHandoff409JSONResponse Error
+
+func (response CompleteHandoff409JSONResponse) VisitCompleteHandoffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -1029,6 +1331,9 @@ type StrictServerInterface interface {
 
 	// (DELETE /v1/accounts/{accountId})
 	DeleteAccount(ctx context.Context, request DeleteAccountRequestObject) (DeleteAccountResponseObject, error)
+
+	// (POST /v1/accounts/{platform}/connect)
+	StartConnect(ctx context.Context, request StartConnectRequestObject) (StartConnectResponseObject, error)
 
 	// (POST /v1/media)
 	CreateUpload(ctx context.Context, request CreateUploadRequestObject) (CreateUploadResponseObject, error)
@@ -1044,6 +1349,9 @@ type StrictServerInterface interface {
 
 	// (GET /v1/posts/{postId})
 	GetPost(ctx context.Context, request GetPostRequestObject) (GetPostResponseObject, error)
+
+	// (POST /v1/targets/{targetId}/handoff)
+	CompleteHandoff(ctx context.Context, request CompleteHandoffRequestObject) (CompleteHandoffResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1159,6 +1467,39 @@ func (sh *strictHandler) DeleteAccount(w http.ResponseWriter, r *http.Request, a
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteAccountResponseObject); ok {
 		if err := validResponse.VisitDeleteAccountResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartConnect operation middleware
+func (sh *strictHandler) StartConnect(w http.ResponseWriter, r *http.Request, platform Platform) {
+	var request StartConnectRequestObject
+
+	request.Platform = platform
+
+	var body StartConnectJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartConnect(ctx, request.(StartConnectRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartConnect")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartConnectResponseObject); ok {
+		if err := validResponse.VisitStartConnectResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1306,48 +1647,98 @@ func (sh *strictHandler) GetPost(w http.ResponseWriter, r *http.Request, postId 
 	}
 }
 
+// CompleteHandoff operation middleware
+func (sh *strictHandler) CompleteHandoff(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID) {
+	var request CompleteHandoffRequestObject
+
+	request.TargetId = targetId
+
+	var body CompleteHandoffJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteHandoff(ctx, request.(CompleteHandoffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteHandoff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteHandoffResponseObject); ok {
+		if err := validResponse.VisitCompleteHandoffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"xFttbxs38v8qg/3/gSbARnLc9IBTUBRu0l6N9mIjsa8vWsOgliMt4xW54XCtqIG++2FI7pN2FSup7XuT",
+	"iBIfhvP4mxn6U5KZVWk0akfJ7FNSCitW6ND60UmWmUq7U8kDpZNZUgqXJ2mixQqTWSKa39PE4odKWZTJ",
+	"zNkK04SyHFeCFy6MXQmXzJKqUjzTbUpeTM4qvUy22y0vptJoQn/qj0K+xQ8VkuNRZrRD7T+KsixUJpwy",
+	"evqejObv2mP+3+IimSX/N21vNA2/0vQna40NR0mkzKqSN0lmyUWOYMNhoAhWomBqUU6SbZq8Me5nU2n5",
+	"8GS8MUBVloNFMpXNEBbGgssVQUVoPTGXWlQuN1b9hY9A0L8VkdJLMBYqfaPNWsMchUULztygniS8JO7S",
+	"0RT+WFpTonUqCDOzKBzKa+F6qiCFw2dOrXCoD2kiFZWF2FwHLfs0nKDkAXqVJmUhHE+6iwvn9bzttqvH",
+	"fyR+22aXHcLS7t2umuPN/D1mjo9/ZVZlgQ5/EVqaxaKj030WURTjjmbaCmGdowaXo1cD4Il+VBpysLBm",
+	"FUaRwG8IRFlOWk7MjSlQ6MG1/IHjFGuNmXutKDNW7iV4Vz59wl/jQlSFI3DGk7fGeW7MzTcErEW8ZjIm",
+	"rDjturIF74kfBXMvmSW5cyXNplMZqJpkZjUVpZrGBTR9fvztVMyzEc/Sv3b3hNHbe3GeG3Kdm/fvduKg",
+	"QEEOjEaI3o9txA+JFDmUjTz4mn3GxRXXSvqhcriigzQ5fiGsFRse12cNKax1mTzvs0KxzqxVUUAutGy1",
+	"xxlQjrBYwJPfc+HopCzToFLq7N3TCfwkshyW6AgEOGGX6EBpv4fSy2uzWABvpw2U1bxQlMN7M3/ZPdNi",
+	"aawLZJjKZWaFsFYuh/OzdxcwvX0+DdvS9FP4cCq30zyYygTeGAeiKMwaZVglYFG5yiKw0cqq8GY3AwFx",
+	"CeSiLFETaLNOwQSrkXirMpz8qZO0ZfZhnmDI8xVKJWrR9Zl+qiHaBBgr2WGnf0O43RsOzzpbKS+9mu/a",
+	"rPm4wzyrw49uxKPuGEpXTfcbymVZGLHfScT4dB1Wdw1arcQSp+9LXI6RSOovvJ5vHPaZp7T7x4t2vtIO",
+	"l2gHpPdO7W02dpEQ/gakr5BILPFuRtUTx/Y+JapwuHfL24N0Y6GwkH32eRmOTN1P9T1EwkBH+tkbn3cO",
+	"6evsmj2MKEtQ1LpJo4vNDJSDXJB3JIYcQ46T89MUKMQOdfaOY5o3cuo5r9ppQe3V6ggpifd0Odpo+Kir",
+	"FV8hxo8kTQqlb1Aq/vEjW6omJ5ZWcIRfiAznxtwwg9WN8x9q6juXbjlbX/pUL8yoEXBAHXLkF7MGoZsQ",
+	"ogjiVJSTOmLOoBTkEARcvv0NnjR+My6iOiI+nYBhbDgDU0a40IEEmdEeN5RiiWObfKrnbqeRhKd9vkVq",
+	"kjTxp4xy4cv1K01sVeCdDvmtn7SrjR1IVnO43m9UMQ3dEzI90Gp7oeL+AsGBPj6E1d7Rn2PxhZ8/dv5h",
+	"0SLcJTil9uI71PfAckvjmLTe1nqx45TFx2u/fYeiJgqk7c9t7NgBRmhhoQqcwM/Gwq2SaPyYUuC1/ouw",
+	"Fnw+hQTsGFDIgMKVt1JtHBz14u2+wBRIYr5cF6iXLh+FDZdaZUYi+H9Ko7QjqHSBRD07BhIbAsNeba0I",
+	"J/vPM04Un2fESWYNEaOrcH9Q2uNX9qwTOIIVCg+jAD86K6BQK+W+4MYdRo4LoWU9PBHgSQXeCsgJ6yOA",
+	"nzF92hKzI9xDqfEr+Pu+Mdxpd1G7aaBvTULVmbNjJJ0pgROiMHokSzqJfFhV5GCOASbrYhMYo3QT7A7I",
+	"53YVrWMNydAy9inKUHx9Fu7eecCn/o3HTPsdSzgmmfuBo88fhhz7nUM6OOODfBvyjc6wbyuKQBqNk34M",
+	"S9JEGRqJXrsIMhx/N/mhYjWkvynT1Kls6/etujNJ7a8eoyL66zuQ5Y62zT0GaHgV53roNUf06UsLQJL0",
+	"7lh1YCQsBLlrrGH2veCGmPh8YVS0uDKuEcngZ3LCVSMOazfh5THKMLShTDfI+2nWzYMVAeVmzX6Nv6Wc",
+	"11GO6FIwttXju4s7XD7hAk8PnZXoCUwavvQGKD2mVYX/0LlMHIWr3G0Uu4WwyK4x9Qxp4VA98WPpfcWX",
+	"CC1HIWMpWkipWCaiOO9tO1jTl9+76CsoFh88uz2Fk2SE+Bq/HIjyXG781FoY55cXo/A4nLhH+QY5ZSSh",
+	"t6w5rWVK2mXpmCT+IwolfVV4T56rOEU9HCiGjHa0MvKF+XJaHz0km20Rs8oqt3nH5wb6Qu35pAooyhPk",
+	"A6L/upUNlwpDNVvFdMwp55NmTgGUy/FGcH7JoQotBRU5mjyfHPE1TIlalCqZJd9OjibfssYLl/vzuxkT",
+	"j6MDZmZ6BnOHJPlNkTupJ+30NI6Pjr6oaH+QQOJhQ5EM6/lnv/KsF0fP9+3ZUDvtNRq2fq+xrNOrkxkr",
+	"ksYISSAgVpIhy4XWWMB8A8pRneByXjtp5mhE6XHnGcsZ2LOWJVi8Vbhu+iGhxMj5MKfMOWY3KEEshdLk",
+	"mp3muDAWI2InZyzK1Hvv8BlQZ3ZTOv6WFIdEoTdGI+SmYP/ICzOhA/ryzrYv536VPOIgJPejkZt768yM",
+	"l+K32+1up2070LTn90ZEo2BDhXpVo4WgV0d361WnrXdfqvipaUBugxoW6HBomK/99/Vl0l6T849xGtop",
+	"07YJur0a8PrFSP+jA6W+8qa86MXdi5r+5BhrBmWd/QbrcW1TgWIL6JSmjAbRYmuXC8d4haKVPmFz7tbA",
+	"PKSMO81CXerpBN6iq6ymz9WmXu7g+lDBg4vOCrAolfWuZS6ym9BgYhNHe4s2hXWusjwYOfVgrrd9rEuI",
+	"MW2o+1MRp7kcNyEFRenh16zuXnk/JBxMf2jk+n3L3gbF1bVK4aBsos1sOm0W/VCv6ayewJkGBmiVDci8",
+	"viJkwlqFDS8DiIYna5w/5RPjkJs1dZ1ixl4rw6JgxxawgeSpAf9N4NWofL1EFdcDLAq5aeuQYFHjmrzD",
+	"zixK1E6JgjwzbxBL/gVEYCmJVcPtMZfZzZyGBjjysqCDNfc/LDiwkn31MB56LJk9yD8fPRAJ4ZB9rxx6",
+	"dWBnfK348Xz313u0pgYz7rveord+grqUpKTXUBs9juDsy7pnhbpF6YGDM3B+eeHV1tdanAlexg+WBgnI",
+	"WaGWue8zBFzqnYpYYgoab71zsqZa5sH9nJyfTqBONIIpvArSfXaxKTuJBx8rCCRmhWDbZA/3spOSjGGa",
+	"uXF5+wwgXpFgoSw5EM4JrrIyoWI/Xum06x4KrYx0BB8Zq8T7jWh/+AVs0JT/BWBpKgOd3GFooWWndd9E",
+	"tYBEY6/XmbTVJt/viGIPZcQVovNIGUWWT+CVD2wEtyEPxEanYj6ce+2vA+LaKofUdN582ZeAzaYpEBci",
+	"wzEF48SneXfwKJlPr+v2KOkPc/nzqd+5nzEe3D5UaDdtdPPMTbqhTIZHM8ns+MjXYdWKKwrPj3ikdByN",
+	"dL+vHoXbhg5KMt/gGskF3/TV/E73ZZXexTQKzz7+Q4UVUtDN9hUKlGgbLNIgT0FAxugasLw3c/IVPL+H",
+	"fAmlKYpeg3lh+PmJN6X4AOYbglD38s9Tcp8pEsS+FiguEG7iVFibqmCX44NHU8r/U/swITScSlyVxqHO",
+	"Ns9+xQ0fuBI3CBadR30kFjgDARZLFK41eh9dbnDTxLeW5BxjVKjfM0bKosvwMK6yFrWL10ibBpdZhMkB",
+	"GkpoS4kcPzEzWjKX9wcXryED1d/teFRafaiQ/VGFXkpMeBpePgqW7OXl6esUstwQaq4VtPCcBVlRIIiv",
+	"7wuvINVigf5GngWMYuHF8XGg0xteKJa1lrfD954NrsTH32Kn7vi777zh1ePnwwLp1UNG0u4jtEeOo+em",
+	"PnPM/mRrePJR0ePx8b3dcLcuOnLZ3ju/z5l0k/3tGvRatClVRShHNZYVdSfETD/xf7GgMRpr/oVu3NzG",
+	"0ii/1996nX31gPnLPl376nD99WnG/seIn8s9MmMlAT8Qiu8PIxbXbVcoak/Teus0gCArDHFmTqjd9ywY",
+	"WAl7Q+FRVN2deQkLUVDnpzqfP+N2cfM6k1z9yLPuVzFynCNk8RmyfBmjSdOKEqv2aSb7zizDkvt/ozXP",
+	"3lvmg5Sv5uTfV7+HKK+Ovs1+5Px9n/5fNN6lCfxRylXJSP7R6oq84J+P81cY8YLxjc2IBa2F8qrLjlQ5",
+	"qh/+TrwRd9pGXh27DaM/rrZX2/8OAA==",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

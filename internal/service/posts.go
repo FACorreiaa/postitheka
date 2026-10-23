@@ -22,9 +22,11 @@ import (
 )
 
 type CreatePostInput struct {
-	Text        string
-	MediaIDs    []uuid.UUID
-	AccountIDs  []uuid.UUID
+	Text       string
+	MediaIDs   []uuid.UUID
+	AccountIDs []uuid.UUID
+	// Assisted platforms the client hands the post to itself (WhatsApp).
+	Assisted    []string
 	ScheduledAt *time.Time
 	// IdempotencyKey, when set, makes the call safe to retry: a second call
 	// with the same key returns the post the first one created.
@@ -84,13 +86,26 @@ func (s *Service) CreatePost(ctx context.Context, userID uuid.UUID, in CreatePos
 	addIssue := func(i Issue) { issues = append(issues, i) }
 
 	accountIDs := dedupe(in.AccountIDs)
-	if len(accountIDs) == 0 {
+	assisted := dedupeStrings(in.Assisted)
+	if len(accountIDs) == 0 && len(assisted) == 0 {
 		return PostView{}, &ValidationError{Issues: []Issue{{Field: "account_ids", Message: "choose at least one account"}}}
+	}
+	for _, p := range assisted {
+		if !publisher.IsAssisted(publisher.Platform(p)) {
+			addIssue(Issue{Platform: p, Field: "assisted", Message: p + " is not an assisted platform"})
+		}
+	}
+	// A handoff happens on the device when Publish is pressed; there is no
+	// one to hand a scheduled post over at its time.
+	if len(assisted) > 0 && in.ScheduledAt != nil && in.ScheduledAt.After(s.now()) {
+		addIssue(Issue{Field: "assisted", Message: "a post handed to another app cannot be scheduled"})
 	}
 	if len(in.MediaIDs) != len(dedupe(in.MediaIDs)) {
 		addIssue(Issue{Field: "media_ids", Message: "the same file is attached twice"})
 	}
 
+	// No rules are checked for assisted platforms: the server never sends to
+	// them, and their own apps enforce their limits.
 	accounts, err := s.q.GetAccountsByIDs(ctx, db.GetAccountsByIDsParams{UserID: userID, Ids: accountIDs})
 	if err != nil {
 		return PostView{}, err
@@ -183,6 +198,13 @@ func (s *Service) CreatePost(ctx context.Context, userID uuid.UUID, in CreatePos
 		}
 		view.Targets = append(view.Targets, target)
 	}
+	for _, p := range assisted {
+		target, err := qtx.CreateAssistedTarget(ctx, db.CreateAssistedTargetParams{PostID: row.ID, Platform: p})
+		if err != nil {
+			return PostView{}, fmt.Errorf("create assisted target: %w", err)
+		}
+		view.Targets = append(view.Targets, target)
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return PostView{}, fmt.Errorf("commit post: %w", err)
@@ -226,8 +248,9 @@ func requestHash(in CreatePostInput) []byte {
 		Text        string      `json:"text"`
 		MediaIDs    []uuid.UUID `json:"media_ids"`
 		AccountIDs  []uuid.UUID `json:"account_ids"`
+		Assisted    []string    `json:"assisted,omitempty"`
 		ScheduledAt *time.Time  `json:"scheduled_at"`
-	}{in.Text, in.MediaIDs, in.AccountIDs, scheduledAt})
+	}{in.Text, in.MediaIDs, in.AccountIDs, in.Assisted, scheduledAt})
 	sum := sha256.Sum256(b)
 	return sum[:]
 }
@@ -352,6 +375,46 @@ func (s *Service) withDetails(ctx context.Context, posts []db.Post) ([]PostView,
 		v.MediaIDs = append(v.MediaIDs, f.ID)
 	}
 	return views, nil
+}
+
+// CompleteHandoff records what happened to an assisted target once the share
+// sheet closed. Repeating the outcome already recorded is accepted, so a
+// client retrying after a lost response does not see an error; a different
+// outcome is a conflict.
+func (s *Service) CompleteHandoff(ctx context.Context, userID, targetID uuid.UUID, sent bool) (PostView, error) {
+	status, lastError := "handed_off", (*string)(nil)
+	if !sent {
+		status, lastError = "failed", new("the share sheet closed without sending")
+	}
+	row, err := s.q.CompleteHandoff(ctx, db.CompleteHandoffParams{ID: targetID, UserID: userID, Status: status, LastError: lastError})
+	if errors.Is(err, pgx.ErrNoRows) {
+		current, getErr := s.q.GetTargetForUser(ctx, db.GetTargetForUserParams{ID: targetID, UserID: userID})
+		if errors.Is(getErr, pgx.ErrNoRows) {
+			return PostView{}, ErrNotFound
+		}
+		if getErr != nil {
+			return PostView{}, getErr
+		}
+		if current.Status != status || current.AccountID.Valid {
+			return PostView{}, ErrConflict
+		}
+		row = current
+	} else if err != nil {
+		return PostView{}, err
+	}
+	return s.GetPost(ctx, userID, row.PostID)
+}
+
+func dedupeStrings(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func dedupe(ids []uuid.UUID) []uuid.UUID {

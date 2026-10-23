@@ -7,7 +7,9 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"github.com/FACorreiaa/postitheka/internal/analytics"
 	"github.com/FACorreiaa/postitheka/internal/db"
 	"github.com/FACorreiaa/postitheka/internal/publisher"
 	"github.com/FACorreiaa/postitheka/internal/publisher/discord"
@@ -38,6 +40,30 @@ func (s *Service) storeAccount(ctx context.Context, userID uuid.UUID, platform p
 		name = string(platform)
 	}
 
+	var remoteID *string
+	if conn.RemoteID != "" {
+		remoteID = &conn.RemoteID
+		// Reconnecting renews the credentials of the account already there,
+		// keeping its id, so its post history stays attached. Sealed to that
+		// id, as the first credentials were.
+		existing, err := s.q.GetAccountByRemoteID(ctx, db.GetAccountByRemoteIDParams{UserID: userID, Platform: string(platform), RemoteID: remoteID})
+		if err == nil {
+			acct, err := s.q.ReplaceAccountCredentials(ctx, db.ReplaceAccountCredentialsParams{
+				ID:          existing.ID,
+				UserID:      userID,
+				Credentials: s.box.Seal(conn.Credentials, existing.ID[:]),
+				DisplayName: name,
+			})
+			if err != nil {
+				return Account{}, fmt.Errorf("replace credentials: %w", err)
+			}
+			return Account(acct), nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return Account{}, err
+		}
+	}
+
 	id := uuid.New()
 	acct, err := s.q.CreateAccount(ctx, db.CreateAccountParams{
 		ID:          id,
@@ -45,10 +71,16 @@ func (s *Service) storeAccount(ctx context.Context, userID uuid.UUID, platform p
 		Platform:    string(platform),
 		DisplayName: name,
 		Credentials: s.box.Seal(conn.Credentials, id[:]),
+		RemoteID:    remoteID,
 	})
 	if err != nil {
 		return Account{}, fmt.Errorf("store account: %w", err)
 	}
+	s.events.Capture(analytics.Event{
+		Name:       analytics.EventAccountConnected,
+		DistinctID: userID.String(),
+		Props:      analytics.Props("platform", string(platform)),
+	})
 	return acct, nil
 }
 

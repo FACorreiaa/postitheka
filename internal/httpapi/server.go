@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/FACorreiaa/postitheka/internal/db"
+	"github.com/FACorreiaa/postitheka/internal/publisher"
 	"github.com/FACorreiaa/postitheka/internal/service"
 )
 
@@ -90,13 +91,20 @@ func (s *Server) ListPlatforms(ctx context.Context, _ ListPlatformsRequestObject
 	out := ListPlatforms200JSONResponse{}
 	for _, p := range s.svc.Platforms() {
 		r := p.Rules()
+		connect := Webhook
+		if s.svc.ConnectsByOAuth(p.Platform()) {
+			connect = Oauth
+		}
 		out = append(out, PlatformInfo{
 			Platform: Platform(p.Platform()),
+			Connect:  connect,
 			Rules: Rules{
 				MaxTextLength:      r.MaxTextLength,
 				MaxMedia:           r.MaxMedia,
 				MaxMediaBytes:      r.MaxMediaBytes,
 				MaxTotalMediaBytes: r.MaxTotalMediaBytes,
+				MaxVideoBytes:      r.MaxVideoBytes,
+				VideoAlone:         r.VideoAlone,
 				MediaTypes:         r.MediaTypes,
 				RequiresText:       r.RequiresText,
 				RequiresMedia:      r.RequiresMedia,
@@ -127,6 +135,20 @@ func (s *Server) ConnectDiscord(ctx context.Context, req ConnectDiscordRequestOb
 		return nil, err
 	}
 	return ConnectDiscord201JSONResponse(toAccount(acct)), nil
+}
+
+func (s *Server) StartConnect(ctx context.Context, req StartConnectRequestObject) (StartConnectResponseObject, error) {
+	if !req.Body.Client.Valid() {
+		return StartConnect400JSONResponse{BadRequestJSONResponse{Message: "client must be web or ios"}}, nil
+	}
+	url, err := s.svc.StartConnect(ctx, userID(ctx), publisher.Platform(req.Platform), service.ConnectClient(req.Body.Client))
+	if errors.Is(err, service.ErrNotFound) {
+		return StartConnect404JSONResponse{NotFoundJSONResponse{Message: "this server does not connect " + string(req.Platform) + " accounts"}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return StartConnect200JSONResponse{AuthorizeUrl: url}, nil
 }
 
 func (s *Server) DeleteAccount(ctx context.Context, req DeleteAccountRequestObject) (DeleteAccountResponseObject, error) {
@@ -185,6 +207,11 @@ func (s *Server) CreatePost(ctx context.Context, req CreatePostRequestObject) (C
 	if req.Body.MediaIds != nil {
 		in.MediaIDs = *req.Body.MediaIds
 	}
+	if req.Body.Assisted != nil {
+		for _, p := range *req.Body.Assisted {
+			in.Assisted = append(in.Assisted, string(p))
+		}
+	}
 
 	view, err := s.svc.CreatePost(ctx, userID(ctx), in)
 	var ve *service.ValidationError
@@ -206,6 +233,19 @@ func (s *Server) CreatePost(ctx context.Context, req CreatePostRequestObject) (C
 		return nil, err
 	}
 	return CreatePost201JSONResponse(toPost(view)), nil
+}
+
+func (s *Server) CompleteHandoff(ctx context.Context, req CompleteHandoffRequestObject) (CompleteHandoffResponseObject, error) {
+	view, err := s.svc.CompleteHandoff(ctx, userID(ctx), req.TargetId, req.Body.Sent)
+	switch {
+	case errors.Is(err, service.ErrNotFound):
+		return CompleteHandoff404JSONResponse{NotFoundJSONResponse{Message: "no such target"}}, nil
+	case errors.Is(err, service.ErrConflict):
+		return CompleteHandoff409JSONResponse{Message: "this target is not waiting for a handoff"}, nil
+	case err != nil:
+		return nil, err
+	}
+	return CompleteHandoff200JSONResponse(toPost(view)), nil
 }
 
 func (s *Server) GetPost(ctx context.Context, req GetPostRequestObject) (GetPostResponseObject, error) {

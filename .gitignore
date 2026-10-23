@@ -14,3 +14,10 @@
 web/node_modules/
 web/dist/*
 !web/dist/.gitkeep
+
+# Xcode and SwiftPM
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
+*.xcresult

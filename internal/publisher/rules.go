@@ -14,16 +14,30 @@ type Rules struct {
 	MaxTextLength      int
 	MaxMedia           int
 	MaxMediaBytes      int64
+	MaxVideoBytes      int64 // per video file; 0 means MaxMediaBytes
 	MaxTotalMediaBytes int64 // 0 means only the per-file limit applies
 	MediaTypes         []string
 	RequiresText       bool
 	RequiresMedia      bool
+	// VideoAlone means a video must be the only file in its post: LinkedIn
+	// takes one image, several images, or one video, never a mix.
+	VideoAlone bool
 
 	// CountText measures text the way the platform does. Nil counts Unicode
 	// code points. X is the reason this is pluggable: it weights URLs and
 	// most non-Latin characters differently.
 	CountText func(string) int
 }
+
+// MaxBytes is the per-file limit for a file of this type.
+func (r Rules) MaxBytes(contentType string) int64 {
+	if r.MaxVideoBytes > 0 && IsVideo(contentType) {
+		return r.MaxVideoBytes
+	}
+	return r.MaxMediaBytes
+}
+
+func IsVideo(contentType string) bool { return strings.HasPrefix(contentType, "video/") }
 
 func (r Rules) count(s string) int {
 	if r.CountText != nil {
@@ -74,15 +88,22 @@ func Validate(rules Rules, post Post) []Issue {
 	}
 
 	var total int64
+	videos := 0
 	for i, m := range post.Media {
 		field := fmt.Sprintf("media[%d]", i)
 		if !slices.Contains(rules.MediaTypes, m.ContentType) {
 			add(field, "%s is not accepted", m.ContentType)
 		}
-		if m.Size > rules.MaxMediaBytes {
-			add(field, "%d bytes, limit is %d", m.Size, rules.MaxMediaBytes)
+		if limit := rules.MaxBytes(m.ContentType); m.Size > limit {
+			add(field, "%d bytes, limit is %d", m.Size, limit)
+		}
+		if IsVideo(m.ContentType) {
+			videos++
 		}
 		total += m.Size
+	}
+	if rules.VideoAlone && videos > 0 && len(post.Media) > 1 {
+		add("media", "a video must be the only file in the post")
 	}
 	if rules.MaxTotalMediaBytes > 0 && total > rules.MaxTotalMediaBytes {
 		add("media", "%d bytes in total, limit is %d", total, rules.MaxTotalMediaBytes)

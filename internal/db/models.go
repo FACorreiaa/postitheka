@@ -18,6 +18,7 @@ type Account struct {
 	DisplayName string
 	Credentials []byte
 	CreatedAt   time.Time
+	RemoteID    *string
 }
 
 type ApiToken struct {
@@ -37,6 +38,15 @@ type Medium struct {
 	SizeBytes   int64
 	VerifiedAt  pgtype.Timestamptz
 	CreatedAt   time.Time
+}
+
+type OauthState struct {
+	StateHash []byte
+	UserID    uuid.UUID
+	Platform  string
+	Verifier  []byte
+	Client    string
+	CreatedAt time.Time
 }
 
 type Post struct {
