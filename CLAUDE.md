@@ -63,7 +63,7 @@ This file is the working contract for anyone, human or agent, changing the repo.
 ```text
 postitheka/
   api/openapi.yaml          # the contract; Go server and TS types are generated from it
-  cmd/server/               # entrypoint: serve | migrate | user create EMAIL
+  cmd/server/               # entrypoint: no args serves; migrate | user create EMAIL
   internal/
     config/                 # environment -> Config, fails loudly on anything missing
     database/               # pool, migrations (goose + River), testdb for tests
@@ -74,6 +74,7 @@ postitheka/
     publisher/              # Publisher interface, Rules, Validate, error classes
       discord/              # one package per platform
       linkedin/
+      threads/
     secretbox/              # credential encryption
     analytics/              # product events (PostHog); empty key sends nothing
     service/                # application behaviour: accounts, uploads, posts, tokens
@@ -162,6 +163,11 @@ vocabulary: "Publish" produces "Published"; "Not sent" means failed.
   backslash-escaped or the post fails or renders as something else. `escapeText` does it.
 - **OAuth redirect URLs must match exactly.** Each platform's developer app lists
   `PUBLIC_URL/oauth/{platform}/callback`; a different host, port or trailing slash is refused.
+- **Meta's developer docs render client-side.** A plain fetch gets an empty shell; render the
+  page in headless Chrome (CDP, `document.body.innerText`) to read it.
+- **Transport errors carry the request URL.** `net/http` writes the full URL, query included,
+  into a `*url.Error`. Threads takes tokens and the app secret in query strings, so its `call`
+  strips the URL; `TestErrorsCarryNoSecrets` guards it. Do the same for any platform like it.
 - **Platform research agents can be wrong.** Limits that came back unconfirmed from research
   (LinkedIn's text length, image size) were checked against the platform's own pages before
   going into `Rules()`.

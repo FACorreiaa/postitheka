@@ -205,7 +205,7 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
                 <li key={a.id}>
                   <Stamp
                     account={a}
-                    used={countText(text)}
+                    used={countText(text, rules?.text_counting)}
                     limit={rules?.max_text_length}
                     problems={selected.has(a.id) ? [...(rules ? problems(rules, draft) : []), ...own] : []}
                     on={selected.has(a.id)}

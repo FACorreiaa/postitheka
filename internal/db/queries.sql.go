@@ -774,6 +774,19 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 	return items, nil
 }
 
+const lockAccountCredentials = `-- name: LockAccountCredentials :one
+SELECT credentials FROM accounts WHERE id = $1 FOR UPDATE
+`
+
+// Held while credentials are refreshed, so two jobs for one account do not
+// both spend a refresh token that rotates.
+func (q *Queries) LockAccountCredentials(ctx context.Context, id uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, lockAccountCredentials, id)
+	var credentials []byte
+	err := row.Scan(&credentials)
+	return credentials, err
+}
+
 const lockUnattachedMedia = `-- name: LockUnattachedMedia :many
 SELECT m.id FROM media m
 WHERE m.created_at < $1
@@ -955,6 +968,20 @@ func (q *Queries) TakeOAuthState(ctx context.Context, arg TakeOAuthStateParams) 
 		&i.CreatedAt,
 	)
 	return i, err
+}
+
+const updateAccountCredentials = `-- name: UpdateAccountCredentials :exec
+UPDATE accounts SET credentials = $2 WHERE id = $1
+`
+
+type UpdateAccountCredentialsParams struct {
+	ID          uuid.UUID
+	Credentials []byte
+}
+
+func (q *Queries) UpdateAccountCredentials(ctx context.Context, arg UpdateAccountCredentialsParams) error {
+	_, err := q.db.Exec(ctx, updateAccountCredentials, arg.ID, arg.Credentials)
+	return err
 }
 
 const useAPIToken = `-- name: UseAPIToken :one

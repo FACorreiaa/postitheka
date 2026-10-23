@@ -156,9 +156,18 @@ type Publisher interface {
 - Connecting by webhook is platform-specific (`discord.Connect`). An OAuth platform implements
   `publisher.OAuthConnector` (`AuthorizeURL`, `Exchange`) and shares one flow, below; both end in
   `service.storeAccount`.
+- A publisher whose credentials expire implements `publisher.Refresher` (`NeedsRefresh`, no
+  I/O; `Refresh`). The worker refreshes before claiming the target, holding `SELECT … FOR
+  UPDATE` on the account and asking `NeedsRefresh` again once it has the lock, so a rotating
+  refresh token (X) is spent once however many posts go out together. A `Permanent` refresh
+  error fails the target with "reconnect the account"; anything else leaves it pending for a
+  retry. Nothing was sent to the platform yet, so neither case risks a duplicate.
 - `Rules` gives per-file limits (`MaxMediaBytes`, and `MaxVideoBytes` for video when it
-  differs), `VideoAlone` for platforms that take a video only on its own, and `CountText` for
-  platforms that count characters their own way.
+  differs), `VideoAlone` for platforms that take a video only on its own, `MaxLinks` for
+  platforms that cap distinct links, and `TextCounting` for platforms that count characters
+  their own way. `TextCounting` is a named mode (`code_points`, `emoji_bytes`), not a function,
+  because the web and iOS clients count too: each mode exists three times (Go `rules.go`,
+  `web/src/rules.ts`, the kit's `Rules.swift`), tested against the same cases.
 - Registration is one line in `cmd/server/main.go`; `GET /v1/platforms` lists exactly the
   registered set with its rules.
 
@@ -200,6 +209,26 @@ they are https on a linkedin.com host, so the member's token never leaves Linked
 permanent ("reconnect"); 429 → `Retry-After`, else wait for the daily reset at midnight UTC;
 5xx → retry; other 4xx → permanent, except an upload LinkedIn has not finished taking in.
 
+### Threads (built, against a stub)
+
+The user's own profile through the Threads API (`threads_basic`, `threads_content_publish`),
+with the Threads app id and secret. Authorize on `threads.com`, exchange on
+`graph.threads.com`; no PKCE. The one-hour token is exchanged at once for a long-lived one (60
+days), and `Refresher` renews it a week after each refresh; a refresh that fails while the
+token has more than a day left keeps the current token rather than hold up a post. The user id
+is a number past 2^53 and is read as `json.Number`.
+
+A post is a container: `TEXT`, `IMAGE` or `VIDEO` with a presigned GET URL (an hour) that Meta
+downloads, or a `CAROUSEL` of 2 to 20 item containers. Each container is polled until
+`FINISHED` (3 minutes, inside the job's 5) before it is used; `ERROR` is permanent with Meta's
+reason, `EXPIRED` and a timeout are retried. `threads_publish` is the only request that puts
+anything on the profile, so when it fails without a 4xx answer the container is asked, on a
+context of its own: `PUBLISHED` → success, `FINISHED` → retry, no answer → permanent "check
+Threads before posting again". Tokens and the app secret travel in query strings and form
+bodies where Meta's examples put them, so transport errors are stripped of their URL before
+they can reach a log or `last_error`. Graph error codes: 190 → permanent ("reconnect"); 4, 17,
+32, 613 or 429 → retry in an hour; 1, 2, 5xx → retry; anything else → permanent.
+
 ### Discord (built)
 
 Incoming webhook: the URL is the credential. Connect checks the URL is one Discord issues
@@ -217,7 +246,7 @@ Checked dates matter: re-check a platform's docs before building it.
 | --- | --- | --- | --- |
 | Discord | Direct (webhook) | **Built** | Checked 2026-10-22: 2,000 chars, 10 files, 20 MiB per file. No review. Forum channels need `thread_name` (not yet). |
 | LinkedIn | Direct (OAuth 2.0) | **Built** (stub-tested) | Checked 2026-10-23: 3,000 characters, 20 images of 5 MB, or one MP4 up to 500 MB. Self-serve. Needs the owner's developer app to use. |
-| Threads | Direct (OAuth, threads.com) | Not started | Media by public URL. 500 characters (emoji counted in UTF-8 bytes). Testers before App Review. |
+| Threads | Direct (OAuth, threads.com) | **Built** (stub-tested) | Checked 2026-10-23: 500 characters (emoji counted in UTF-8 bytes), 5 links, carousel of 2–20; JPEG/PNG 8 MB, MP4/MOV 1 GB. Testers before App Review; needs the owner's Threads app. |
 | X | Direct (OAuth 2.0 PKCE) | Not started | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23); owner decision. Weighted `CountText`. |
 | Reddit | Direct (OAuth 2.0) | Not started | Needs Reddit's approval first; text and links only. |
 | Facebook | Direct (Meta OAuth) | Not started | Pages only. Needs Business Verification + App Review. |
@@ -320,6 +349,8 @@ The image is multi-stage: Node builds `web/dist`, Go builds a static binary, Alp
 - Credentials: AES-256-GCM with the row id as associated data; a version byte allows key
   rotation later. Losing `TOKEN_ENCRYPTION_KEY` orphans every connected account.
 - Uploaded type is checked against storage, not trusted from the client.
+- Platforms that download media (Threads) get a presigned GET for that one object, valid an
+  hour; the bucket stays private.
 - OAuth: single-use state, stored hashed, 15 minutes; PKCE verifier sealed; client secrets only in
   the environment; the callback redirects only to the app's own `/` or the `postitheka://`
   scheme, never to a URL taken from the request.
