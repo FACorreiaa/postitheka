@@ -59,4 +59,5 @@ export const platformNames: Record<string, string> = {
   instagram: "Instagram",
   facebook: "Facebook",
   tiktok: "TikTok",
+  whatsapp: "WhatsApp",
 };

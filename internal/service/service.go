@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
+	"github.com/FACorreiaa/postitheka/internal/analytics"
 	"github.com/FACorreiaa/postitheka/internal/db"
 	"github.com/FACorreiaa/postitheka/internal/media"
 	"github.com/FACorreiaa/postitheka/internal/publisher"
@@ -19,6 +20,10 @@ import (
 )
 
 var ErrNotFound = errors.New("not found")
+
+// ErrConflict is a request that cannot apply to the current state, such as
+// completing a handoff that already has a different outcome.
+var ErrConflict = errors.New("conflict")
 
 // BadRequest is input the caller can fix. Its message is shown to the user.
 type BadRequest struct{ Message string }
@@ -45,6 +50,7 @@ type Service struct {
 	registry *publisher.Registry
 	storage  Storage
 	discord  DiscordConnector
+	events   analytics.Client
 	now      func() time.Time
 }
 
@@ -55,10 +61,17 @@ type Deps struct {
 	Registry *publisher.Registry
 	Storage  Storage
 	Discord  DiscordConnector
+	// Analytics may be nil, which records nothing.
+	Analytics analytics.Client
 }
 
 func New(d Deps) *Service {
+	events := d.Analytics
+	if events == nil {
+		events = analytics.Nop()
+	}
 	return &Service{
+		events:   events,
 		pool:     d.Pool,
 		q:        db.New(d.Pool),
 		river:    d.River,

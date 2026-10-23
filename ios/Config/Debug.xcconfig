@@ -1,0 +1,4 @@
+// The server a Debug build talks to. Not a secret: the app holds no
+// credentials but the user's own token, kept in the Keychain. The simulator
+// reaches the Mac's localhost; a device needs the Mac's .local name.
+API_BASE_URL = http:/$()/localhost:8095

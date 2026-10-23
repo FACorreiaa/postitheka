@@ -107,6 +107,10 @@ tasks:
     cmds:
       - go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
       - cd web && npm run api:gen
+      # The Swift client needs Xcode's toolchain; on Linux the iOS CI job
+      # (macOS) is what catches a stale one.
+      - task: ios:gen
+        platforms: [darwin]
 
   sqlc:
     desc: Regenerate database access code from SQL
@@ -139,14 +143,67 @@ tasks:
 
   check:
     desc: The gate — generated code is current, formatting, vet, tests, build
+    vars:
+      GENERATED: internal/httpapi/api.gen.go internal/db/*.go web/src/schema.d.ts ios/PostithekaKit/Sources/PostithekaAPI/Generated/*.swift
+      # Hashed before the generators run, and compared after: if generating
+      # changed anything, the committed or working copy was stale. Unlike a
+      # git diff, this passes with uncommitted changes that are already
+      # regenerated.
+      BEFORE:
+        sh: shasum {{.GENERATED}}
     cmds:
       - task: generate
-      - git diff --exit-code -- internal/httpapi/api.gen.go internal/db web/src/schema.d.ts
+      - 'test "$(shasum {{.GENERATED}})" = "{{.BEFORE}}" || (echo "generated code was stale; review and commit the regenerated files" >&2 && exit 1)'
       - 'test -z "$(go tool gofumpt -l .)" || (go tool gofumpt -l . && echo "run: task fmt" >&2 && exit 1)'
       - task: vet
       - cd web && npm run typecheck
       - go test ./... -count=1
       - go build ./...
+
+  ios:gen:
+    desc: Regenerate the Swift client from api/openapi.yaml (macOS)
+    cmds:
+      - >-
+        swift run --package-path ios/tools/openapi swift-openapi-generator generate api/openapi.yaml
+        --config ios/PostithekaKit/openapi-generator-config.yaml
+        --output-directory ios/PostithekaKit/Sources/PostithekaAPI/Generated
+
+  ios:test:
+    desc: Test PostithekaKit (API client, rules, composer) without a simulator
+    cmds:
+      - swift test --package-path ios/PostithekaKit
+
+  ios:build:
+    desc: Build the iOS app for the simulator, unsigned
+    cmds:
+      - >-
+        xcodebuild build -project ios/Postitheka.xcodeproj -scheme Postitheka
+        -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet
+
+  ios:check:
+    desc: The iOS gate — Swift client current, kit tests, app builds (macOS)
+    vars:
+      BEFORE:
+        sh: shasum ios/PostithekaKit/Sources/PostithekaAPI/Generated/*.swift
+    cmds:
+      - task: ios:gen
+      - 'test "$(shasum ios/PostithekaKit/Sources/PostithekaAPI/Generated/*.swift)" = "{{.BEFORE}}" || (echo "the Swift client was stale; commit the regenerated files" >&2 && exit 1)'
+      - task: ios:test
+      - task: ios:build
+
+  ios:uitest:
+    desc: "Drive the app against a running local server (needs TOKEN=pk_... and an account)"
+    requires:
+      vars: [TOKEN]
+    cmds:
+      - >-
+        TEST_RUNNER_POSTITHEKA_TOKEN={{.TOKEN}} xcodebuild test -project ios/Postitheka.xcodeproj -scheme Postitheka
+        -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:PostithekaUITests
+
+  secrets:
+    desc: Scan the git history for committed secrets (what CI runs)
+    cmds:
+      - gitleaks git . --no-banner --redact
 
   build:
     desc: Build the server binary with the web app inside it

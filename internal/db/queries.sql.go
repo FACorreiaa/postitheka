@@ -28,6 +28,50 @@ func (q *Queries) AddPostMedia(ctx context.Context, arg AddPostMediaParams) erro
 	return err
 }
 
+const completeHandoff = `-- name: CompleteHandoff :one
+UPDATE post_targets t
+SET status = $1,
+    last_error = $2,
+    published_at = CASE WHEN $1 = 'handed_off' THEN now() END,
+    updated_at = now()
+FROM posts p
+WHERE t.id = $3 AND p.id = t.post_id AND p.user_id = $4
+  AND t.status = 'handing_off'
+RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at
+`
+
+type CompleteHandoffParams struct {
+	Status    string
+	LastError *string
+	ID        uuid.UUID
+	UserID    uuid.UUID
+}
+
+// Conditional on handing_off, so a late or repeated report cannot overwrite
+// an outcome already recorded.
+func (q *Queries) CompleteHandoff(ctx context.Context, arg CompleteHandoffParams) (PostTarget, error) {
+	row := q.db.QueryRow(ctx, completeHandoff,
+		arg.Status,
+		arg.LastError,
+		arg.ID,
+		arg.UserID,
+	)
+	var i PostTarget
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.AccountID,
+		&i.Platform,
+		&i.Status,
+		&i.LastError,
+		&i.RemoteID,
+		&i.RemoteUrl,
+		&i.PublishedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createAPIToken = `-- name: CreateAPIToken :exec
 INSERT INTO api_tokens (user_id, token_hash, name) VALUES ($1, $2, $3)
 `
@@ -80,6 +124,34 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 		&i.Platform,
 		&i.DisplayName,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const createAssistedTarget = `-- name: CreateAssistedTarget :one
+INSERT INTO post_targets (post_id, platform, status) VALUES ($1, $2, 'handing_off')
+RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at
+`
+
+type CreateAssistedTargetParams struct {
+	PostID   uuid.UUID
+	Platform string
+}
+
+func (q *Queries) CreateAssistedTarget(ctx context.Context, arg CreateAssistedTargetParams) (PostTarget, error) {
+	row := q.db.QueryRow(ctx, createAssistedTarget, arg.PostID, arg.Platform)
+	var i PostTarget
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.AccountID,
+		&i.Platform,
+		&i.Status,
+		&i.LastError,
+		&i.RemoteID,
+		&i.RemoteUrl,
+		&i.PublishedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -231,6 +303,27 @@ func (q *Queries) DeleteUnattachedMedia(ctx context.Context, ids []uuid.UUID) ([
 	return items, nil
 }
 
+const expireHandoffs = `-- name: ExpireHandoffs :execrows
+UPDATE post_targets
+SET status = 'failed', last_error = $1, updated_at = now()
+WHERE status = 'handing_off' AND updated_at < $2
+`
+
+type ExpireHandoffsParams struct {
+	LastError *string
+	Cutoff    time.Time
+}
+
+// A handoff the phone never reported (app killed with the share sheet open)
+// would otherwise wait forever.
+func (q *Queries) ExpireHandoffs(ctx context.Context, arg ExpireHandoffsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, expireHandoffs, arg.LastError, arg.Cutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getAccountsByIDs = `-- name: GetAccountsByIDs :many
 SELECT id, user_id, platform, display_name, created_at
 FROM accounts
@@ -365,7 +458,7 @@ func (q *Queries) GetPostByIdempotencyKey(ctx context.Context, arg GetPostByIdem
 const getTargetForPublish = `-- name: GetTargetForPublish :one
 SELECT
     t.id, t.post_id, t.account_id, t.platform, t.status,
-    p.text,
+    p.user_id, p.text,
     a.credentials
 FROM post_targets t
 JOIN posts p ON p.id = t.post_id
@@ -379,6 +472,7 @@ type GetTargetForPublishRow struct {
 	AccountID   uuid.NullUUID
 	Platform    string
 	Status      string
+	UserID      uuid.UUID
 	Text        string
 	Credentials []byte
 }
@@ -394,8 +488,38 @@ func (q *Queries) GetTargetForPublish(ctx context.Context, id uuid.UUID) (GetTar
 		&i.AccountID,
 		&i.Platform,
 		&i.Status,
+		&i.UserID,
 		&i.Text,
 		&i.Credentials,
+	)
+	return i, err
+}
+
+const getTargetForUser = `-- name: GetTargetForUser :one
+SELECT t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at FROM post_targets t
+JOIN posts p ON p.id = t.post_id
+WHERE t.id = $1 AND p.user_id = $2
+`
+
+type GetTargetForUserParams struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+}
+
+func (q *Queries) GetTargetForUser(ctx context.Context, arg GetTargetForUserParams) (PostTarget, error) {
+	row := q.db.QueryRow(ctx, getTargetForUser, arg.ID, arg.UserID)
+	var i PostTarget
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.AccountID,
+		&i.Platform,
+		&i.Status,
+		&i.LastError,
+		&i.RemoteID,
+		&i.RemoteUrl,
+		&i.PublishedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

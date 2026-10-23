@@ -79,6 +79,35 @@ INSERT INTO post_media (post_id, media_id, position) VALUES ($1, $2, $3);
 INSERT INTO post_targets (post_id, account_id, platform) VALUES ($1, $2, $3)
 RETURNING *;
 
+-- name: CreateAssistedTarget :one
+INSERT INTO post_targets (post_id, platform, status) VALUES ($1, $2, 'handing_off')
+RETURNING *;
+
+-- name: GetTargetForUser :one
+SELECT t.* FROM post_targets t
+JOIN posts p ON p.id = t.post_id
+WHERE t.id = $1 AND p.user_id = $2;
+
+-- Conditional on handing_off, so a late or repeated report cannot overwrite
+-- an outcome already recorded.
+-- name: CompleteHandoff :one
+UPDATE post_targets t
+SET status = sqlc.arg(status),
+    last_error = sqlc.narg(last_error),
+    published_at = CASE WHEN sqlc.arg(status) = 'handed_off' THEN now() END,
+    updated_at = now()
+FROM posts p
+WHERE t.id = sqlc.arg(id) AND p.id = t.post_id AND p.user_id = sqlc.arg(user_id)
+  AND t.status = 'handing_off'
+RETURNING t.*;
+
+-- A handoff the phone never reported (app killed with the share sheet open)
+-- would otherwise wait forever.
+-- name: ExpireHandoffs :execrows
+UPDATE post_targets
+SET status = 'failed', last_error = sqlc.arg(last_error), updated_at = now()
+WHERE status = 'handing_off' AND updated_at < sqlc.arg(cutoff);
+
 -- name: GetPost :one
 SELECT * FROM posts WHERE id = $1 AND user_id = $2;
 
@@ -108,7 +137,7 @@ ORDER BY pm.post_id, pm.position;
 -- name: GetTargetForPublish :one
 SELECT
     t.id, t.post_id, t.account_id, t.platform, t.status,
-    p.text,
+    p.user_id, p.text,
     a.credentials
 FROM post_targets t
 JOIN posts p ON p.id = t.post_id

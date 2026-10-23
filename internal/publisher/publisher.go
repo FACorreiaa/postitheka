@@ -20,7 +20,14 @@ const (
 	Instagram Platform = "instagram"
 	Facebook  Platform = "facebook"
 	TikTok    Platform = "tiktok"
+	WhatsApp  Platform = "whatsapp"
 )
+
+// IsAssisted reports whether a platform is published by handing the post to
+// its own app on the device (the share sheet) rather than by the server.
+// Such a platform has no Publisher and no publish job; WhatsApp has no
+// posting API at all.
+func IsAssisted(p Platform) bool { return p == WhatsApp }
 
 // Media is one attached file, as the publisher sees it: metadata plus a key to
 // fetch it by. The bytes are not loaded until a publisher asks for them,

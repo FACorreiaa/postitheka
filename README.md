@@ -54,12 +54,13 @@ again") rather than risk a duplicate post.
 | `internal/publisher` | `Publisher` interface, `Rules`, validation, error classes |
 | `internal/publisher/discord` | Discord webhooks: the first platform |
 | `internal/service` | Application behaviour: accounts, uploads, posts, tokens |
-| `internal/jobs` | The River worker that publishes one target |
+| `internal/jobs` | River workers: publish one target, sweep unattached uploads, expire unreported handoffs |
 | `internal/secretbox` | AES-256-GCM for credentials at rest, bound to the row id |
 | `internal/media` | S3-compatible storage (R2 in production) |
 | `internal/db` | sqlc output from `internal/db/queries.sql` (`task sqlc`) |
 | `migrations` | goose SQL, embedded; River migrates its own tables |
 | `web/` | The composer: Vite + React + TypeScript, embedded by `web/embed.go`. Types in `src/schema.d.ts` come from the spec |
+| `ios/` | SwiftUI app and `PostithekaKit`, its client generated from the spec. `task ios:check` |
 
 ## Adding a platform
 
@@ -77,13 +78,12 @@ Tests stub the platform's HTTP API; see `discord_test.go`. Never a real token.
 - **Sign in with Apple.** Tokens come from `server user create` until then.
 - **X, TikTok, Instagram, Facebook.** Start Meta Business Verification and the
   TikTok audit early; both take weeks.
-- **WhatsApp** is a share-sheet handoff in the iOS app. It has no API for posting.
 - **Discord forum channels** need `thread_name`; they fail permanently today.
-- **iOS app.** The web composer covers the same flow; iOS adds the share
-  sheet, which is also how WhatsApp gets posts.
+- **iOS:** the share extension and on-device video conversion. The composer,
+  Sent, accounts and the WhatsApp handoff are built; WhatsApp has no posting
+  API, so the app hands the post over through the share sheet.
 - **Deployment.** Nothing is in `platform/infra` yet. When it is: R2 bucket,
   sealed secrets for `TOKEN_ENCRYPTION_KEY` and the S3 keys (sealed for the
   right namespace), and a PreSync hook running `server migrate`. The R2 bucket
   needs a CORS rule allowing `PUT` with `Content-Type` from the app's origin,
   or browser uploads fail at the preflight; locally the server sets this up.
-# postitheka

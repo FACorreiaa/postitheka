@@ -181,6 +181,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/ValidationError"
 
+  /v1/targets/{targetId}/handoff:
+    post:
+      operationId: completeHandoff
+      description: >
+        Records what happened to an assisted target once the share sheet
+        closed. sent=true marks it handed_off; false marks it failed. Only a
+        target still handing_off can be completed; repeating the same outcome
+        is accepted.
+      parameters:
+        - name: targetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteHandoffRequest"
+      responses:
+        "200":
+          description: The post, with the target updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The target is not an assisted target waiting for its handoff.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /v1/posts/{postId}:
     get:
       operationId: getPost
@@ -241,7 +280,10 @@ components:
   schemas:
     Platform:
       type: string
-      enum: [discord, x, instagram, facebook, tiktok]
+      enum: [discord, x, instagram, facebook, tiktok, whatsapp]
+      description: >
+        whatsapp is assisted only: it has no posting API, so the iOS app hands
+        the post to WhatsApp and the user sends it there.
 
     PlatformInfo:
       type: object
@@ -346,6 +388,7 @@ components:
     CreatePostRequest:
       type: object
       required: [account_ids]
+      description: At least one account or one assisted platform.
       properties:
         text:
           type: string
@@ -357,14 +400,31 @@ components:
           description: In display order.
         account_ids:
           type: array
-          minItems: 1
           items:
             type: string
             format: uuid
+        assisted:
+          type: array
+          description: >
+            Platforms the client will hand the post to itself (WhatsApp, from
+            iOS). Each gets a target in handing_off and no publish job; the
+            client reports the outcome with POST /v1/targets/{targetId}/handoff.
+            Not allowed with a future scheduled_at: a handoff happens now, on
+            the device.
+          items:
+            $ref: "#/components/schemas/Platform"
         scheduled_at:
           type: string
           format: date-time
           description: Omit to publish now.
+
+    CompleteHandoffRequest:
+      type: object
+      required: [sent]
+      properties:
+        sent:
+          type: boolean
+          description: True when the user sent the post from the platform's app.
 
     Post:
       type: object
@@ -406,7 +466,11 @@ components:
           $ref: "#/components/schemas/Platform"
         status:
           type: string
-          enum: [pending, publishing, published, failed]
+          enum: [pending, publishing, published, failed, handing_off, handed_off]
+          description: >
+            handing_off and handed_off are for assisted platforms: the client
+            is showing the share sheet, or the user sent the post from the
+            platform's own app.
         last_error:
           type: string
         remote_url:

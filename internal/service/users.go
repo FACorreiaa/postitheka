@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/FACorreiaa/postitheka/internal/analytics"
 	"github.com/FACorreiaa/postitheka/internal/db"
 )
 
@@ -33,11 +34,16 @@ func (s *Service) CreateUserWithToken(ctx context.Context, email, tokenName stri
 	}
 
 	user, err := s.q.GetUserByEmail(ctx, email)
+	created := false
 	if errors.Is(err, pgx.ErrNoRows) {
 		user, err = s.q.CreateUser(ctx, email)
+		created = err == nil
 	}
 	if err != nil {
 		return uuid.Nil, "", fmt.Errorf("user: %w", err)
+	}
+	if created {
+		s.events.Capture(analytics.Event{Name: analytics.EventSignedUp, DistinctID: user.ID.String()})
 	}
 
 	secret := make([]byte, 32)

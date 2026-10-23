@@ -1,0 +1,3 @@
+// Empty until the public hostname exists (REL-004). The app then says it has
+// no server rather than guessing one.
+API_BASE_URL =

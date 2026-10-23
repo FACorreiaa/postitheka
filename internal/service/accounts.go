@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/FACorreiaa/postitheka/internal/analytics"
 	"github.com/FACorreiaa/postitheka/internal/db"
 	"github.com/FACorreiaa/postitheka/internal/publisher"
 	"github.com/FACorreiaa/postitheka/internal/publisher/discord"
@@ -49,6 +50,11 @@ func (s *Service) storeAccount(ctx context.Context, userID uuid.UUID, platform p
 	if err != nil {
 		return Account{}, fmt.Errorf("store account: %w", err)
 	}
+	s.events.Capture(analytics.Event{
+		Name:       analytics.EventAccountConnected,
+		DistinctID: userID.String(),
+		Props:      analytics.Props("platform", string(platform)),
+	})
 	return acct, nil
 }
 

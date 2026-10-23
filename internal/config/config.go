@@ -44,6 +44,11 @@ type Config struct {
 	// so this is a bandwidth knob more than a CPU one.
 	PublishWorkers int
 
+	// PostHog product analytics. An empty key disables capture entirely:
+	// nothing is sent, and no credential is needed to develop.
+	PostHogAPIKey string
+	PostHogHost   string
+
 	LogLevel  string
 	LogFormat string
 
@@ -67,6 +72,8 @@ func Load() (Config, error) {
 		S3Bucket:        env("S3_BUCKET", ""),
 		S3AccessKey:     env("S3_ACCESS_KEY", ""),
 		S3SecretKey:     env("S3_SECRET_KEY", ""),
+		PostHogAPIKey:   env("POSTHOG_API_KEY", ""),
+		PostHogHost:     strings.TrimSuffix(env("POSTHOG_HOST", "https://eu.i.posthog.com"), "/"),
 		LogLevel:        env("LOG_LEVEL", "info"),
 		LogFormat:       env("LOG_FORMAT", ""),
 		ShutdownTimeout: 30 * time.Second,

@@ -10,9 +10,10 @@ This file is the working contract for anyone, human or agent, changing the repo.
 ## Where it stands (2026-10-22)
 
 - Built: the Go API, Discord publishing, the web composer. Not deployed. **Strangers: 0.**
-- Postitheka is not on the owner's active-projects list (`~/.claude/CLAUDE.md`). Work so far was
-  done on the owner's explicit go-ahead. Do not start new work on it unasked; when asked, say
-  once if the request polishes supply side while strangers are 0, then follow the owner's call.
+- Postitheka is not on the owner's active-projects list (`~/.claude/CLAUDE.md`), but on
+  2026-10-23 the owner said to build it out (API, web, iOS) regardless of the strangers count,
+  as with Aaru. Do not flag supply-side work here. What waits on the owner is listed in
+  `BACKLOG.md` under "Waiting on the owner"; work around it, not on it.
 - The owner's global rules apply here: no renames, rebrands or re-architectures until 10
   strangers have used the current version. Agents draft pixels; the owner keeps visual verdicts.
 
@@ -30,6 +31,12 @@ This file is the working contract for anyone, human or agent, changing the repo.
   app hands the post to the platform's app through the share sheet and the user taps Send.
 - **Platform limits come from the platform's docs, dated.** Every `Rules()` says when it was
   checked. Never guess a limit: Discord's was remembered as 10 MiB and is 20 MiB per file.
+- **No secrets in the repo.** Every secret (database URL, encryption key, storage keys, a
+  platform's OAuth client secret, analytics key) comes from the environment: `.env` locally
+  (gitignored), sealed secrets in the cluster. `.env.example` holds only blanks and the
+  docker-compose dev values. Clients hold none: the web app and the iOS app know the API's
+  base URL and nothing else, so every call to a platform goes through the server. CI runs a
+  secret scan over the history.
 - **Credentials are sealed and never leave the server.** Stored encrypted with AES-256-GCM, bound
   to their account row, never logged, never in an API response, never in a URL.
 - **Media bytes never pass through the API.** Clients upload straight to storage with a
@@ -61,11 +68,12 @@ postitheka/
     database/               # pool, migrations (goose + River), testdb for tests
     db/                     # sqlc output; edit queries.sql, never the .go files
     httpapi/                # api.gen.go (generated) + server.go (wire <-> service)
-    jobs/                   # the River worker that publishes one target
+    jobs/                   # River workers: publish one target, sweep uploads, expire handoffs
     media/                  # object storage, presigned URLs, filenames
     publisher/              # Publisher interface, Rules, Validate, error classes
       discord/              # one package per platform
     secretbox/              # credential encryption
+    analytics/              # product events (PostHog); empty key sends nothing
     service/                # application behaviour: accounts, uploads, posts, tokens
   migrations/               # goose SQL; never edit one that has been applied
   web/                      # the composer; web/embed.go serves web/dist
@@ -83,6 +91,7 @@ task web:dev                        # composer on :5173, proxies /v1 to :8095
 task user:create -- you@example.com # prints an API token (stand-in for sign-in)
 task test                           # Go tests; DB tests skip without DATABASE_URL
 task check                          # the gate: codegen current, gofumpt, vet, typecheck, tests, build
+task secrets                        # gitleaks over the history, as CI runs it
 task generate                       # api:gen (Go + TS) and sqlc
 task build                          # web build, then one binary with the web app inside
 ```

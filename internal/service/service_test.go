@@ -23,6 +23,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"github.com/riverqueue/river/rivertype"
 
+	"github.com/FACorreiaa/postitheka/internal/analytics"
 	"github.com/FACorreiaa/postitheka/internal/database/testdb"
 	"github.com/FACorreiaa/postitheka/internal/db"
 	"github.com/FACorreiaa/postitheka/internal/jobs"
@@ -142,6 +143,42 @@ type env struct {
 	workers *river.Workers
 	storage *fakeStorage
 	discord *discordStub
+	events  *recordedEvents
+}
+
+// recordedEvents is an analytics client that keeps what it is given.
+type recordedEvents struct {
+	mu     sync.Mutex
+	events []analytics.Event
+}
+
+func (r *recordedEvents) Capture(e analytics.Event) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, e)
+}
+
+func (r *recordedEvents) Close(context.Context) error { return nil }
+
+// names lists events as "name" or "name:reason", in order.
+func (r *recordedEvents) names() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := []string{}
+	for _, e := range r.events {
+		n := e.Name
+		if reason, ok := e.Props["reason"]; ok {
+			n += ":" + reason.(string)
+		}
+		out = append(out, n)
+	}
+	return out
+}
+
+func (r *recordedEvents) reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = nil
 }
 
 func setup(t *testing.T) *env {
@@ -168,7 +205,8 @@ func setup(t *testing.T) *env {
 	storage := &fakeStorage{objects: map[string]fakeObject{}}
 	q := db.New(pool)
 
-	worker := jobs.NewPublishWorker(q, box, registry, storage, slog.New(slog.DiscardHandler))
+	events := &recordedEvents{}
+	worker := jobs.NewPublishWorker(q, box, registry, storage, events, slog.New(slog.DiscardHandler))
 	workers := river.NewWorkers()
 	river.AddWorker(workers, worker)
 
@@ -180,9 +218,9 @@ func setup(t *testing.T) *env {
 	}
 
 	svc := service.New(service.Deps{
-		Pool: pool, River: rc, Box: box, Registry: registry, Storage: storage, Discord: discordPub,
+		Pool: pool, River: rc, Box: box, Registry: registry, Storage: storage, Discord: discordPub, Analytics: events,
 	})
-	return &env{pool: pool, q: q, svc: svc, worker: worker, workers: workers, storage: storage, discord: stub}
+	return &env{pool: pool, q: q, svc: svc, worker: worker, workers: workers, storage: storage, discord: stub, events: events}
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -501,6 +539,147 @@ func TestSweepDeletesOnlyOldUnattachedUploads(t *testing.T) {
 	}
 }
 
+// The funnel the P1 gate is measured by: a sign-up is counted once, not each
+// time a token is minted, and nothing a person wrote reaches analytics.
+func TestProductEventsCarryNoPersonalData(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	if _, _, err := e.svc.CreateUserWithToken(ctx, "alice@example.com", "second"); err != nil {
+		t.Fatal(err)
+	}
+	acct := e.account(t, alice)
+	if _, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "secret words", AccountIDs: []uuid.UUID{acct}}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := strings.Join(e.events.names(), ","); got != "signed_up,account_connected" {
+		t.Errorf("events %s, want signed_up,account_connected", got)
+	}
+	for _, ev := range e.events.events {
+		if ev.DistinctID != alice.String() {
+			t.Errorf("%s: distinct id %q, want alice's user id", ev.Name, ev.DistinctID)
+		}
+		for k, v := range ev.Props {
+			if s, ok := v.(string); ok && (strings.Contains(s, "alice") || strings.Contains(s, "secret") || strings.Contains(s, "webhook")) {
+				t.Errorf("%s carries %s=%q", ev.Name, k, s)
+			}
+		}
+	}
+}
+
+func TestAssistedHandoff(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	acct := e.account(t, alice)
+
+	view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "for the group", Assisted: []string{"whatsapp", "whatsapp"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(view.Targets) != 1 || view.Targets[0].Status != "handing_off" || view.Targets[0].AccountID.Valid {
+		t.Fatalf("targets %+v, want one handing_off target with no account", view.Targets)
+	}
+	var queued int
+	_ = e.pool.QueryRow(ctx, "SELECT count(*) FROM river_job").Scan(&queued)
+	if queued != 0 {
+		t.Errorf("%d publish jobs for a handoff, want none", queued)
+	}
+	target := view.Targets[0].ID
+
+	done, err := e.svc.CompleteHandoff(ctx, alice, target, true)
+	if err != nil || done.Targets[0].Status != "handed_off" || !done.Targets[0].PublishedAt.Valid {
+		t.Fatalf("complete: %v, %+v; want handed_off with a time", err, done.Targets)
+	}
+	if _, err := e.svc.CompleteHandoff(ctx, alice, target, true); err != nil {
+		t.Errorf("repeating the same outcome: %v, want it accepted", err)
+	}
+	if _, err := e.svc.CompleteHandoff(ctx, alice, target, false); !errors.Is(err, service.ErrConflict) {
+		t.Errorf("changing the outcome: %v, want ErrConflict", err)
+	}
+
+	t.Run("cancelled share sheet", func(t *testing.T) {
+		v, _ := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "x", AccountIDs: []uuid.UUID{acct}, Assisted: []string{"whatsapp"}})
+		var handoff, direct uuid.UUID
+		for _, tg := range v.Targets {
+			if tg.Platform == "whatsapp" {
+				handoff = tg.ID
+			} else {
+				direct = tg.ID
+			}
+		}
+		got, err := e.svc.CompleteHandoff(ctx, alice, handoff, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, tg := range got.Targets {
+			if tg.ID == handoff && (tg.Status != "failed" || deref(tg.LastError) == "") {
+				t.Errorf("cancelled handoff: %+v, want failed with a reason", tg)
+			}
+		}
+		if _, err := e.svc.CompleteHandoff(ctx, alice, direct, true); !errors.Is(err, service.ErrConflict) {
+			t.Errorf("completing a direct target: %v, want ErrConflict", err)
+		}
+	})
+
+	t.Run("another user's target", func(t *testing.T) {
+		bob := e.user(t, "bob@example.com")
+		if _, err := e.svc.CompleteHandoff(ctx, bob, target, true); !errors.Is(err, service.ErrNotFound) {
+			t.Errorf("got %v, want ErrNotFound", err)
+		}
+	})
+
+	t.Run("phone never reports", func(t *testing.T) {
+		stale, _ := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "stale", Assisted: []string{"whatsapp"}})
+		fresh, _ := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "fresh", Assisted: []string{"whatsapp"}})
+		if _, err := e.pool.Exec(ctx, "UPDATE post_targets SET updated_at = now() - interval '61 minutes' WHERE id = $1",
+			stale.Targets[0].ID); err != nil {
+			t.Fatal(err)
+		}
+		expire := jobs.NewExpireHandoffsWorker(db.New(e.pool), slog.New(slog.DiscardHandler))
+		if err := expire.Work(ctx, &river.Job[jobs.ExpireHandoffsArgs]{JobRow: &rivertype.JobRow{}}); err != nil {
+			t.Fatal(err)
+		}
+		got, _ := e.svc.GetPost(ctx, alice, stale.Post.ID)
+		if tg := got.Targets[0]; tg.Status != "failed" || deref(tg.LastError) != jobs.HandoffExpiredMessage {
+			t.Errorf("stale handoff: %+v, want failed as never reported", tg)
+		}
+		got, _ = e.svc.GetPost(ctx, alice, fresh.Post.ID)
+		if tg := got.Targets[0]; tg.Status != "handing_off" {
+			t.Errorf("fresh handoff: %+v, want still handing_off", tg)
+		}
+		// Only handing_off expires: a finished handoff keeps its outcome
+		// however old it is.
+		if _, err := e.pool.Exec(ctx, "UPDATE post_targets SET updated_at = now() - interval '1 day' WHERE id = $1", target); err != nil {
+			t.Fatal(err)
+		}
+		if err := expire.Work(ctx, &river.Job[jobs.ExpireHandoffsArgs]{JobRow: &rivertype.JobRow{}}); err != nil {
+			t.Fatal(err)
+		}
+		got, _ = e.svc.GetPost(ctx, alice, view.Post.ID)
+		if got.Targets[0].Status != "handed_off" {
+			t.Errorf("finished handoff became %s", got.Targets[0].Status)
+		}
+		if _, err := e.svc.CompleteHandoff(ctx, alice, stale.Targets[0].ID, true); !errors.Is(err, service.ErrConflict) {
+			t.Errorf("late report: %v, want ErrConflict", err)
+		}
+	})
+
+	t.Run("rejected requests", func(t *testing.T) {
+		later := time.Now().Add(time.Hour)
+		for name, in := range map[string]service.CreatePostInput{
+			"not assisted": {Text: "x", Assisted: []string{"discord"}},
+			"scheduled":    {Text: "x", Assisted: []string{"whatsapp"}, ScheduledAt: &later},
+		} {
+			var ve *service.ValidationError
+			if _, err := e.svc.CreatePost(ctx, alice, in); !errors.As(err, &ve) || ve.Issues[0].Field != "assisted" {
+				t.Errorf("%s: got %v, want an issue on assisted", name, err)
+			}
+		}
+	})
+}
+
 func TestUsersAreIsolated(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
@@ -591,6 +770,7 @@ func TestWorkerOutcomes(t *testing.T) {
 		status    string
 		cancelled bool
 		errText   string
+		event     string // what analytics records; empty while it will retry
 	}
 	cases := map[string]struct {
 		prepare func(e *env, targetID, accountID uuid.UUID)
@@ -600,12 +780,12 @@ func TestWorkerOutcomes(t *testing.T) {
 		"published": {
 			prepare: func(*env, uuid.UUID, uuid.UUID) {},
 			attempt: 1,
-			want:    outcome{status: "published"},
+			want:    outcome{status: "published", event: "target_published"},
 		},
 		"platform rejects: no retry": {
 			prepare: func(e *env, _, _ uuid.UUID) { e.discord.postStatus.Store(http.StatusBadRequest) },
 			attempt: 1,
-			want:    outcome{status: "failed", cancelled: true, errText: "stub failure"},
+			want:    outcome{status: "failed", cancelled: true, errText: "stub failure", event: "target_failed:rejected"},
 		},
 		"platform down: retry": {
 			prepare: func(e *env, _, _ uuid.UUID) { e.discord.postStatus.Store(http.StatusBadGateway) },
@@ -615,21 +795,21 @@ func TestWorkerOutcomes(t *testing.T) {
 		"platform down on the last attempt: give up": {
 			prepare: func(e *env, _, _ uuid.UUID) { e.discord.postStatus.Store(http.StatusBadGateway) },
 			attempt: 10,
-			want:    outcome{status: "failed", errText: "502"},
+			want:    outcome{status: "failed", errText: "502", event: "target_failed:retries_exhausted"},
 		},
 		"previous attempt died mid-request: do not risk a duplicate": {
 			prepare: func(e *env, targetID, _ uuid.UUID) {
 				_, _ = e.pool.Exec(context.Background(), "UPDATE post_targets SET status = 'publishing' WHERE id = $1", targetID)
 			},
 			attempt: 2,
-			want:    outcome{status: "failed", cancelled: true, errText: "interrupted"},
+			want:    outcome{status: "failed", cancelled: true, errText: "interrupted", event: "target_failed:interrupted"},
 		},
 		"account disconnected after posting": {
 			prepare: func(e *env, _, accountID uuid.UUID) {
 				_, _ = e.pool.Exec(context.Background(), "DELETE FROM accounts WHERE id = $1", accountID)
 			},
 			attempt: 1,
-			want:    outcome{status: "failed", cancelled: true, errText: "disconnected"},
+			want:    outcome{status: "failed", cancelled: true, errText: "disconnected", event: "target_failed:disconnected"},
 		},
 	}
 
@@ -644,6 +824,7 @@ func TestWorkerOutcomes(t *testing.T) {
 			}
 			targetID := view.Targets[0].ID
 			tc.prepare(e, targetID, acct)
+			e.events.reset()
 
 			jobErr := e.runJob(t, targetID, tc.attempt)
 
@@ -657,6 +838,18 @@ func TestWorkerOutcomes(t *testing.T) {
 			}
 			if !strings.Contains(deref(tgt.LastError), tc.want.errText) {
 				t.Errorf("last error %q, want it to mention %q", deref(tgt.LastError), tc.want.errText)
+			}
+			want := []string{}
+			if tc.want.event != "" {
+				want = append(want, tc.want.event)
+			}
+			if got := e.events.names(); strings.Join(got, ",") != strings.Join(want, ",") {
+				t.Errorf("events %v, want %v", got, want)
+			}
+			for _, ev := range e.events.events {
+				if ev.DistinctID != alice.String() || ev.Props["platform"] != "discord" {
+					t.Errorf("event %+v: want alice's id and the platform", ev)
+				}
 			}
 		})
 	}

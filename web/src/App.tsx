@@ -114,6 +114,8 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
 
   // Poll only while something is still on its way. A finished history has
   // nothing to refresh, and an idle tab should not keep the server busy.
+  // Not handing_off: that waits on a phone, which may never report back, and
+  // polling for it would never stop.
   const inFlight = posts?.some((p) => p.targets.some((t) => t.status === "pending" || t.status === "publishing"));
   useEffect(() => {
     if (!inFlight) return;

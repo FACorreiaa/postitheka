@@ -25,6 +25,7 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
+	"github.com/FACorreiaa/postitheka/internal/analytics"
 	"github.com/FACorreiaa/postitheka/internal/config"
 	"github.com/FACorreiaa/postitheka/internal/database"
 	"github.com/FACorreiaa/postitheka/internal/db"
@@ -125,13 +126,15 @@ func serve(cfg config.Config) error {
 	registry := publisher.NewRegistry(discordPub)
 
 	workers := river.NewWorkers()
-	river.AddWorker(workers, jobs.NewPublishWorker(db.New(pool), box, registry, store, slog.Default()))
+	events := analytics.New(cfg.PostHogAPIKey, cfg.PostHogHost, slog.Default())
+	river.AddWorker(workers, jobs.NewPublishWorker(db.New(pool), box, registry, store, events, slog.Default()))
 	river.AddWorker(workers, jobs.NewSweepMediaWorker(pool, store, slog.Default()))
+	river.AddWorker(workers, jobs.NewExpireHandoffsWorker(db.New(pool), slog.Default()))
 
 	rc, err := river.NewClient(riverpgxv5.New(pool), &river.Config{
 		Queues:       map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: cfg.PublishWorkers}},
 		Workers:      workers,
-		PeriodicJobs: []*river.PeriodicJob{jobs.PeriodicSweepMedia()},
+		PeriodicJobs: []*river.PeriodicJob{jobs.PeriodicSweepMedia(), jobs.PeriodicExpireHandoffs()},
 		Logger:       slog.Default(),
 	})
 	if err != nil {
@@ -142,12 +145,13 @@ func serve(cfg config.Config) error {
 	}
 
 	svc := service.New(service.Deps{
-		Pool:     pool,
-		River:    rc,
-		Box:      box,
-		Registry: registry,
-		Storage:  store,
-		Discord:  discordPub,
+		Pool:      pool,
+		River:     rc,
+		Box:       box,
+		Registry:  registry,
+		Storage:   store,
+		Discord:   discordPub,
+		Analytics: events,
 	})
 
 	srv := &http.Server{
@@ -179,6 +183,9 @@ func serve(cfg config.Config) error {
 	// leave its target 'publishing' and be failed as interrupted, so letting
 	// in-flight posts finish is worth most of the shutdown budget.
 	riverErr := rc.Stop(shutdownCtx)
+	// After River, so the outcomes of the last jobs are flushed too. Bounded
+	// by the same budget: a hung analytics endpoint cannot hold up a deploy.
+	_ = events.Close(shutdownCtx)
 	return errors.Join(httpErr, riverErr)
 }
 
@@ -220,8 +227,11 @@ func createUser(cfg config.Config, email string) error {
 	}
 	defer pool.Close()
 
-	// No river client or storage: minting a token touches neither.
-	svc := service.New(service.Deps{Pool: pool})
+	// No river client or storage: minting a token touches neither. Analytics
+	// is flushed before exit, so a sign-up from the CLI is not lost.
+	events := analytics.New(cfg.PostHogAPIKey, cfg.PostHogHost, slog.Default())
+	defer func() { _ = events.Close(ctx) }()
+	svc := service.New(service.Deps{Pool: pool, Analytics: events})
 	id, token, err := svc.CreateUserWithToken(ctx, email, "cli")
 	if err != nil {
 		return err

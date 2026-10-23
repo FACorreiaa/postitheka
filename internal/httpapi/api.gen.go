@@ -29,6 +29,7 @@ const (
 	Facebook  Platform = "facebook"
 	Instagram Platform = "instagram"
 	Tiktok    Platform = "tiktok"
+	Whatsapp  Platform = "whatsapp"
 	X         Platform = "x"
 )
 
@@ -43,6 +44,8 @@ func (e Platform) Valid() bool {
 		return true
 	case Tiktok:
 		return true
+	case Whatsapp:
+		return true
 	case X:
 		return true
 	default:
@@ -53,6 +56,8 @@ func (e Platform) Valid() bool {
 // Defines values for TargetStatus.
 const (
 	Failed     TargetStatus = "failed"
+	HandedOff  TargetStatus = "handed_off"
+	HandingOff TargetStatus = "handing_off"
 	Pending    TargetStatus = "pending"
 	Published  TargetStatus = "published"
 	Publishing TargetStatus = "publishing"
@@ -62,6 +67,10 @@ const (
 func (e TargetStatus) Valid() bool {
 	switch e {
 	case Failed:
+		return true
+	case HandedOff:
+		return true
+	case HandingOff:
 		return true
 	case Pending:
 		return true
@@ -94,7 +103,15 @@ type Account struct {
 	CreatedAt   time.Time          `json:"created_at"`
 	DisplayName string             `json:"display_name"`
 	Id          openapi_types.UUID `json:"id"`
-	Platform    Platform           `json:"platform"`
+
+	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+	Platform Platform `json:"platform"`
+}
+
+// CompleteHandoffRequest defines model for CompleteHandoffRequest.
+type CompleteHandoffRequest struct {
+	// Sent True when the user sent the post from the platform's app.
+	Sent bool `json:"sent"`
 }
 
 // ConnectDiscordRequest defines model for ConnectDiscordRequest.
@@ -106,9 +123,12 @@ type ConnectDiscordRequest struct {
 	WebhookUrl string `json:"webhook_url"`
 }
 
-// CreatePostRequest defines model for CreatePostRequest.
+// CreatePostRequest At least one account or one assisted platform.
 type CreatePostRequest struct {
 	AccountIds []openapi_types.UUID `json:"account_ids"`
+
+	// Assisted Platforms the client will hand the post to itself (WhatsApp, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
+	Assisted *[]Platform `json:"assisted,omitempty"`
 
 	// MediaIds In display order.
 	MediaIds *[]openapi_types.UUID `json:"media_ids,omitempty"`
@@ -135,16 +155,19 @@ type Issue struct {
 	AccountId *openapi_types.UUID `json:"account_id,omitempty"`
 
 	// Field Example: text
-	Field    string    `json:"field"`
-	Message  string    `json:"message"`
+	Field   string `json:"field"`
+	Message string `json:"message"`
+
+	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
 	Platform *Platform `json:"platform,omitempty"`
 }
 
-// Platform defines model for Platform.
+// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
 type Platform string
 
 // PlatformInfo defines model for PlatformInfo.
 type PlatformInfo struct {
+	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
 	Platform Platform `json:"platform"`
 	Rules    Rules    `json:"rules"`
 }
@@ -179,16 +202,20 @@ type Rules struct {
 // Target defines model for Target.
 type Target struct {
 	// AccountId Absent once the account has been disconnected.
-	AccountId   *openapi_types.UUID `json:"account_id,omitempty"`
-	Id          openapi_types.UUID  `json:"id"`
-	LastError   *string             `json:"last_error,omitempty"`
-	Platform    Platform            `json:"platform"`
-	PublishedAt *time.Time          `json:"published_at,omitempty"`
-	RemoteUrl   *string             `json:"remote_url,omitempty"`
-	Status      TargetStatus        `json:"status"`
+	AccountId *openapi_types.UUID `json:"account_id,omitempty"`
+	Id        openapi_types.UUID  `json:"id"`
+	LastError *string             `json:"last_error,omitempty"`
+
+	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+	Platform    Platform   `json:"platform"`
+	PublishedAt *time.Time `json:"published_at,omitempty"`
+	RemoteUrl   *string    `json:"remote_url,omitempty"`
+
+	// Status handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
+	Status TargetStatus `json:"status"`
 }
 
-// TargetStatus defines model for Target.Status.
+// TargetStatus handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
 type TargetStatus string
 
 // Upload defines model for Upload.
@@ -243,6 +270,9 @@ type CreateUploadJSONRequestBody = CreateUploadRequest
 // CreatePostJSONRequestBody defines body for CreatePost for application/json ContentType.
 type CreatePostJSONRequestBody = CreatePostRequest
 
+// CompleteHandoffJSONRequestBody defines body for CompleteHandoff for application/json ContentType.
+type CompleteHandoffJSONRequestBody = CompleteHandoffRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 
@@ -269,6 +299,9 @@ type ServerInterface interface {
 
 	// (GET /v1/posts/{postId})
 	GetPost(w http.ResponseWriter, r *http.Request, postId openapi_types.UUID)
+
+	// (POST /v1/targets/{targetId}/handoff)
+	CompleteHandoff(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -312,6 +345,11 @@ func (_ Unimplemented) CreatePost(w http.ResponseWriter, r *http.Request, params
 
 // (GET /v1/posts/{postId})
 func (_ Unimplemented) GetPost(w http.ResponseWriter, r *http.Request, postId openapi_types.UUID) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// (POST /v1/targets/{targetId}/handoff)
+func (_ Unimplemented) CompleteHandoff(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -506,6 +544,32 @@ func (siw *ServerInterfaceWrapper) GetPost(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// CompleteHandoff operation middleware
+func (siw *ServerInterfaceWrapper) CompleteHandoff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "targetId" -------------
+	var targetId openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "targetId", chi.URLParam(r, "targetId"), &targetId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: r.URL.RawPath == ""})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "targetId", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteHandoff(w, r, targetId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -639,6 +703,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/v1/posts", wrapper.CreatePost)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/v1/targets/{targetId}/handoff", wrapper.CompleteHandoff)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/v1/posts/{postId}", wrapper.GetPost)
@@ -1018,6 +1085,71 @@ func (response GetPost404JSONResponse) VisitGetPostResponse(w http.ResponseWrite
 	return err
 }
 
+type CompleteHandoffRequestObject struct {
+	TargetId openapi_types.UUID `json:"targetId"`
+	Body     *CompleteHandoffJSONRequestBody
+}
+
+type CompleteHandoffResponseObject interface {
+	VisitCompleteHandoffResponse(w http.ResponseWriter) error
+}
+
+type CompleteHandoff200JSONResponse Post
+
+func (response CompleteHandoff200JSONResponse) VisitCompleteHandoffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteHandoff401JSONResponse struct{ UnauthorizedJSONResponse }
+
+func (response CompleteHandoff401JSONResponse) VisitCompleteHandoffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteHandoff404JSONResponse struct{ NotFoundJSONResponse }
+
+func (response CompleteHandoff404JSONResponse) VisitCompleteHandoffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CompleteHandoff409JSONResponse Error
+
+func (response CompleteHandoff409JSONResponse) VisitCompleteHandoffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 
@@ -1044,6 +1176,9 @@ type StrictServerInterface interface {
 
 	// (GET /v1/posts/{postId})
 	GetPost(ctx context.Context, request GetPostRequestObject) (GetPostResponseObject, error)
+
+	// (POST /v1/targets/{targetId}/handoff)
+	CompleteHandoff(ctx context.Context, request CompleteHandoffRequestObject) (CompleteHandoffResponseObject, error)
 }
 
 type StrictHandlerFunc func(ctx context.Context, w http.ResponseWriter, r *http.Request, request any) (any, error)
@@ -1306,48 +1441,89 @@ func (sh *strictHandler) GetPost(w http.ResponseWriter, r *http.Request, postId 
 	}
 }
 
+// CompleteHandoff operation middleware
+func (sh *strictHandler) CompleteHandoff(w http.ResponseWriter, r *http.Request, targetId openapi_types.UUID) {
+	var request CompleteHandoffRequestObject
+
+	request.TargetId = targetId
+
+	var body CompleteHandoffJSONRequestBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CompleteHandoff(ctx, request.(CompleteHandoffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CompleteHandoff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CompleteHandoffResponseObject); ok {
+		if err := validResponse.VisitCompleteHandoffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // Base64 encoded, compressed with deflate, json marshaled OpenAPI spec.
 // Stored as a slice of fixed-width chunks rather than one concatenated
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
