@@ -4,6 +4,7 @@ import { type Account, api, messageOf, type PlatformInfo, type Post, readToken, 
 import lockupDark from "./assets/lockup-horizontal-on-dark.svg";
 import lockupLight from "./assets/lockup-horizontal-on-light.svg";
 import { Composer } from "./Composer";
+import { DISCORD_URL } from "./links";
 import { platformNames } from "./rules";
 import { Sent } from "./Sent";
 
@@ -143,6 +144,9 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
           <button className="quiet" onClick={() => accountsDialog.current?.showModal()}>
             Accounts{accounts && accounts.length > 0 ? ` (${accounts.length})` : ""}
           </button>
+          <a className="quiet" href={DISCORD_URL} target="_blank" rel="noopener noreferrer">
+            Join us on Discord
+          </a>
           <button className="quiet" onClick={onSignOut}>
             Sign out
           </button>
