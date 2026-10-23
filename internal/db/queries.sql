@@ -30,6 +30,14 @@ UPDATE accounts SET credentials = $3, display_name = $4
 WHERE id = $1 AND user_id = $2
 RETURNING id, user_id, platform, display_name, created_at;
 
+-- Held while credentials are refreshed, so two jobs for one account do not
+-- both spend a refresh token that rotates.
+-- name: LockAccountCredentials :one
+SELECT credentials FROM accounts WHERE id = $1 FOR UPDATE;
+
+-- name: UpdateAccountCredentials :exec
+UPDATE accounts SET credentials = $2 WHERE id = $1;
+
 -- name: CreateOAuthState :exec
 INSERT INTO oauth_states (state_hash, user_id, platform, verifier, client)
 VALUES ($1, $2, $3, $4, $5);

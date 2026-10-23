@@ -144,6 +144,7 @@ type env struct {
 	storage *fakeStorage
 	discord *discordStub
 	events  *recordedEvents
+	box     *secretbox.Box
 }
 
 // recordedEvents is an analytics client that keeps what it is given.
@@ -208,7 +209,7 @@ func setup(t *testing.T, extra ...publisher.Publisher) *env {
 	q := db.New(pool)
 
 	events := &recordedEvents{}
-	worker := jobs.NewPublishWorker(q, box, registry, storage, events, slog.New(slog.DiscardHandler))
+	worker := jobs.NewPublishWorker(pool, box, registry, storage, events, slog.New(slog.DiscardHandler))
 	workers := river.NewWorkers()
 	river.AddWorker(workers, worker)
 
@@ -223,7 +224,7 @@ func setup(t *testing.T, extra ...publisher.Publisher) *env {
 		Pool: pool, River: rc, Box: box, Registry: registry, Storage: storage, Discord: discordPub, Analytics: events,
 		PublicURL: "https://postitheka.test",
 	})
-	return &env{pool: pool, q: q, svc: svc, worker: worker, workers: workers, storage: storage, discord: stub, events: events}
+	return &env{pool: pool, q: q, svc: svc, worker: worker, workers: workers, storage: storage, discord: stub, events: events, box: box}
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
