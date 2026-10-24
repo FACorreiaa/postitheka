@@ -55,6 +55,18 @@ struct AccountsView: View {
                     }
                 }
 
+                // Our own server, not a destination: the header and footer keep it
+                // apart from "Connect a Discord channel" above.
+                Section {
+                    Link(destination: discordURL) {
+                        Label("Join us on Discord", systemImage: "bubble.left.and.bubble.right")
+                    }
+                } header: {
+                    Text("Community")
+                } footer: {
+                    Text("Get help and share ideas")
+                }
+
                 Section {
                     Button("Sign out", role: .destructive) { model.signOut() }
                 }
@@ -82,6 +94,9 @@ struct AccountsView: View {
         opening = nil
     }
 }
+
+/// Invite from the #postitheka channel of our community server.
+private let discordURL = URL(string: "https://discord.gg/nYhWNMRJC")!
 
 private struct ConnectDiscordView: View {
     @Environment(AppModel.self) private var model

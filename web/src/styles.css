@@ -166,6 +166,7 @@ button:disabled {
   padding: 0.4rem 0.6rem;
   border-radius: var(--radius);
   color: var(--muted);
+  text-decoration: none;
 }
 
 .quiet:hover {
