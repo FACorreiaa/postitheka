@@ -16,6 +16,7 @@ final class PublishFlowTests: XCTestCase {
         let text = "Hello from the iOS composer \(Int(Date().timeIntervalSince1970))"
 
         let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"] // no rating sheet over the flow
         app.launch()
 
         let field = app.secureTextFields.firstMatch
@@ -59,6 +60,7 @@ final class PublishFlowTests: XCTestCase {
         }
         let text = "For the group \(Int(Date().timeIntervalSince1970))"
         let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"] // no rating sheet over the flow
         app.launch()
         let field = app.secureTextFields.firstMatch
         if field.waitForExistence(timeout: 5) {

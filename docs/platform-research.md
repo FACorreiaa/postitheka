@@ -65,7 +65,13 @@ Sources: developers.facebook.com/docs/threads — `posts`, `get-started`,
 - 500 characters, emoji counted in UTF-8 bytes. At most 5 links; `link_attachment` only on
   text posts. Carousel 2 to 20. Images JPEG/PNG, 8 MB, width 320–1440, up to 10:1. Video MOV/MP4,
   H.264/HEVC, 5 minutes, 1 GB. 250 posts per 24 hours (`threads_publishing_limit`).
-- Unconfirmed: whether Threads needs Business Verification; its error codes.
+- Re-checked by rendering the pages, 2026-10-23: all of the above, plus no PKCE, `user_id` as a
+  JSON number, emoji counted by UTF-8 bytes "for the post character limit", links counted as
+  distinct URLs (more than 5 fails container creation with `THREADS_API__LINK_LIMIT_EXCEEDED`
+  since 2025-12-22), container `ERROR` reasons (`FAILED_DOWNLOADING_VIDEO`, `INVALID_DURATION`, …)
+  in `error_message`, and `PUBLISHED` as the container status once live.
+- Unconfirmed: whether Threads needs Business Verification; its error codes (the publisher uses
+  the Graph API's); whether an http redirect URI is accepted for local testing.
 
 ### Instagram
 Sources: developers.facebook.com/docs/instagram-platform — `overview`,

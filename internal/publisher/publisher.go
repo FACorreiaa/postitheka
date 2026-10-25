@@ -17,6 +17,7 @@ type Platform string
 const (
 	Discord   Platform = "discord"
 	LinkedIn  Platform = "linkedin"
+	Threads   Platform = "threads"
 	X         Platform = "x"
 	Instagram Platform = "instagram"
 	Facebook  Platform = "facebook"
@@ -83,6 +84,21 @@ type OAuthConnector interface {
 	// Exchange trades the code from the callback for credentials, and looks
 	// up who was connected for the display name and RemoteID.
 	Exchange(ctx context.Context, code, verifier, redirectURL string) (Connection, error)
+}
+
+// Refresher is implemented by a publisher whose credentials expire and can be
+// renewed without the user: with a refresh token (X, TikTok), or by
+// refreshing the long-lived token itself (Threads, Instagram). The worker
+// calls it before publishing, holding a lock on the account and asking
+// NeedsRefresh again once it has the lock, so a refresh token that rotates
+// is spent exactly once even when several posts go out together.
+type Refresher interface {
+	// NeedsRefresh reports whether credentials should be renewed before they
+	// are used at now. It does no I/O.
+	NeedsRefresh(credentials []byte, now time.Time) bool
+	// Refresh returns renewed credentials. A Permanent error means the grant
+	// is gone and only the user reconnecting helps.
+	Refresh(ctx context.Context, credentials []byte) ([]byte, error)
 }
 
 type Publisher interface {
