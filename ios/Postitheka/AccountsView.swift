@@ -11,6 +11,7 @@ struct AccountsView: View {
     @State private var outcome: ConnectOutcome?
 
     var body: some View {
+        @Bindable var prompter = model.reviewPrompter
         NavigationStack {
             List {
                 if let error = model.loadError {
@@ -53,6 +54,10 @@ struct AccountsView: View {
                     if model.platforms.contains(where: { $0.connect == .oauth }) {
                         Text("You sign in on the platform’s own page; Postitheka never sees your password.")
                     }
+                }
+
+                Section {
+                    Toggle("Ask me to rate Postitheka", isOn: $prompter.isEnabled)
                 }
 
                 Section {
