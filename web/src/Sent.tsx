@@ -1,4 +1,5 @@
 import type { Account, Post, Target } from "./api";
+import mascot from "./assets/mascot-256.webp";
 import { platformNames } from "./rules";
 
 const time = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -14,7 +15,10 @@ export function Sent({ posts, accounts }: { posts: Post[] | null; accounts: Acco
       {posts === null ? (
         <p className="help">Loading…</p>
       ) : posts.length === 0 ? (
-        <p className="help">Posts you publish appear here, with where each one landed.</p>
+        <div className="sent-empty">
+          <img src={mascot} alt="" width={285} height={256} />
+          <p className="help">Posts you publish appear here, with where each one landed.</p>
+        </div>
       ) : (
         <ol className="history">
           {posts.map((p) => (

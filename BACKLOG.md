@@ -111,7 +111,7 @@ Strangers who have published a post: **0**.
 | API-001 | Done | `migrations/20261022190000_post_idempotency.sql`; `TestCreatePostIsIdempotent` (incl. 8 concurrent requests, one post) | Web retry path checked by typecheck only, not in a browser |
 | MED-001 | Done | `internal/jobs/sweep.go`; `TestSweepDeletesOnlyOldUnattachedUploads` in CI; live run against RustFS removed row and object | |
 | WEB-001 | Open | | |
-| WEB-002 | Built, unverified | `web/src/styles.css` dark tokens | Never looked at in dark mode |
+| WEB-002 | Done | Dark only since 2026-11-05, so there is one theme to check: every screen looked at in a browser at 1280 and 390 px, no sideways scroll; palette contrast passes WCAG AA for text (lowest 6.5:1) | |
 | PRV-001 | Open | | Owner approves the text |
 | OPS-001 | Built, unverified | `internal/analytics`; `TestProductEventsCarryNoPersonalData`, events asserted in `TestWorkerOutcomes`; empty key is a no-op (`TestNoAPIKeyMeansNothingIsSent`) | Needs production and a PostHog project key (Owner) to see an event arrive |
 | OPS-002 | Open | | |

@@ -25,7 +25,7 @@ def wordmark(fill):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WW} {WH}" role="img" aria-label="Postitheka">{inner(fill)}</svg>\n'
 
 
-INK = {"dark": "#EEF3F9", "light": "#1A2838"}
+INK = {"dark": "#F3E3CB", "light": "#2A2118"}
 for k, f in INK.items():
     open(f"{OUT}/wordmark-on-{k}.svg", "w").write(wordmark(f))
 open(f"{OUT}/wordmark-mono.svg", "w").write(wordmark("currentColor"))
@@ -44,8 +44,8 @@ def nest(x, y, w, h, vb, body):
 
 for k, f in INK.items():
     vb, body = mark_vb[k]
-    # horizontal: mark height = 2.2x wordmark cap height, wordmark centred on it
-    mh = WH * 2.2
+    # horizontal: the stamp's fine detail needs height, so 2.6x the lettering
+    mh = WH * 2.6
     mw = MW * mh / MH
     gap = WH * 0.7
     W, H = mw + gap + WW, mh
@@ -53,8 +53,8 @@ for k, f in INK.items():
          + nest(0, 0, mw, mh, vb, body)
          + nest(mw + gap, (H - WH) / 2, WW, WH, f"0 0 {WW} {WH}", inner(f)) + "</svg>\n")
     open(f"{OUT}/lockup-horizontal-on-{k}.svg", "w").write(s)
-    # stacked, as in the source art: mark above, wordmark ~2x mark width
-    mw = WW / 2.0
+    # stacked, as in the source art: mark above, wordmark ~1.75x mark width
+    mw = WW / 1.75
     mh = MH * mw / MW
     gap = WH * 0.8
     W, H = WW, mh + gap + WH

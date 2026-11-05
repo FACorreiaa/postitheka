@@ -1,4 +1,5 @@
 import "@fontsource-variable/schibsted-grotesk";
+import "@fontsource-variable/schibsted-grotesk/wght-italic.css";
 import "./styles.css";
 
 import { StrictMode } from "react";

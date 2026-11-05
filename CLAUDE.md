@@ -127,7 +127,9 @@ task build                          # web build, then one binary with the web ap
   density already in the file.
 - Go is formatted with gofumpt. Configuration comes from the environment through
   `internal/config`; nothing reads `os.Getenv` elsewhere.
-- **Web:** no CSS framework. Tokens on `:root` in `web/src/styles.css`, with dark mode. API calls
+- **Design follows the key art** (`brand/source/postitheka-key-art.png`, chosen 2026-11-05): gold on
+  night, dark only on web and iOS; `brand/README.md` lists the palette and what each colour means.
+- **Web:** no CSS framework. Tokens on `:root` in `web/src/styles.css`. API calls
   go through `web/src/api.ts`; client-side checks mirror `publisher.Validate` and never replace it.
 
 ## Domain language
@@ -149,6 +151,18 @@ vocabulary: "Publish" produces "Published"; "Not sent" means failed.
 ## Traps already hit
 
 - **MinIO images are gone** (Docker Hub repo deleted, quay.io needs auth). Local S3 is RustFS.
+- **`.primary` inside a Form's Button is the tint.** Hierarchical styles resolve against the
+  button's foreground, so a stamp row's every line turned gold. Use `Color.secondary` and
+  `Brand.cream` there.
+- **No `foregroundStyle` at the iOS app's root.** It overrides what the system colours itself:
+  tab icons lost their shape, buttons lost the accent, and destructive rows lost their red. Cream
+  goes on named text only (`Brand.cream`).
+- **No UIKit in the iOS `App.init`.** Setting a `UINavigationBar` appearance there turned every
+  control system blue, though the catalog's accent was right. It lives in `AppDelegate`.
+- **`listRowBackground` does not inherit from a Form.** Each Section takes `.brandRow()`, or its rows
+  fall back to the system's grey.
+- **`app.screenshot()` leaves out the keyboard.** The area under it comes out black in a UI test's
+  screenshot; use `XCUIScreen.main.screenshot()` to see what a person sees.
 - **Browser uploads need bucket CORS** (`PUT`, `Content-Type`, the app's origin). Locally the
   server sets it on boot; for R2 it is infrastructure. A missing rule fails silently at preflight.
 - **oapi-codegen's chi server has no per-operation security hook.** Auth wraps every spec route,

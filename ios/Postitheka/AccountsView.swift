@@ -15,8 +15,17 @@ struct AccountsView: View {
         NavigationStack {
             List {
                 if let error = model.loadError {
-                    Section { Text(error).foregroundStyle(.red) }
+                    Section { Text(error).foregroundStyle(.red) }.brandRow()
                 }
+                // A row, not an overlay: the connect buttons below would sit under it.
+                if model.accounts.isEmpty && model.loadError == nil {
+                    Section {
+                        NoAccounts()
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                }
+
                 Section {
                     ForEach(model.accounts, id: \.id) { account in
                         VStack(alignment: .leading, spacing: 4) {
@@ -32,14 +41,16 @@ struct AccountsView: View {
                 } footer: {
                     if !model.accounts.isEmpty { Text("Swipe to disconnect. Posts already sent stay in Sent.") }
                 }
+                .brandRow()
 
                 if let outcome {
                     Section {
                         switch outcome {
-                        case .connected(let platform): Text("\(platform.displayName) connected.").foregroundStyle(.tint)
+                        case .connected(let platform): Text("\(platform.displayName) connected.").foregroundStyle(Brand.glow)
                         case .failed(let message): Text(message).foregroundStyle(.red)
                         }
                     }
+                    .brandRow()
                 }
 
                 Section {
@@ -55,6 +66,7 @@ struct AccountsView: View {
                         Text("You sign in on the platform’s own page; Postitheka never sees your password.")
                     }
                 }
+                .brandRow()
 
                 // Our own server, not a destination: the header and footer keep it
                 // apart from "Connect a Discord channel" above.
@@ -67,22 +79,20 @@ struct AccountsView: View {
                 } footer: {
                     Text("Get help and share ideas")
                 }
+                .brandRow()
 
                 Section {
                     Toggle("Ask me to rate Postitheka", isOn: $prompter.isEnabled)
+                        .tint(.accentColor)
                 }
+                .brandRow()
 
                 Section {
                     Button("Sign out", role: .destructive) { model.signOut() }
                 }
+                .brandRow()
             }
-            .overlay {
-                if model.accounts.isEmpty && model.loadError == nil {
-                    ContentUnavailableView("No accounts", systemImage: "person.2.slash",
-                                           description: Text("Connect a destination to publish to it."))
-                        .allowsHitTesting(false)
-                }
-            }
+            .brandBackdrop()
             .navigationTitle("Accounts")
             .sheet(isPresented: $connecting) { ConnectDiscordView() }
         }
@@ -97,6 +107,23 @@ struct AccountsView: View {
             try? await webAuthentication.authenticate(using: url, callbackURLScheme: connectCallbackScheme)
         }
         opening = nil
+    }
+}
+
+private struct NoAccounts: View {
+    var body: some View {
+        VStack(spacing: 8) {
+            Image("Mascot")
+                .resizable()
+                .scaledToFit()
+                .frame(height: 112)
+                .accessibilityHidden(true)
+            Text("No accounts").font(.headline)
+            Text("Connect a destination to publish to it.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -124,13 +151,16 @@ private struct ConnectDiscordView: View {
                 } footer: {
                     Text("In Discord: channel settings, Integrations, Webhooks, New Webhook, Copy Webhook URL.")
                 }
+                .brandRow()
                 Section("Name (optional)") {
                     TextField("#announcements", text: $name)
                 }
+                .brandRow()
                 if let error {
-                    Section { Text(error).foregroundStyle(.red) }
+                    Section { Text(error).foregroundStyle(.red) }.brandRow()
                 }
             }
+            .brandBackdrop()
             .navigationTitle("Connect Discord")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

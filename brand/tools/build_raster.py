@@ -29,15 +29,17 @@ for h in (512, 256):
     r.save(f"{OUT}/mascot/mascot-{h}.png", optimize=True)
     r.save(f"{OUT}/mascot/mascot-{h}.webp", quality=90, method=6)
 
-# avatar: head and shoulders in a circle on the brand dark, for profile/empty states
+# avatar: the head in a circle on the brand dark, for profile/empty states
 S = 1024
 grad = Image.radial_gradient("L").resize((S, S))  # 0 centre -> 255 edge
-top, bot = (30, 44, 64), (10, 15, 23)
+top, bot = (34, 39, 52), (11, 14, 20)
 bg = Image.composite(Image.new("RGBA", (S, S), bot + (255,)), Image.new("RGBA", (S, S), top + (255,)), grad)
-head = m.crop((0, 0, m.width, round(m.height * 0.72)))  # runs past the circle, which does the clipping
-hs = S * 0.86 / head.width
+# The scarf and the outstretched hand make the body wide, so the crop is the
+# hat and head alone; the fractions are of the cutout's bounding box.
+head = m.crop((round(m.width * 0.18), 0, round(m.width * 0.74), round(m.height * 0.62)))  # runs past the circle, which does the clipping
+hs = S * 0.92 / head.width
 head = head.resize((round(head.width * hs), round(head.height * hs)), Image.LANCZOS)
-bg.alpha_composite(head, ((S - head.width) // 2, round(S * 0.14)))
+bg.alpha_composite(head, ((S - head.width) // 2, round(S * 0.12)))
 mask = Image.new("L", (S * 4, S * 4))
 ImageDraw.Draw(mask).ellipse((0, 0, S * 4 - 1, S * 4 - 1), fill=255)
 bg.putalpha(mask.resize((S, S), Image.LANCZOS))

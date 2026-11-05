@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct PostithekaApp: App {
+    @UIApplicationDelegateAdaptor private var appDelegate: AppDelegate
     @State private var model = AppModel()
 
     var body: some Scene {
@@ -10,6 +11,19 @@ struct PostithekaApp: App {
             RootView()
                 .environment(model)
         }
+    }
+}
+
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    /// Navigation titles are drawn by UIKit, out of reach of SwiftUI's styles. Here and
+    /// not in `App.init`: touching UIKit that early loses the catalog's accent colour,
+    /// and every control in the app comes out system blue.
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        let cream = UIColor(named: "Cream") ?? .label
+        UINavigationBar.appearance().largeTitleTextAttributes = [.foregroundColor: cream]
+        UINavigationBar.appearance().titleTextAttributes = [.foregroundColor: cream]
+        return true
     }
 }
 
