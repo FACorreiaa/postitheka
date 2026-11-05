@@ -158,6 +158,8 @@ vocabulary: "Publish" produces "Published"; "Not sent" means failed.
   server keeps serving the old app.
 - **A Taskfile command containing `: ` must be quoted.** Unquoted, YAML reads it as a mapping
   and Task refuses the whole file. `task check` was broken this way, unnoticed, until CI ran it.
+- **Task ignores `platforms` on a `task:` call.** Put it on the task or on a `cmd:`. Guarding the
+  call to `ios:gen` did nothing, so Linux CI ran Swift and failed only on runner images without it.
 - **Discord forum and media channels** need `thread_name`; without it the webhook answers 400.
 - **LinkedIn post text is markup** ("little" format): `| { } @ [ ] ( ) < > # \ * _ ~` must be
   backslash-escaped or the post fails or renders as something else. `escapeText` does it.
