@@ -340,7 +340,7 @@ sealed for the app's namespace: `DATABASE_URL`, `TOKEN_ENCRYPTION_KEY`, S3 keys.
 the CORS rule and, later, a lifecycle rule for unattached uploads.
 
 The image is multi-stage: Node builds `web/dist`, Go builds a static binary, Alpine runs it
-(about 50 MB).
+(about 40 MB).
 
 ## Security notes
 
