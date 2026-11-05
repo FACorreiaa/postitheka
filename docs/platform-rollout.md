@@ -22,10 +22,12 @@ Postitheka is a **public product**, so strangers connect their own accounts. Tha
 - **X:** the owner buys credits once the app is on TestFlight and ready to test. The publisher is
   built against stubs before then. Set a spending limit, and post without URLs by default.
 - **Facebook and the job timeout:** the changes under Code work are accepted. Neither is built yet.
+- **Text per platform is a premium feature.** Free users write one text for all platforms, so selecting
+  X caps it at 280 characters. Premium users can write a different text per platform.
 
 **X credits are the owner's money.** Pay-per-use bills the developer account behind the app, so every
 stranger's post to X costs the owner $0.015, or $0.20 with a URL. Public X access needs a gate, which
-is the likely first use of the free and premium check below.
+and the free and premium tiers are the likely place for it (decision 5).
 
 ## Still open
 
@@ -33,14 +35,13 @@ is the likely first use of the free and premium check below.
 | --- | --- | --- | --- |
 | 3 | TikTok after the audit opens: when to apply? | Ship drafts first, then apply (TT-002) | Review wants a working, public app |
 | 4 | Reddit: API or by hand? | By hand | Approval is doubtful, the API has no media, and subreddit rules decide what survives |
-| 5 | Free and premium: what does each tier get? | See below | The owner proposed a check for free and premium users; no billing exists yet |
+| 5 | Is X itself premium, and how does a user pay? | Make X premium; choose payment before building tiers | Every X post costs the owner money; no billing exists yet |
 | 6 | Public hostname (deferred 2026-10-22) | Choose one when starting step 2 | OAuth callbacks, TestFlight and scheduled posts need a server that stays up |
 | 7 | LinkedIn: personal profile or Company Page? | Personal profile first | Company Pages need an application for the Community Management API |
 
-**Decision 5.** A post has one text, so selecting X caps it at 280 characters, and X cannot drop a
-link while LinkedIn keeps it. Different text per platform removes both limits. It is deferred today.
-A tier check could make it, and X itself, premium features. How a user pays (StoreKit on iOS, the web
-equivalent) is undecided and is not in any backlog item.
+**Decision 5.** Decided so far: free users write one text for all platforms, and premium users can
+write a different text per platform. Still open: whether X is premium too, and how a user pays
+(StoreKit on iOS, the web equivalent). Neither tier is in a backlog item yet.
 
 ## What each platform takes
 
@@ -194,7 +195,7 @@ and app purpose.
    Reels, X and TikTok uploads plus processing polls may not fit. Measure, then make it fit.
 3. **IG-001,** then **FB-001,** then **X-001.**
 4. **VID-001:** duration and aspect ratio on stamps. Needed by TikTok and useful for Reels.
-5. **Different text per platform:** deferred today until P2's gate, and tied to decision 5.
+5. **Different text per platform,** premium only, which needs the tiers from decision 5.
 6. **Cost hint on the X stamp,** once what counts as "with URL" is known: show $0.20 before Publish.
 7. **TT-001,** with the draft outcome.
 

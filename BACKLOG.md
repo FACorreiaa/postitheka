@@ -55,9 +55,10 @@ so far and introduces none: anything still undecided is marked **OPEN** and wait
   for.
 - **X credits are bought once the app is on TestFlight and ready to test** (owner). X posts go out
   without URLs by default ($0.015 against $0.20). Build X-001 against stubs before then.
-- **OPEN: free and premium tiers.** The owner proposed a check for free and premium users. What each
-  tier gets, and how a user pays, is undecided. X posts bill the owner's developer account for every
-  user, so public X access needs an answer here.
+- **Free and premium tiers** (owner). Free users write one text for all platforms; premium users can
+  write a different text per platform.
+- **OPEN:** whether X is premium too, and how a user pays. X posts bill the owner's developer account
+  for every user, so public X access needs an answer here.
 
 ## Waiting on the owner
 
@@ -482,7 +483,8 @@ published. A handoff the phone never reports fails after an hour.
 Not before P2's gate, so nobody reopens them early.
 
 - **Bluesky, Mastodon, Threads, LinkedIn.** Free or review-light, but not on the owner's list.
-- **Different text per platform** in one post.
+- **Different text per platform** in one post. Decided 2026-11-05 to be premium only, so it waits for
+  the tiers.
 - **Rewriting a post per platform with an LLM.** If it ever comes, it follows the shared Haiku
   trial rules in `~/Work/production/CLAUDE.md`.
 - **Editing or deleting a post on the platforms after publishing.**
