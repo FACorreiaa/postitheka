@@ -107,10 +107,9 @@ tasks:
     cmds:
       - go tool oapi-codegen -config api/oapi-codegen.yaml api/openapi.yaml
       - cd web && npm run api:gen
-      # The Swift client needs Xcode's toolchain; on Linux the iOS CI job
-      # (macOS) is what catches a stale one.
+      # Skipped on Linux by the platforms on ios:gen itself; the iOS CI job
+      # (macOS) is what catches a stale Swift client.
       - task: ios:gen
-        platforms: [darwin]
 
   sqlc:
     desc: Regenerate database access code from SQL
@@ -162,6 +161,9 @@ tasks:
 
   ios:gen:
     desc: Regenerate the Swift client from api/openapi.yaml (macOS)
+    # Here, not on the callers: Task ignores platforms on a `task:` call. Linux
+    # CI then only passes on runner images that happen to include Swift.
+    platforms: [darwin]
     cmds:
       - >-
         swift run --package-path ios/tools/openapi swift-openapi-generator generate api/openapi.yaml
