@@ -15,6 +15,9 @@ This file is the working contract for anyone, human or agent, changing the repo.
   2026-10-23 the owner said to build it out (API, web, iOS) regardless of the strangers count,
   as with Aaru. Do not flag supply-side work here. What waits on the owner is listed in
   `BACKLOG.md` under "Waiting on the owner"; work around it, not on it.
+- On 2026-11-05 the owner decided Postitheka promotes their own apps and is also a public product.
+  **The platform phase starts from `docs/platform-rollout.md`**: decisions, what each platform
+  needs, order of work.
 - The owner's global rules apply here: no renames, rebrands or re-architectures until 10
   strangers have used the current version. Agents draft pixels; the owner keeps visual verdicts.
 
@@ -83,6 +86,8 @@ postitheka/
   ios/                      # Postitheka app (views) + PostithekaKit (generated client, model, tests)
   brand/                    # logo, icons, mascot; brand/README.md says which file goes where
   docs/platform-research.md # what each platform allows (dated; re-check before building)
+  docs/platform-rollout.md  # the plan for the platform phase: decisions, needs, order of work
+  marketing/                # marketing agent instructions; rules/*.md are still empty
   CLAUDE.md  ARCHITECTURE.md  BACKLOG.md  README.md
 ```
 
