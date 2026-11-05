@@ -141,6 +141,39 @@ redditinc.com/policies/data-api-terms, reddit.com/dev/api, github.com/reddit-arc
   APIs only" Reddit is text and links. `GET /api/v1/{sr}/post_requirements` gives a
   subreddit's flair, title and domain rules. 100 queries a minute per client.
 
+### Facebook
+Sources, rendered 2026-11-05: developers.facebook.com — `documentation/pages-api/posts`,
+`docs/video-api/guides/publishing`, `docs/graph-api/overview/access-levels`.
+
+- Pages only, with a Page access token from Facebook Login. The user must be able to perform
+  `CREATE_CONTENT` on the Page. Examples use Graph v27.0.
+- Text and links: `POST /{page}/feed` with `message`, `link`, and `published` (or
+  `scheduled_publish_time`, 10 minutes to 30 days ahead). Photo: `POST /{page}/photos` with `url`.
+  Video: `POST graph-video.facebook.com/…/{page}/videos` with a handle from the Resumable Upload API.
+- Permissions differ by page. Pages guide: `pages_manage_engagement`, `pages_manage_posts`,
+  `pages_read_engagement`, `pages_read_user_engagement`, `publish_video` for video. Video guide:
+  `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`.
+- Standard Access is automatic and limited to people with a role on the app. Advanced Access needs
+  Business Verification, and App Review for some permissions.
+- Unconfirmed: text length, multi-photo posts, video limits, and whether posts from an app in
+  Development mode are publicly visible (claimed only by a third party).
+
+### Re-checked 2026-11-05
+- **X:** $0.015 a post and $0.20 with a URL, unchanged. New: $20 free credit after the first credit
+  purchase with an eligible card and a match of the first auto-recharge up to $50, expiring after 3
+  months. Spending limits block requests when reached.
+- **Instagram:** the content-publishing page now says 100 API posts in 24 hours with a carousel
+  counting as one. The earlier note of 50 for carousels is no longer on that page.
+- **TikTok:** unaudited direct posting requires a private account (a public one gets a 403). The
+  guidelines list "a utility tool to help upload contents to the account(s) you or your team
+  manages" as not acceptable, so the audit is not open to a private tool. `video.upload` needs the
+  app approved for that scope; app review takes several days to two weeks. Whether a private tool
+  passes that review is unconfirmed. Direct Post requires a commercial-content disclosure control.
+- **Reddit:** the policy page refused automated reads. Third-party guides report that personal bots
+  are usually refused, and one says requests stop on 2026-10-31. Both are unconfirmed.
+
+What this means for the owner's own use is in `docs/platform-rollout.md`.
+
 ### Discord
 Webhooks: 2,000 characters, 10 files, 20 MiB per file (checked 2026-10-22). Forum and media
 channels need `thread_name`.
