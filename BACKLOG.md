@@ -48,10 +48,25 @@ so far and introduces none: anything still undecided is marked **OPEN** and wait
   `Needs` on an owner account blocks real use, not the code.
 - **No secrets in the repo** (owner, 2026-10-23). Enforced by a secret scan in CI.
 
+## Decisions recorded 2026-11-05
+
+- **Public product** (owner). Postitheka promotes the owner's apps and is also offered to strangers,
+  so AUTH-001, OPS-002 and META-001 stay on the path, and the TikTok audit (TT-002) is worth applying
+  for.
+- **X credits are bought once the app is on TestFlight and ready to test** (owner). X posts go out
+  without URLs by default ($0.015 against $0.20). Build X-001 against stubs before then.
+- **Free and premium tiers** (owner). Free users write one text for all platforms; premium users can
+  write a different text per platform.
+- **OPEN:** whether X is premium too, and how a user pays. X posts bill the owner's developer account
+  for every user, so public X access needs an answer here.
+
 ## Waiting on the owner
 
 Nothing below blocks building; it blocks shipping. Each is an account, a decision or a key that
 only the owner can create. Build against stubs and configuration until they arrive.
+
+`docs/platform-rollout.md` (2026-11-05) orders this work for the owner's own use, promoting their
+apps, and lists the decisions still open. Its recommendations are not decisions.
 
 | What | Unblocks | Notes |
 | --- | --- | --- |
@@ -63,8 +78,8 @@ only the owner can create. Build against stubs and configuration until they arri
 | X developer app + credits | X-001 used for real | Pay-per-use: $0.015 a post, $0.20 with a URL (2026-10-23) |
 | TikTok developer app | TT-001 used for real, TT-002 | Photos also need a domain verified with TikTok |
 | Reddit API access request | RDT-001 | Approval required since Nov 2025; commercial use needs an agreement |
-| Threads app testers | THR-001 used before review | The owner adds their own account as a Threads Tester |
-| Meta app, Business Verification, App Review | THR-001, IG-001 for strangers; FB-001 at all | Weeks; needs PRV-001 live |
+| Meta app with the Threads API use case, owner as Threads Tester | THR-001 used before review | `THREADS_APP_ID` / `THREADS_APP_SECRET` (the Threads ones, not the main app's) in `.env`; redirect `PUBLIC_URL/oauth/threads/callback`. Meta may refuse a plain-http redirect (not checked); then `PUBLIC_URL` must be an https tunnel to the local server |
+| Meta app, Business Verification, App Review | THR-001, IG-001, FB-001 for strangers | Weeks; needs PRV-001 live. Not needed for accounts with a role on the app (Standard Access, checked 2026-11-05) |
 | Approve privacy policy and terms text | PRV-001 | Agent drafts |
 
 ## Status (2026-10-23)
@@ -73,8 +88,8 @@ only the owner can create. Build against stubs and configuration until they arri
 | --- | --- | --- | --- |
 | **P0 · Foundations** | 6/6 | **Met** | Nothing |
 | **P1 · First stranger** | 4/12 (2 built, unverified) | Not met | Not deployed; no real sign-in |
-| **P2 · Platforms** | 0/15 (2 built, unverified) | Not met | Needs P1 deployed; X needs credits, Reddit approval; Meta and TikTok need review |
-| **P3 · iOS** | 0/6 (3 built, unverified) | Not met | IOS-002 needs AUTH-001; nothing tested on a device |
+| **P2 · Platforms** | 0/15 (4 built, unverified) | Not met | Needs P1 deployed; X needs credits, Reddit approval; Meta and TikTok need review |
+| **P3 · iOS** | 1/6 (2 built, unverified) | Not met | IOS-002 needs AUTH-001; nothing tested on a device |
 
 Strangers who have published a post: **0**.
 
@@ -101,21 +116,21 @@ Strangers who have published a post: **0**.
 | OPS-001 | Built, unverified | `internal/analytics`; `TestProductEventsCarryNoPersonalData`, events asserted in `TestWorkerOutcomes`; empty key is a no-op (`TestNoAPIKeyMeansNothingIsSent`) | Needs production and a PostHog project key (Owner) to see an event arrive |
 | OPS-002 | Open | | |
 | OAUTH-001 | Built, unverified | `internal/service/connect.go`, `internal/httpapi/oauth.go`, `migrations/20261023150000_oauth_connect.sql`; `TestOAuthConnect` (start, callback, replay, cancel, expiry, reconnect, two users); web Accounts checked headless at 1400 and 390 px, light and dark; iOS kit `ConnectTests` | Never run against a real platform; iOS connect screen built, not looked at on a simulator |
-| X-002 | Open | | |
+| X-002 | Built, unverified | `publisher.Refresher`, `PublishWorker.refresh` (row lock, re-check, seal, then publish); `TestTokenRefresh` (three concurrent posts refresh once and publish with the new token, revoked grant fails asking for reconnect, transient failure stays pending); mutation-checked; Threads implements it | Never run against a real platform |
 | ACC-001 | Open | | |
 | LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
 | DSC-001 | Open | | |
 | META-001 | Open | | Owner |
-| THR-001 | Open | | |
-| X-001 | Open | | OPEN: buy credits |
+| THR-001 | Built, unverified | `internal/publisher/threads`; `threads_test.go` (connect with the long-lived exchange, text, image, video processing, carousel order, `ERROR`/`EXPIRED`/timeout, publish without a clear answer incl. a cancelled request, error classes, refresh, no secrets in errors); mutation-checked; `max_links` and `text_counting` in the spec, mirrored and tested in web and iOS | Needs the owner's Threads app and tester account to post for real |
+| X-001 | Open | | Credits bought once on TestFlight (decided 2026-11-05); public use needs the tier decision |
 | TT-001 | Open | | |
 | TT-002 | Open | | Owner |
-| FB-001 | Open | | Needs META-001 |
+| FB-001 | Open | | META-001 for strangers; role holders can use it before |
 | IG-001 | Open | | META-001 for strangers; role holders can use it before |
 | RDT-001 | Open | | Owner |
 | RDT-002 | Open | | OPEN: title and subreddit |
 | VID-001 | Open | | |
-| IOS-001 | Built, unverified | `ios/`: Xcode project + `PostithekaKit` with the client generated by swift-openapi-generator 1.14.0; `task ios:check` green locally (16 kit tests, app builds) | CI job not yet run on GitHub |
+| IOS-001 | Done | `ios/`: Xcode project + `PostithekaKit`, client generated by swift-openapi-generator 1.14.0; `task ios:check` green locally and in CI (PR #2, run 39951558861, 2026-10-23) | |
 | IOS-002 | Open | | Needs AUTH-001; a pasted token stands in |
 | IOS-003 | Built, unverified | `ComposerView`, `Composer` (kit, tested); `PublishFlowTests` UI test published to a local server and saw the outcome in Sent | Photos path not exercised by the UI test |
 | IOS-004, IOS-005 | Open | | |
@@ -360,8 +375,9 @@ connect before review.
 **Done when:** tests against a stub pass, and a photo post lands on the owner's account.
 
 ### X-001 · X publisher · M
-**OPEN:** whether to buy X API credits. X is pay-per-use as of 2026-10-23: $0.015 per post,
-$0.20 for a post containing a URL, no subscription. Publisher with OAuth 2.0 PKCE (the code
+**Owner:** buys X API credits once the app is on TestFlight and ready to test (decided 2026-11-05).
+X is pay-per-use, re-checked 2026-11-05: $0.015 per post, $0.20 for a post containing a URL, no
+subscription, billed to the app's developer account. Publisher with OAuth 2.0 PKCE (the code
 lives 30 seconds, so the callback exchanges at once), media through the v2 chunked upload
 (`media.write`), and X's weighted character counting as `Rules.CountText`. The code is built
 against stubs; only real use waits on the decision.
@@ -403,7 +419,8 @@ is created.
 requires flair, and error classes.
 
 ### FB-001 · Facebook Pages publisher · M
-**Needs:** META-001. Pages only: posting to personal profiles is not possible. Connect lists the
+**Needs:** OAUTH-001; META-001 for strangers, since role holders on the app can use Standard Access
+before it. Pages only: posting to personal profiles is not possible. Connect lists the
 user's Pages and creates one account per chosen Page.
 
 **Done when:** tests against a stub pass, and a post lands on a real Page from production.
@@ -466,7 +483,8 @@ published. A handoff the phone never reports fails after an hour.
 Not before P2's gate, so nobody reopens them early.
 
 - **Bluesky, Mastodon, Threads, LinkedIn.** Free or review-light, but not on the owner's list.
-- **Different text per platform** in one post.
+- **Different text per platform** in one post. Decided 2026-11-05 to be premium only, so it waits for
+  the tiers.
 - **Rewriting a post per platform with an LLM.** If it ever comes, it follows the shared Haiku
   trial rules in `~/Work/production/CLAUDE.md`.
 - **Editing or deleting a post on the platforms after publishing.**

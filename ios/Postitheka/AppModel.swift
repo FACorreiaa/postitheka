@@ -25,6 +25,8 @@ final class AppModel {
 
     let api: API
     let composer: Composer
+    /// When to ask for an App Store rating; a post the server accepted counts.
+    let reviewPrompter = ReviewPrompter()
 
     init() {
         let url = baseURL ?? URL(string: "http://invalid")!
@@ -74,6 +76,9 @@ final class AppModel {
 
     func published(_ post: Post) {
         posts.insert(post, at: 0)
+        reviewPrompter.recordSuccess()
+        // A local flag, not posts.isEmpty: posts made on the web are in that list too.
+        reviewPrompter.recordMilestone(once: "firstPost")
     }
 
     func replace(_ post: Post) {

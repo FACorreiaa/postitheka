@@ -19,6 +19,7 @@ extension Components {
         @frozen public enum Platform: String, Codable, Hashable, Sendable, CaseIterable {
             case discord = "discord"
             case linkedin = "linkedin"
+            case threads = "threads"
             case x = "x"
             case instagram = "instagram"
             case facebook = "facebook"
@@ -67,10 +68,25 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/Rules`.
         public struct Rules: Codable, Hashable, Sendable {
-            /// In Unicode code points unless the platform says otherwise.
+            /// Measured as text_counting says.
             ///
             /// - Remark: Generated from `#/components/schemas/Rules/max_text_length`.
             public var max_text_length: Swift.Int
+            /// How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F).
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/text_counting`.
+            @frozen public enum text_countingPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case code_points = "code_points"
+                case emoji_bytes = "emoji_bytes"
+            }
+            /// How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F).
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/text_counting`.
+            public var text_counting: Components.Schemas.Rules.text_countingPayload
+            /// Distinct links in the text, where a link starts with http://, https:// or www. and runs to whitespace, compared without case and without trailing punctuation. 0 means no limit.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/max_links`.
+            public var max_links: Swift.Int
             /// - Remark: Generated from `#/components/schemas/Rules/max_media`.
             public var max_media: Swift.Int
             /// Per file. For video files, max_video_bytes applies instead when it is not 0.
@@ -98,7 +114,9 @@ extension Components {
             /// Creates a new `Rules`.
             ///
             /// - Parameters:
-            ///   - max_text_length: In Unicode code points unless the platform says otherwise.
+            ///   - max_text_length: Measured as text_counting says.
+            ///   - text_counting: How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F).
+            ///   - max_links: Distinct links in the text, where a link starts with http://, https:// or www. and runs to whitespace, compared without case and without trailing punctuation. 0 means no limit.
             ///   - max_media:
             ///   - max_media_bytes: Per file. For video files, max_video_bytes applies instead when it is not 0.
             ///   - max_video_bytes: Per video file (a media type starting video/). 0 means max_media_bytes.
@@ -109,6 +127,8 @@ extension Components {
             ///   - video_alone: A video must be the only file in the post.
             public init(
                 max_text_length: Swift.Int,
+                text_counting: Components.Schemas.Rules.text_countingPayload,
+                max_links: Swift.Int,
                 max_media: Swift.Int,
                 max_media_bytes: Swift.Int64,
                 max_video_bytes: Swift.Int64,
@@ -119,6 +139,8 @@ extension Components {
                 video_alone: Swift.Bool
             ) {
                 self.max_text_length = max_text_length
+                self.text_counting = text_counting
+                self.max_links = max_links
                 self.max_media = max_media
                 self.max_media_bytes = max_media_bytes
                 self.max_video_bytes = max_video_bytes
@@ -130,6 +152,8 @@ extension Components {
             }
             public enum CodingKeys: String, CodingKey {
                 case max_text_length
+                case text_counting
+                case max_links
                 case max_media
                 case max_media_bytes
                 case max_video_bytes

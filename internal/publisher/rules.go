@@ -2,8 +2,10 @@ package publisher
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -12,6 +14,7 @@ import (
 // same rules again before anything is queued.
 type Rules struct {
 	MaxTextLength      int
+	MaxLinks           int // distinct links in the text; 0 means no limit
 	MaxMedia           int
 	MaxMediaBytes      int64
 	MaxVideoBytes      int64 // per video file; 0 means MaxMediaBytes
@@ -23,10 +26,58 @@ type Rules struct {
 	// takes one image, several images, or one video, never a mix.
 	VideoAlone bool
 
-	// CountText measures text the way the platform does. Nil counts Unicode
-	// code points. X is the reason this is pluggable: it weights URLs and
-	// most non-Latin characters differently.
-	CountText func(string) int
+	// TextCounting is how the platform measures MaxTextLength. It is a
+	// named mode rather than a function because the clients count too, and
+	// each mode is written three times: here, web/src/rules.ts and the iOS
+	// kit's Rules.swift.
+	TextCounting TextCounting
+}
+
+type TextCounting string
+
+const (
+	CountCodePoints TextCounting = "code_points"
+	// CountEmojiBytes counts a character as one and an emoji as its UTF-8
+	// length (Threads).
+	CountEmojiBytes TextCounting = "emoji_bytes"
+)
+
+// CountText measures s the way mode does. An unset mode counts code points.
+func CountText(mode TextCounting, s string) int {
+	if mode == CountEmojiBytes {
+		return countEmojiBytes(s)
+	}
+	return utf8.RuneCountInString(s)
+}
+
+// countEmojiBytes has no emoji property to go on, so every symbol (category
+// So) and every emoji component (joiner, variation selector, skin tone,
+// keycap, tag) counts by bytes. That over-counts a few symbols such as ©
+// (2 instead of 1): a post near the limit may be refused that the platform
+// would take, never the reverse.
+func countEmojiBytes(s string) int {
+	n := 0
+	for _, r := range s {
+		if isEmojiPart(r) {
+			n += utf8.RuneLen(r)
+		} else {
+			n++
+		}
+	}
+	return n
+}
+
+func isEmojiPart(r rune) bool {
+	switch {
+	case unicode.Is(unicode.So, r),
+		r == 0x200D,                  // zero-width joiner
+		r == 0x20E3,                  // combining keycap
+		r >= 0xFE00 && r <= 0xFE0F,   // variation selectors
+		r >= 0x1F3FB && r <= 0x1F3FF, // skin tones (category Sk)
+		r >= 0xE0020 && r <= 0xE007F: // tags, for flags of regions
+		return true
+	}
+	return false
 }
 
 // MaxBytes is the per-file limit for a file of this type.
@@ -39,12 +90,22 @@ func (r Rules) MaxBytes(contentType string) int64 {
 
 func IsVideo(contentType string) bool { return strings.HasPrefix(contentType, "video/") }
 
-func (r Rules) count(s string) int {
-	if r.CountText != nil {
-		return r.CountText(s)
+// linkPattern finds what CountLinks treats as a link: a URL with a scheme,
+// or one starting www. Platforms also link bare domains (example.com); those
+// are not counted, since guessing at them would refuse ordinary sentences.
+var linkPattern = regexp.MustCompile(`(?i)\b(?:https?://|www\.)[^\s<>"]+`)
+
+// CountLinks counts the distinct links in s, the way Threads counts toward
+// its limit: the same URL twice is one link.
+func CountLinks(s string) int {
+	seen := map[string]bool{}
+	for _, l := range linkPattern.FindAllString(s, -1) {
+		seen[strings.ToLower(strings.TrimRight(l, ".,;:!?)]}'"))] = true
 	}
-	return utf8.RuneCountInString(s)
+	return len(seen)
 }
+
+func (r Rules) count(s string) int { return CountText(r.TextCounting, s) }
 
 // Issue is one reason a platform would reject a post.
 type Issue struct {
@@ -71,6 +132,11 @@ func Validate(rules Rules, post Post) []Issue {
 	}
 	if n := rules.count(post.Text); n > rules.MaxTextLength {
 		add("text", "%d characters, limit is %d", n, rules.MaxTextLength)
+	}
+	if rules.MaxLinks > 0 {
+		if n := CountLinks(post.Text); n > rules.MaxLinks {
+			add("text", "%d links, limit is %d", n, rules.MaxLinks)
+		}
 	}
 
 	switch {

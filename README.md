@@ -71,7 +71,9 @@ again") rather than risk a duplicate post.
    (`AuthorizeURL`, `Exchange`) and gets the shared connect routes for free;
    its client id and secret come from the environment through `internal/config`.
    A webhook-style platform needs its own service method and route.
-3. Register it in `cmd/server/main.go` (OAuth platforms only when configured).
+3. If its tokens expire and can be renewed without the user, implement
+   `publisher.Refresher`; the publish worker calls it under a lock.
+4. Register it in `cmd/server/main.go` (OAuth platforms only when configured).
    `GET /v1/platforms` picks it up.
 
 Tests stub the platform's HTTP API; see `discord_test.go`. Never a real token.
@@ -82,7 +84,10 @@ Tests stub the platform's HTTP API; see `discord_test.go`. Never a real token.
 - **LinkedIn** is built and tested against a stub; to use it, create a
   LinkedIn developer app and set `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET`
   in `.env` (see `.env.example`).
-- **X, Threads, Instagram, TikTok, Reddit, Facebook.** Order and blockers are in
+- **Threads** is built and tested against a stub; to use it, add the Threads API
+  use case to a Meta app, add yourself as a Threads Tester, and set
+  `THREADS_APP_ID` and `THREADS_APP_SECRET`.
+- **X, Instagram, TikTok, Reddit, Facebook.** Order and blockers are in
   `BACKLOG.md` (P2). Start Meta Business Verification and the TikTok audit
   early; both take weeks.
 - **Discord forum channels** need `thread_name`; they fail permanently today.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
 
 	"github.com/FACorreiaa/postitheka/internal/analytics"
@@ -41,20 +42,22 @@ func (PublishArgs) InsertOpts() river.InsertOpts {
 type PublishWorker struct {
 	river.WorkerDefaults[PublishArgs]
 
+	pool     *pgxpool.Pool
 	q        *db.Queries
 	box      *secretbox.Box
 	registry *publisher.Registry
 	media    publisher.MediaSource
 	events   analytics.Client
 	log      *slog.Logger
+	now      func() time.Time
 }
 
 // NewPublishWorker builds the worker. events may be nil, which records nothing.
-func NewPublishWorker(q *db.Queries, box *secretbox.Box, registry *publisher.Registry, src publisher.MediaSource, events analytics.Client, log *slog.Logger) *PublishWorker {
+func NewPublishWorker(pool *pgxpool.Pool, box *secretbox.Box, registry *publisher.Registry, src publisher.MediaSource, events analytics.Client, log *slog.Logger) *PublishWorker {
 	if events == nil {
 		events = analytics.Nop()
 	}
-	return &PublishWorker{q: q, box: box, registry: registry, media: src, events: events, log: log}
+	return &PublishWorker{pool: pool, q: db.New(pool), box: box, registry: registry, media: src, events: events, log: log, now: time.Now}
 }
 
 // Why a target failed, as sent to analytics. Coarse on purpose: the error
@@ -105,6 +108,27 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 	creds, err := w.box.Open(row.Credentials, row.AccountID.UUID[:])
 	if err != nil {
 		return w.fail(ctx, row, failCredentials, errors.New("stored credentials cannot be decrypted; reconnect the account"))
+	}
+
+	// Before the claim: a refresh that fails leaves the target pending, not
+	// 'publishing', since nothing was sent to the platform yet.
+	creds, err = w.refresh(ctx, pub, row.AccountID.UUID, creds)
+	switch {
+	case err == nil:
+	case publisher.IsPermanent(err):
+		return w.fail(ctx, row, failCredentials, fmt.Errorf("%w; reconnect the account", err))
+	default:
+		w.log.Warn("refresh failed", slog.String("target", id.String()), slog.String("platform", row.Platform), slog.Any("error", err))
+		if job.Attempt >= job.MaxAttempts {
+			return w.fail(ctx, row, failExhausted, err)
+		}
+		if markErr := w.retryLater(ctx, id, err); markErr != nil {
+			return markErr
+		}
+		if ra := (*publisher.RetryAfterError)(nil); errors.As(err, &ra) {
+			return river.JobSnooze(ra.After)
+		}
+		return err
 	}
 
 	mediaRows, err := w.q.ListPostMedia(ctx, []uuid.UUID{row.PostID})
@@ -176,6 +200,57 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 		}
 		return pubErr
 	}
+}
+
+// refresh renews an account's credentials when its publisher says they need
+// it, and returns the credentials to publish with.
+//
+// The account row stays locked from reading the credentials to storing the
+// new ones. A job that waited for the lock reads what the first one stored,
+// finds it fresh, and does not refresh again. If storing fails after the
+// platform issued new credentials, a rotating refresh token is lost and the
+// account must be reconnected; holding the lock keeps that to this one
+// failure instead of a race on every concurrent post.
+func (w *PublishWorker) refresh(ctx context.Context, pub publisher.Publisher, accountID uuid.UUID, creds []byte) ([]byte, error) {
+	r, ok := pub.(publisher.Refresher)
+	if !ok || !r.NeedsRefresh(creds, w.now()) {
+		return creds, nil
+	}
+
+	tx, err := w.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	qtx := w.q.WithTx(tx)
+
+	sealed, err := qtx.LockAccountCredentials(ctx, accountID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, publisher.Permanent(errors.New("the account was disconnected"))
+	}
+	if err != nil {
+		return nil, err
+	}
+	current, err := w.box.Open(sealed, accountID[:])
+	if err != nil {
+		return nil, publisher.Permanent(errors.New("stored credentials cannot be decrypted"))
+	}
+	if !r.NeedsRefresh(current, w.now()) {
+		return current, tx.Commit(ctx)
+	}
+
+	fresh, err := r.Refresh(ctx, current)
+	if err != nil {
+		return nil, err
+	}
+	if err := qtx.UpdateAccountCredentials(ctx, db.UpdateAccountCredentialsParams{ID: accountID, Credentials: w.box.Seal(fresh, accountID[:])}); err != nil {
+		return nil, fmt.Errorf("store refreshed credentials: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		w.log.Error("refreshed credentials were not stored; the account may need reconnecting", slog.String("account", accountID.String()), slog.Any("error", err))
+		return nil, fmt.Errorf("store refreshed credentials: %w", err)
+	}
+	return fresh, nil
 }
 
 // fail records a terminal failure and cancels the job, so River does not

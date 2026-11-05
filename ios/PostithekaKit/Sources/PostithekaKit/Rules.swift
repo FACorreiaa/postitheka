@@ -32,11 +32,36 @@ public struct Draft: Sendable, Equatable {
     }
 }
 
-/// Counts text the way the server does for platforms without their own
-/// counter: Unicode code points. `String.count` counts grapheme clusters and
-/// would call a family emoji one character where the server sees several.
-public func countText(_ text: String) -> Int {
-    text.unicodeScalars.count
+/// Counts text the way the server does for a platform's `text_counting`.
+/// `.code_points` counts Unicode scalars: `String.count` counts grapheme
+/// clusters and would call a family emoji one character where the server
+/// sees several. `.emoji_bytes` counts an emoji as its UTF-8 length (Threads).
+public func countText(_ text: String, _ mode: Rules.text_countingPayload = .code_points) -> Int {
+    guard mode == .emoji_bytes else { return text.unicodeScalars.count }
+    return text.unicodeScalars.reduce(0) { n, s in n + (isEmojiPart(s) ? s.utf8.count : 1) }
+}
+
+/// An emoji part as `publisher.isEmojiPart` in Go defines it: any symbol (So)
+/// or emoji component. The spec's `text_counting` description is the contract.
+func isEmojiPart(_ s: Unicode.Scalar) -> Bool {
+    if s.properties.generalCategory == .otherSymbol { return true }
+    switch s.value {
+    case 0x200D, 0x20E3, 0xFE00...0xFE0F, 0x1F3FB...0x1F3FF, 0xE0020...0xE007F: return true
+    default: return false
+    }
+}
+
+/// Counts distinct links as `publisher.CountLinks` does: a scheme or www., up
+/// to whitespace, compared without case or trailing punctuation.
+public func countLinks(_ text: String) -> Int {
+    let pattern = /(?i)\b(?:https?:\/\/|www\.)[^\s<>"]+/
+    var seen = Set<String>()
+    for match in text.matches(of: pattern) {
+        var link = Substring(match.output)
+        while let last = link.last, ".,;:!?)]}'\"".contains(last) { link = link.dropLast() }
+        seen.insert(link.lowercased())
+    }
+    return seen.count
 }
 
 /// Mirrors `publisher.Validate` in Go (and `problems` in the web app), so the
@@ -48,8 +73,9 @@ public func problems(_ rules: Rules, _ draft: Draft) -> [String] {
     if !hasText && draft.media.isEmpty { return out } // nothing written yet is not an error
 
     if rules.requires_text && !hasText { out.append("Needs text") }
-    let n = countText(draft.text)
+    let n = countText(draft.text, rules.text_counting)
     if n > rules.max_text_length { out.append("\(n - rules.max_text_length) characters over") }
+    if rules.max_links > 0 && countLinks(draft.text) > rules.max_links { out.append("At most \(rules.max_links) link\(rules.max_links == 1 ? "" : "s")") }
 
     if rules.requires_media && draft.media.isEmpty { out.append("Needs a photo or video") }
     if rules.max_media == 0 && !draft.media.isEmpty {
@@ -87,6 +113,7 @@ extension Platform {
         switch self {
         case .discord: "Discord"
         case .linkedin: "LinkedIn"
+        case .threads: "Threads"
         case .x: "X"
         case .instagram: "Instagram"
         case .facebook: "Facebook"

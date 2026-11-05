@@ -100,6 +100,8 @@ func (s *Server) ListPlatforms(ctx context.Context, _ ListPlatformsRequestObject
 			Connect:  connect,
 			Rules: Rules{
 				MaxTextLength:      r.MaxTextLength,
+				TextCounting:       textCounting(r.TextCounting),
+				MaxLinks:           r.MaxLinks,
 				MaxMedia:           r.MaxMedia,
 				MaxMediaBytes:      r.MaxMediaBytes,
 				MaxTotalMediaBytes: r.MaxTotalMediaBytes,
@@ -301,4 +303,11 @@ func toTarget(t db.PostTarget) Target {
 		out.PublishedAt = &t.PublishedAt.Time
 	}
 	return out
+}
+
+func textCounting(m publisher.TextCounting) RulesTextCounting {
+	if m == publisher.CountEmojiBytes {
+		return EmojiBytes
+	}
+	return CodePoints
 }

@@ -55,6 +55,11 @@ type Config struct {
 	LinkedInClientID     string
 	LinkedInClientSecret string
 
+	// Threads app (Threads API use case; its own app id and secret, not the
+	// main Meta app's). Both empty: Threads is not offered.
+	ThreadsAppID     string
+	ThreadsAppSecret string
+
 	// PostHog product analytics. An empty key disables capture entirely:
 	// nothing is sent, and no credential is needed to develop.
 	PostHogAPIKey string
@@ -86,6 +91,8 @@ func Load() (Config, error) {
 		S3SecretKey:          env("S3_SECRET_KEY", ""),
 		LinkedInClientID:     env("LINKEDIN_CLIENT_ID", ""),
 		LinkedInClientSecret: env("LINKEDIN_CLIENT_SECRET", ""),
+		ThreadsAppID:         env("THREADS_APP_ID", ""),
+		ThreadsAppSecret:     env("THREADS_APP_SECRET", ""),
 		PostHogAPIKey:        env("POSTHOG_API_KEY", ""),
 		PostHogHost:          strings.TrimSuffix(env("POSTHOG_HOST", "https://eu.i.posthog.com"), "/"),
 		LogLevel:             env("LOG_LEVEL", "info"),
@@ -109,6 +116,9 @@ func Load() (Config, error) {
 
 	if (c.LinkedInClientID == "") != (c.LinkedInClientSecret == "") {
 		return Config{}, fmt.Errorf("config: set both LINKEDIN_CLIENT_ID and LINKEDIN_CLIENT_SECRET, or neither")
+	}
+	if (c.ThreadsAppID == "") != (c.ThreadsAppSecret == "") {
+		return Config{}, fmt.Errorf("config: set both THREADS_APP_ID and THREADS_APP_SECRET, or neither")
 	}
 
 	if c.PublicURL == "" && !c.IsProduction() {

@@ -48,6 +48,6 @@ let postJSON = """
 """
 
 let discordRules = Rules(
-    max_text_length: 2000, max_media: 10, max_media_bytes: 20 << 20, max_video_bytes: 0, max_total_media_bytes: 0,
+    max_text_length: 2000, text_counting: .code_points, max_links: 0, max_media: 10, max_media_bytes: 20 << 20, max_video_bytes: 0, max_total_media_bytes: 0,
     media_types: ["image/png", "image/jpeg", "video/mp4"], requires_text: false, requires_media: false, video_alone: false
 )

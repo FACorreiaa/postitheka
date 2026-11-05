@@ -77,10 +77,14 @@ struct ComposerView: View {
                 guard id != nil, let handoff = composer.pendingHandoff else { return }
                 ShareSheet.present(text: handoff.text, files: handoff.files) { sent in
                     Task {
-                        if let post = await composer.finishHandoff(sent: sent) { model.replace(post) }
+                        if let post = await composer.finishHandoff(sent: sent) {
+                            model.replace(post)
+                            if sent { model.reviewPrompter.recordSuccess() }
+                        }
                     }
                 }
             }
+            .reviewPrompt(model.reviewPrompter, pausedWhile: composer.pendingHandoff != nil)
             .onChange(of: picked) { _, items in
                 guard !items.isEmpty else { return }
                 picked = []

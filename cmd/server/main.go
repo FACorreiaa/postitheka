@@ -35,6 +35,7 @@ import (
 	"github.com/FACorreiaa/postitheka/internal/publisher"
 	"github.com/FACorreiaa/postitheka/internal/publisher/discord"
 	"github.com/FACorreiaa/postitheka/internal/publisher/linkedin"
+	"github.com/FACorreiaa/postitheka/internal/publisher/threads"
 	"github.com/FACorreiaa/postitheka/internal/secretbox"
 	"github.com/FACorreiaa/postitheka/internal/service"
 	"github.com/FACorreiaa/postitheka/web"
@@ -130,11 +131,14 @@ func serve(cfg config.Config) error {
 	if cfg.LinkedInClientID != "" {
 		pubs = append(pubs, linkedin.New(cfg.LinkedInClientID, cfg.LinkedInClientSecret, nil))
 	}
+	if cfg.ThreadsAppID != "" {
+		pubs = append(pubs, threads.New(cfg.ThreadsAppID, cfg.ThreadsAppSecret, nil))
+	}
 	registry := publisher.NewRegistry(pubs...)
 
 	workers := river.NewWorkers()
 	events := analytics.New(cfg.PostHogAPIKey, cfg.PostHogHost, slog.Default())
-	river.AddWorker(workers, jobs.NewPublishWorker(db.New(pool), box, registry, store, events, slog.Default()))
+	river.AddWorker(workers, jobs.NewPublishWorker(pool, box, registry, store, events, slog.Default()))
 	river.AddWorker(workers, jobs.NewSweepMediaWorker(pool, store, slog.Default()))
 	river.AddWorker(workers, jobs.NewExpireHandoffsWorker(db.New(pool), slog.Default()))
 

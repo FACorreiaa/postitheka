@@ -319,7 +319,7 @@ components:
   schemas:
     Platform:
       type: string
-      enum: [discord, linkedin, x, instagram, facebook, tiktok, whatsapp]
+      enum: [discord, linkedin, threads, x, instagram, facebook, tiktok, whatsapp]
       description: >
         whatsapp is assisted only: it has no posting API, so the iOS app hands
         the post to WhatsApp and the user sends it there.
@@ -344,6 +344,8 @@ components:
       type: object
       required:
         - max_text_length
+        - text_counting
+        - max_links
         - max_media
         - max_media_bytes
         - max_total_media_bytes
@@ -355,7 +357,21 @@ components:
       properties:
         max_text_length:
           type: integer
-          description: In Unicode code points unless the platform says otherwise.
+          description: Measured as text_counting says.
+        text_counting:
+          type: string
+          enum: [code_points, emoji_bytes]
+          description: >-
+            How max_text_length is measured. code_points counts Unicode code points.
+            emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an
+            emoji is any symbol (general category So) or emoji component (U+200D, U+20E3,
+            U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F).
+        max_links:
+          type: integer
+          description: >-
+            Distinct links in the text, where a link starts with http://, https:// or www.
+            and runs to whitespace, compared without case and without trailing punctuation.
+            0 means no limit.
         max_media:
           type: integer
         max_media_bytes:

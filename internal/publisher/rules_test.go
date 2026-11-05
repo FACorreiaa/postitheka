@@ -72,9 +72,63 @@ func TestValidate(t *testing.T) {
 
 func TestValidateUsesPlatformCounter(t *testing.T) {
 	rules := testRules
-	rules.CountText = func(s string) int { return len(s) * 2 }
-	if got := fields(Validate(rules, Post{Text: "123456"})); got != "text" {
-		t.Fatalf("custom counter ignored: issues on %q", got)
+	rules.MaxTextLength = 4
+	rules.TextCounting = CountEmojiBytes
+	if got := fields(Validate(rules, Post{Text: "ab👍"})); got != "text" {
+		t.Fatalf("emoji counted as one: issues on %q", got)
+	}
+	rules.TextCounting = CountCodePoints
+	if got := fields(Validate(rules, Post{Text: "ab👍"})); got != "" {
+		t.Fatalf("code points over-counted: issues on %q", got)
+	}
+}
+
+func TestCountText(t *testing.T) {
+	for _, c := range []struct {
+		text string
+		want int
+	}{
+		{"hello", 5},
+		{"olá", 3},    // accented letters are one each, not their bytes
+		{"日本", 2},     // so is CJK
+		{"👍", 4},      // U+1F44D, 4 bytes
+		{"👍🏽", 8},     // with a skin tone
+		{"❤️", 6},     // U+2764 (So, 3 bytes) + variation selector (3)
+		{"1️⃣", 7},    // digit + variation selector + keycap
+		{"👨‍👩‍👧", 18}, // three people (4 each) joined by two ZWJs (3 each)
+		{"🇵🇹", 8},     // two regional indicators
+		{"a © b", 6},  // the documented over-count: © is So
+	} {
+		if got := CountText(CountEmojiBytes, c.text); got != c.want {
+			t.Errorf("CountText(emoji_bytes, %q) = %d, want %d", c.text, got, c.want)
+		}
+	}
+	if got := CountText(CountCodePoints, "👍🏽"); got != 2 {
+		t.Errorf("code points of a toned emoji = %d, want 2", got)
+	}
+}
+
+func TestCountLinks(t *testing.T) {
+	for _, c := range []struct {
+		text string
+		want int
+	}{
+		{"no links here", 0},
+		{"see https://example.com/a.", 1},
+		{"https://example.com and https://example.com again", 1},
+		{"HTTPS://Example.com and https://example.com", 1},
+		{"www.threads.com, http://a.test (https://b.test)", 3},
+		{"example.com is not counted", 0},
+	} {
+		if got := CountLinks(c.text); got != c.want {
+			t.Errorf("CountLinks(%q) = %d, want %d", c.text, got, c.want)
+		}
+	}
+	rules := testRules
+	rules.MaxLinks = 1
+	rules.MaxTextLength = 100
+	if got := fields(Validate(rules, Post{Text: "https://a.test https://b.test"})); got != "text" {
+		t.Errorf("two links past a limit of one: issues on %q", got)
 	}
 }
 

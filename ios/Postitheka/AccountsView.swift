@@ -11,6 +11,7 @@ struct AccountsView: View {
     @State private var outcome: ConnectOutcome?
 
     var body: some View {
+        @Bindable var prompter = model.reviewPrompter
         NavigationStack {
             List {
                 if let error = model.loadError {
@@ -65,6 +66,10 @@ struct AccountsView: View {
                     Text("Community")
                 } footer: {
                     Text("Get help and share ideas")
+                }
+
+                Section {
+                    Toggle("Ask me to rate Postitheka", isOn: $prompter.isEnabled)
                 }
 
                 Section {

@@ -165,7 +165,7 @@ export interface components {
          * @description whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
          * @enum {string}
          */
-        Platform: "discord" | "linkedin" | "x" | "instagram" | "facebook" | "tiktok" | "whatsapp";
+        Platform: "discord" | "linkedin" | "threads" | "x" | "instagram" | "facebook" | "tiktok" | "whatsapp";
         PlatformInfo: {
             platform: components["schemas"]["Platform"];
             /**
@@ -176,8 +176,15 @@ export interface components {
             rules: components["schemas"]["Rules"];
         };
         Rules: {
-            /** @description In Unicode code points unless the platform says otherwise. */
+            /** @description Measured as text_counting says. */
             max_text_length: number;
+            /**
+             * @description How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F).
+             * @enum {string}
+             */
+            text_counting: "code_points" | "emoji_bytes";
+            /** @description Distinct links in the text, where a link starts with http://, https:// or www. and runs to whitespace, compared without case and without trailing punctuation. 0 means no limit. */
+            max_links: number;
             max_media: number;
             /**
              * Format: int64
