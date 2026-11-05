@@ -1,16 +1,22 @@
-/* Post office, not SaaS: cool paper, navy ink, cancellation blue. The one
-   loud element is the postmark on a published post; everything else stays
-   quiet so it can be. */
+/* The key art's palette: a post office after dark. Night for the page, gold
+   for the stamp and every action, cream for what is written. Cyan is the
+   hologram the mascot sends posts out on, so it is kept for one meaning: on
+   its way or landed. Dark only, because the art is; there is no light theme
+   to fall out of step with it. */
 
 :root {
-  --paper: #edf0f3;
-  --sheet: #ffffff;
-  --ink: #1a2838;
-  --muted: #677386;
-  --rule: #d3d9e0;
-  --postmark: #2b5ba6;
-  --cancel: #b9302c;
-  --focus: #2b5ba6;
+  --paper: #0b0e14;
+  --sheet: #151923;
+  --stamp: #2a2f3c;
+  --ink: #f3e3cb;
+  --muted: #a89d8e;
+  --rule: #2f2e33;
+  --gold: #e0ae6e;
+  --gold-bright: #f4cc94;
+  --on-gold: #17120b;
+  --postmark: #7fe3f2;
+  --cancel: #f0837a;
+  --focus: #f4cc94;
 
   --font: "Schibsted Grotesk Variable", system-ui, sans-serif;
   /* A 1.25 scale off a 17px base. */
@@ -21,22 +27,8 @@
   --s3: 1.953rem;
 
   --gap: 1.5rem;
-  --radius: 4px;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #131c27;
-    --sheet: #1b2635;
-    --ink: #e4e9ef;
-    --muted: #93a0b2;
-    --rule: #2c3a4c;
-    --postmark: #7fa6e6;
-    --cancel: #f07a72;
-    --focus: #7fa6e6;
-    color-scheme: dark;
-  }
+  --radius: 8px;
+  color-scheme: dark;
 }
 
 *,
@@ -97,11 +89,11 @@ code {
   line-height: 0;
 }
 
-/* Sized by height: the mark is 2.2x the lettering, so this keeps the
-   name near body size. */
+/* Sized by height: the mark is 2.6x the lettering, so this keeps the
+   name a little above body size. */
 .wordmark .logo {
   display: block;
-  height: 2.25rem;
+  height: 3rem;
   width: auto;
 }
 
@@ -138,11 +130,15 @@ button:disabled {
 }
 
 .primary {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--gold);
+  color: var(--on-gold);
   padding: 0.6rem 1.25rem;
   border-radius: var(--radius);
   font-weight: 600;
+}
+
+.primary:hover:not(:disabled) {
+  background: var(--gold-bright);
 }
 
 .primary:disabled {
@@ -152,7 +148,8 @@ button:disabled {
 /* For an action beside a primary one, or one of several equal ones: the
    same size as .primary, without its weight. */
 .secondary {
-  border: 1px solid var(--ink);
+  border: 1px solid var(--gold);
+  color: var(--gold-bright);
   padding: calc(0.6rem - 1px) calc(1.25rem - 1px);
   border-radius: var(--radius);
   font-weight: 600;
@@ -170,7 +167,7 @@ button:disabled {
 }
 
 .quiet:hover {
-  color: var(--ink);
+  color: var(--gold-bright);
 }
 
 .danger:hover {
@@ -192,19 +189,58 @@ label {
 
 /* Sign in ------------------------------------------------------------ */
 
+/* The one screen with room for the key art's atmosphere. The workspace stays
+   flat: its stamps punch their perforations in the page colour, which only
+   works on a solid page. */
 .signin {
-  max-width: 26rem;
-  margin: 18vh auto 0;
-  padding: 0 1rem;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 26rem) minmax(0, 30rem);
+  gap: 3rem;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.5rem;
+  background:
+    radial-gradient(60rem 36rem at 78% 42%, rgb(127 227 242 / 0.07), transparent 70%),
+    radial-gradient(50rem 30rem at 18% 30%, rgb(224 174 110 / 0.09), transparent 70%);
+}
+
+@media (max-width: 52rem) {
+  .signin {
+    grid-template-columns: minmax(0, 26rem);
+    gap: 1rem;
+    align-content: center;
+  }
+  .signin .hero {
+    order: -1;
+  }
+  .signin .hero img {
+    max-width: 15rem;
+  }
 }
 
 .signin .wordmark .logo {
-  height: 3.5rem;
+  height: 5rem;
 }
 
 .signin .lede {
-  color: var(--muted);
-  margin: 0.4rem 0 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--ink);
+  font-style: italic;
+  margin: 0.75rem 0 2rem;
+  white-space: nowrap;
+}
+
+/* The gold rules either side of the tagline in the key art. */
+.signin .lede::before,
+.signin .lede::after {
+  content: "";
+  flex: 1 1 0;
+  max-width: 2.5rem;
+  height: 1px;
+  background: var(--gold);
 }
 
 .signin form {
@@ -217,12 +253,46 @@ label {
   margin-top: 1rem;
 }
 
+.hero {
+  margin: 0;
+  display: grid;
+  justify-items: center;
+}
+
+.hero img {
+  display: block;
+  width: 100%;
+  height: auto;
+  animation: hover 5s ease-in-out infinite;
+}
+
+/* The ring it hovers over on the key art's floor. */
+.hero::after {
+  content: "";
+  width: 34%;
+  aspect-ratio: 6;
+  margin-top: 0.75rem;
+  border: 2px solid var(--postmark);
+  border-radius: 50%;
+  box-shadow:
+    0 0 14px rgb(127 227 242 / 0.5),
+    inset 0 0 10px rgb(127 227 242 / 0.3);
+}
+
+@keyframes hover {
+  50% {
+    transform: translateY(-0.6rem);
+  }
+}
+
 /* Workspace ---------------------------------------------------------- */
 
 .bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
+  gap: 0.25rem 1rem;
   max-width: 72rem;
   margin: 0 auto;
   padding: 1rem;
@@ -231,6 +301,21 @@ label {
 .bar nav {
   display: flex;
   gap: 0.25rem;
+}
+
+.bar .quiet {
+  white-space: nowrap;
+}
+
+/* The logo takes the first row and the links share the second, at a size where
+   all three fit on one line down to a 320px phone. */
+@media (max-width: 34rem) {
+  .bar nav {
+    width: 100%;
+    justify-content: space-between;
+    margin-inline: -0.4rem;
+    font-size: 0.8rem;
+  }
 }
 
 .desk {
@@ -254,6 +339,11 @@ label {
 .composer {
   display: grid;
   gap: var(--gap);
+}
+
+.sheet:focus-visible {
+  outline-color: var(--gold);
+  outline-offset: 0;
 }
 
 .sheet {
@@ -348,8 +438,8 @@ label {
 
 .add-media:hover,
 .add-media:focus-within {
-  color: var(--ink);
-  border-color: var(--ink);
+  color: var(--gold-bright);
+  border-color: var(--gold);
 }
 
 .add-media:focus-within {
@@ -407,7 +497,9 @@ label {
 .stamp {
   --hole: 3.5px;
   --step: 10px;
+  --field: var(--stamp);
   position: relative;
+  isolation: isolate;
   display: grid;
   gap: 0.1rem;
   min-width: 9.5rem;
@@ -418,20 +510,22 @@ label {
     radial-gradient(circle, var(--paper) var(--hole), transparent calc(var(--hole) + 0.5px)) 0 calc(100% + var(--step) / 2) / var(--step) var(--step) repeat-x,
     radial-gradient(circle, var(--paper) var(--hole), transparent calc(var(--hole) + 0.5px)) calc(var(--step) / -2) 0 / var(--step) var(--step) repeat-y,
     radial-gradient(circle, var(--paper) var(--hole), transparent calc(var(--hole) + 0.5px)) calc(100% + var(--step) / 2) 0 / var(--step) var(--step) repeat-y,
-    var(--sheet);
-  filter: drop-shadow(0 1px 0 var(--rule));
+    var(--field);
   transition: transform 160ms ease;
 }
 
-/* The printed frame inside the perforations. A pseudo-element rather than an
-   inset shadow: inset shadows paint over the background, perforations and all. */
+/* The window inside the perforated frame, as on the logo's stamp. A pseudo-
+   element rather than an inset shadow: inset shadows paint over the background,
+   perforations and all. The stamp's isolation keeps z-index -1 behind the text
+   and above the stamp's own background. */
 .stamp::after {
   content: "";
   position: absolute;
   inset: 8px;
-  border: 1px solid var(--rule);
+  z-index: -1;
+  background: var(--sheet);
+  border-radius: 2px;
   pointer-events: none;
-  transition: border-color 160ms ease;
 }
 
 .stamp .platform {
@@ -456,18 +550,15 @@ label {
   font-weight: 600;
 }
 
-/* Affixed: the frame inks in and the stamp settles at a slight angle, the
+/* Affixed: the frame turns gold and the stamp settles at a slight angle, the
    way one does when it is stuck on by hand. */
 .stamp.on {
+  --field: var(--gold);
   transform: rotate(-1.5deg);
 }
 
-.stamp.on::after {
-  border: 2px solid var(--ink);
-}
-
-.stamp.on.trouble::after {
-  border-color: var(--cancel);
+.stamp.on.trouble {
+  --field: var(--cancel);
 }
 
 .stamp-issues {
@@ -505,6 +596,24 @@ label {
   font-size: var(--s0);
   font-weight: 600;
   margin-bottom: 1rem;
+}
+
+.sent-empty {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+
+.sent-empty img {
+  width: 11rem;
+  height: auto;
+}
+
+.sent-empty .help {
+  margin: 0;
+  max-width: 20rem;
 }
 
 .history {
@@ -587,8 +696,8 @@ label {
   border-color: var(--postmark);
 }
 
-/* The postmark. Struck at an angle in cancellation ink, multiplied into
-   the page so it reads as ink on paper rather than a badge on top of it. */
+/* The postmark, in the hologram's cyan with its glow: the one loud element
+   on the page, and it means one thing, that this landed. */
 
 .postmark {
   flex: none;
@@ -596,14 +705,7 @@ label {
   height: auto;
   color: var(--postmark);
   transform: rotate(-9deg);
-  mix-blend-mode: multiply;
-  opacity: 0.9;
-}
-
-@media (prefers-color-scheme: dark) {
-  .postmark {
-    mix-blend-mode: normal;
-  }
+  filter: drop-shadow(0 0 5px rgb(127 227 242 / 0.4));
 }
 
 .postmark circle,
@@ -654,7 +756,7 @@ label {
 }
 
 .accounts::backdrop {
-  background: rgb(19 28 39 / 0.45);
+  background: rgb(11 14 20 / 0.72);
 }
 
 .accounts > header {
@@ -736,6 +838,9 @@ section.connect {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .hero img {
+    animation: none;
+  }
   .stamp {
     transition: none;
   }

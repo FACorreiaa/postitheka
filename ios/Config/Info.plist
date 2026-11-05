@@ -10,6 +10,12 @@
 	<array>
 		<string>whatsapp</string>
 	</array>
+	<!-- The launch screen in the app's night colour, so opening it does not flash system black. -->
+	<key>UILaunchScreen</key>
+	<dict>
+		<key>UIColorName</key>
+		<string>Night</string>
+	</dict>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- Plain http to localhost and .local hosts, for a development server. Every other host needs https. -->

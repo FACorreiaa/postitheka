@@ -10,16 +10,27 @@ struct SentView: View {
         NavigationStack {
             List {
                 if let error = model.loadError {
-                    Text(error).foregroundStyle(.red)
+                    Text(error).foregroundStyle(.red).brandRow()
                 }
                 ForEach(model.posts, id: \.id) { post in
-                    PostRow(post: post)
+                    PostRow(post: post).brandRow()
                 }
             }
+            .brandBackdrop()
             .overlay {
                 if model.posts.isEmpty {
-                    ContentUnavailableView("Nothing sent yet", systemImage: "tray",
-                                           description: Text("Posts you publish show up here with each destination's outcome."))
+                    ContentUnavailableView {
+                        VStack(spacing: 16) {
+                            Image("Mascot")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 136)
+                                .accessibilityHidden(true)
+                            Text("Nothing sent yet")
+                        }
+                    } description: {
+                        Text("Posts you publish show up here with each destination's outcome.")
+                    }
                 }
             }
             .navigationTitle("Sent")
@@ -107,7 +118,7 @@ private struct TargetRow: View {
     private var tint: Color {
         switch target.status {
         case .pending, .publishing, .handing_off: .secondary
-        case .published, .handed_off: .accentColor
+        case .published, .handed_off: Brand.glow
         case .failed: .red
         }
     }

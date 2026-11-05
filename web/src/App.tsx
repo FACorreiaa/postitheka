@@ -1,22 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Accounts, type ConnectOutcome } from "./Accounts";
 import { type Account, api, messageOf, type PlatformInfo, type Post, readToken, setUnauthorizedHandler, writeToken } from "./api";
-import lockupDark from "./assets/lockup-horizontal-on-dark.svg";
-import lockupLight from "./assets/lockup-horizontal-on-light.svg";
+import lockup from "./assets/lockup-horizontal-on-dark.svg";
+import mascot from "./assets/mascot.webp";
 import { Composer } from "./Composer";
 import { DISCORD_URL } from "./links";
 import { platformNames } from "./rules";
 import { Sent } from "./Sent";
 
-// The lockup's colours are baked into each file, so the theme picks the file.
 // Sources live in brand/; these are copies.
 function Logo() {
-  return (
-    <picture>
-      <source srcSet={lockupDark} media="(prefers-color-scheme: dark)" />
-      <img className="logo" src={lockupLight} alt="Postitheka" />
-    </picture>
-  );
+  return <img className="logo" src={lockup} alt="Postitheka" />;
 }
 
 export function App() {
@@ -47,45 +41,50 @@ function SignIn({ onSignIn }: { onSignIn: (token: string) => void }) {
 
   return (
     <main className="signin">
-      <h1 className="wordmark">
-        <Logo />
-      </h1>
-      <p className="lede">Write once. Post everywhere you’re connected.</p>
-      <form
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const token = value.trim();
-          writeToken(token);
-          const { error: err, response } = await api.GET("/v1/accounts");
-          if (response.ok) return onSignIn(token);
-          writeToken(null);
-          setError(response.status === 401 ? "That token isn’t recognised. Mint a new one and paste it again." : messageOf(err));
-        }}
-      >
-        <label htmlFor="token">API token</label>
-        <input
-          id="token"
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          placeholder="pk_…"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          aria-describedby="token-help"
-          required
-        />
-        <p id="token-help" className="help">
-          Mint one with <code>task user:create -- you@example.com</code> in the server’s directory.
-        </p>
-        {error && (
-          <p className="error" role="alert">
-            {error}
+      <div>
+        <h1 className="wordmark">
+          <Logo />
+        </h1>
+        <p className="lede">Write once. Publish everywhere.</p>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const token = value.trim();
+            writeToken(token);
+            const { error: err, response } = await api.GET("/v1/accounts");
+            if (response.ok) return onSignIn(token);
+            writeToken(null);
+            setError(response.status === 401 ? "That token isn’t recognised. Mint a new one and paste it again." : messageOf(err));
+          }}
+        >
+          <label htmlFor="token">API token</label>
+          <input
+            id="token"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="pk_…"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            aria-describedby="token-help"
+            required
+          />
+          <p id="token-help" className="help">
+            Mint one with <code>task user:create -- you@example.com</code> in the server’s directory.
           </p>
-        )}
-        <button className="primary" type="submit">
-          Sign in
-        </button>
-      </form>
+          {error && (
+            <p className="error" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="primary" type="submit">
+            Sign in
+          </button>
+        </form>
+      </div>
+      <figure className="hero">
+        <img src={mascot} alt="" width={718} height={646} />
+      </figure>
     </main>
   );
 }

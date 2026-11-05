@@ -28,6 +28,7 @@ struct ComposerView: View {
                     Text("\(countText(composer.text)) characters")
                         .contentTransition(.numericText())
                 }
+                .brandRow()
 
                 Section("Stamps") {
                     if model.accounts.isEmpty {
@@ -39,9 +40,11 @@ struct ComposerView: View {
                     }
                     WhatsAppStamp(composer: composer)
                 }
+                .brandRow()
 
                 Section {
                     Toggle("Schedule", isOn: $scheduling.animation())
+                        .tint(.accentColor)
                     if scheduling {
                         DatePicker("Send at", selection: Binding(
                             get: { composer.scheduledAt ?? .now.addingTimeInterval(3600) },
@@ -49,14 +52,16 @@ struct ComposerView: View {
                         ), in: Date.now...)
                     }
                 }
+                .brandRow()
 
                 if let error = composer.error {
-                    Section { Text(error).foregroundStyle(.red) }
+                    Section { Text(error).foregroundStyle(.red) }.brandRow()
                 }
                 ForEach(composer.issues(for: nil), id: \.self) { issue in
-                    Text(issue.message).foregroundStyle(.red)
+                    Text(issue.message).foregroundStyle(.red).brandRow()
                 }
             }
+            .brandBackdrop()
             .navigationTitle("Compose")
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -114,8 +119,8 @@ private struct StampRow: View {
                 Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(chosen ? Color.accentColor : .secondary)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(account.display_name).foregroundStyle(.primary)
-                    Text(account.platform.displayName).font(.caption).foregroundStyle(.secondary)
+                    Text(account.display_name).foregroundStyle(Brand.cream)
+                    Text(account.platform.displayName).font(.caption).foregroundStyle(Color.secondary)
                     if chosen {
                         ForEach(problems, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
                     }
@@ -139,9 +144,11 @@ private struct WhatsAppStamp: View {
                 Image(systemName: composer.handToWhatsApp ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(composer.handToWhatsApp ? Color.accentColor : .secondary)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("WhatsApp").foregroundStyle(.primary)
+                    // Explicit colours: inside a Form's Button, .primary and .secondary
+                    // resolve against the tint and every line would turn gold.
+                    Text("WhatsApp").foregroundStyle(Brand.cream)
                     Text(ShareSheet.isWhatsAppInstalled ? "You send it from WhatsApp" : "WhatsApp is not installed on this phone")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .font(.caption).foregroundStyle(Color.secondary)
                     if composer.handToWhatsApp && composer.scheduledAt != nil {
                         Text("Cannot be scheduled: it is handed over now").font(.caption).foregroundStyle(.red)
                     }
@@ -192,7 +199,7 @@ private struct Thumbnail: View {
         if !isVideo, let image = UIImage(contentsOfFile: file.path) {
             Image(uiImage: image).resizable().scaledToFill()
         } else {
-            Color(.secondarySystemBackground).overlay { Image(systemName: "video").foregroundStyle(.secondary) }
+            Brand.sheet.overlay { Image(systemName: "video").foregroundStyle(.secondary) }
         }
     }
 }
