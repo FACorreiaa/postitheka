@@ -1,0 +1,71 @@
+package openapi3
+
+import (
+	"context"
+	"encoding/json"
+	"maps"
+)
+
+// Contact is specified by OpenAPI/Swagger standard version 3.
+// See https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.0.3.md#contact-object
+type Contact struct {
+	Extensions map[string]any `json:"-" yaml:"-"`
+	Origin     *Origin        `json:"-" yaml:"-"`
+
+	Name  string `json:"name,omitempty,case:strict" yaml:"name,omitempty"`
+	URL   string `json:"url,omitempty,case:strict" yaml:"url,omitempty"`
+	Email string `json:"email,omitempty,case:strict" yaml:"email,omitempty"`
+}
+
+// MarshalJSON returns the JSON encoding of Contact.
+func (contact Contact) MarshalJSON() ([]byte, error) {
+	x, err := contact.MarshalYAML()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(x)
+}
+
+// MarshalYAML returns the YAML encoding of Contact.
+func (contact Contact) MarshalYAML() (any, error) {
+	m := make(map[string]any, 3+len(contact.Extensions))
+	maps.Copy(m, contact.Extensions)
+	if x := contact.Name; x != "" {
+		m["name"] = x
+	}
+	if x := contact.URL; x != "" {
+		m["url"] = x
+	}
+	if x := contact.Email; x != "" {
+		m["email"] = x
+	}
+	return m, nil
+}
+
+// UnmarshalJSON sets Contact to a copy of data.
+func (contact *Contact) UnmarshalJSON(data []byte) error {
+	type ContactBis Contact
+	var x ContactBis
+	if err := unmarshalJSON(data, &x); err != nil {
+		return unmarshalError(err)
+	}
+	if err := unmarshalJSON(data, &x.Extensions); err != nil {
+		return unmarshalError(err)
+	}
+
+	delete(x.Extensions, "name")
+	delete(x.Extensions, "url")
+	delete(x.Extensions, "email")
+	if len(x.Extensions) == 0 {
+		x.Extensions = nil
+	}
+	*contact = Contact(x)
+	return nil
+}
+
+// Validate returns an error if Contact does not comply with the OpenAPI spec.
+func (contact *Contact) Validate(ctx context.Context, opts ...ValidationOption) error {
+	ctx = WithValidationOptions(ctx, opts...)
+
+	return validateExtensions(ctx, contact.Extensions, contact.Origin)
+}

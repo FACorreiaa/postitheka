@@ -1,0 +1,95 @@
+package openapi3
+
+import (
+	"context"
+	"encoding/json"
+	"maps"
+)
+
+// Link is specified by OpenAPI/Swagger standard version 3.
+// See https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.0.3.md#link-object
+type Link struct {
+	Extensions map[string]any `json:"-" yaml:"-"`
+	Origin     *Origin        `json:"-" yaml:"-"`
+
+	OperationRef string         `json:"operationRef,omitempty,case:strict" yaml:"operationRef,omitempty"`
+	OperationID  string         `json:"operationId,omitempty,case:strict" yaml:"operationId,omitempty"`
+	Description  string         `json:"description,omitempty,case:strict" yaml:"description,omitempty"`
+	Parameters   map[string]any `json:"parameters,omitempty,case:strict" yaml:"parameters,omitempty"`
+	Server       *Server        `json:"server,omitempty,case:strict" yaml:"server,omitempty"`
+	RequestBody  any            `json:"requestBody,omitempty,case:strict" yaml:"requestBody,omitempty"`
+}
+
+// MarshalJSON returns the JSON encoding of Link.
+func (link Link) MarshalJSON() ([]byte, error) {
+	x, err := link.MarshalYAML()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(x)
+}
+
+// MarshalYAML returns the YAML encoding of Link.
+func (link Link) MarshalYAML() (any, error) {
+	m := make(map[string]any, 6+len(link.Extensions))
+	maps.Copy(m, link.Extensions)
+
+	if x := link.OperationRef; x != "" {
+		m["operationRef"] = x
+	}
+	if x := link.OperationID; x != "" {
+		m["operationId"] = x
+	}
+	if x := link.Description; x != "" {
+		m["description"] = x
+	}
+	if x := link.Parameters; len(x) != 0 {
+		m["parameters"] = x
+	}
+	if x := link.Server; x != nil {
+		m["server"] = x
+	}
+	if x := link.RequestBody; x != nil {
+		m["requestBody"] = x
+	}
+
+	return m, nil
+}
+
+// UnmarshalJSON sets Link to a copy of data.
+func (link *Link) UnmarshalJSON(data []byte) error {
+	type LinkBis Link
+	var x LinkBis
+	if err := unmarshalJSON(data, &x); err != nil {
+		return unmarshalError(err)
+	}
+	if err := unmarshalJSON(data, &x.Extensions); err != nil {
+		return unmarshalError(err)
+	}
+
+	delete(x.Extensions, "operationRef")
+	delete(x.Extensions, "operationId")
+	delete(x.Extensions, "description")
+	delete(x.Extensions, "parameters")
+	delete(x.Extensions, "server")
+	delete(x.Extensions, "requestBody")
+	if len(x.Extensions) == 0 {
+		x.Extensions = nil
+	}
+	*link = Link(x)
+	return nil
+}
+
+// Validate returns an error if Link does not comply with the OpenAPI spec.
+func (link *Link) Validate(ctx context.Context, opts ...ValidationOption) error {
+	ctx = WithValidationOptions(ctx, opts...)
+
+	if link.OperationID == "" && link.OperationRef == "" {
+		return newLinkOperationIDOrRefRequired(link.Origin)
+	}
+	if link.OperationID != "" && link.OperationRef != "" {
+		return newLinkOperationIDRefExclusive(link.OperationID, link.OperationRef, link.Origin)
+	}
+
+	return validateExtensions(ctx, link.Extensions, link.Origin)
+}

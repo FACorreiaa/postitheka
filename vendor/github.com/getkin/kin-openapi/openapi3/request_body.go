@@ -1,0 +1,144 @@
+package openapi3
+
+import (
+	"context"
+	"encoding/json"
+	"maps"
+)
+
+// RequestBody is specified by OpenAPI/Swagger 3.0 standard.
+// See https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.0.3.md#request-body-object
+type RequestBody struct {
+	Extensions map[string]any `json:"-" yaml:"-"`
+	Origin     *Origin        `json:"-" yaml:"-"`
+
+	Description string  `json:"description,omitempty,case:strict" yaml:"description,omitempty"`
+	Required    bool    `json:"required,omitempty,case:strict" yaml:"required,omitempty"`
+	Content     Content `json:"content,case:strict" yaml:"content"`
+}
+
+func NewRequestBody() *RequestBody {
+	return &RequestBody{}
+}
+
+func (requestBody *RequestBody) WithDescription(value string) *RequestBody {
+	requestBody.Description = value
+	return requestBody
+}
+
+func (requestBody *RequestBody) WithRequired(value bool) *RequestBody {
+	requestBody.Required = value
+	return requestBody
+}
+
+func (requestBody *RequestBody) WithContent(content Content) *RequestBody {
+	requestBody.Content = content
+	return requestBody
+}
+
+func (requestBody *RequestBody) WithSchemaRef(value *SchemaRef, consumes []string) *RequestBody {
+	requestBody.Content = NewContentWithSchemaRef(value, consumes)
+	return requestBody
+}
+
+func (requestBody *RequestBody) WithSchema(value *Schema, consumes []string) *RequestBody {
+	requestBody.Content = NewContentWithSchema(value, consumes)
+	return requestBody
+}
+
+func (requestBody *RequestBody) WithJSONSchemaRef(value *SchemaRef) *RequestBody {
+	requestBody.Content = NewContentWithJSONSchemaRef(value)
+	return requestBody
+}
+
+func (requestBody *RequestBody) WithJSONSchema(value *Schema) *RequestBody {
+	requestBody.Content = NewContentWithJSONSchema(value)
+	return requestBody
+}
+
+func (requestBody *RequestBody) WithFormDataSchemaRef(value *SchemaRef) *RequestBody {
+	requestBody.Content = NewContentWithFormDataSchemaRef(value)
+	return requestBody
+}
+
+func (requestBody *RequestBody) WithFormDataSchema(value *Schema) *RequestBody {
+	requestBody.Content = NewContentWithFormDataSchema(value)
+	return requestBody
+}
+
+func (requestBody *RequestBody) GetMediaType(mediaType string) *MediaType {
+	m := requestBody.Content
+	if m == nil {
+		return nil
+	}
+	return m[mediaType]
+}
+
+// MarshalJSON returns the JSON encoding of RequestBody.
+func (requestBody RequestBody) MarshalJSON() ([]byte, error) {
+	x, err := requestBody.MarshalYAML()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(x)
+}
+
+// MarshalYAML returns the YAML encoding of RequestBody.
+func (requestBody RequestBody) MarshalYAML() (any, error) {
+	m := make(map[string]any, 3+len(requestBody.Extensions))
+	maps.Copy(m, requestBody.Extensions)
+	if x := requestBody.Description; x != "" {
+		m["description"] = requestBody.Description
+	}
+	if x := requestBody.Required; x {
+		m["required"] = x
+	}
+	// Required, so written even when missing. A nil map would be written
+	// "null" as JSON and "{}" as YAML: write null both ways.
+	if x := requestBody.Content; x != nil {
+		m["content"] = x
+	} else {
+		m["content"] = nil
+	}
+	return m, nil
+}
+
+// UnmarshalJSON sets RequestBody to a copy of data.
+func (requestBody *RequestBody) UnmarshalJSON(data []byte) error {
+	type RequestBodyBis RequestBody
+	var x RequestBodyBis
+	if err := unmarshalJSON(data, &x); err != nil {
+		return unmarshalError(err)
+	}
+	if err := unmarshalJSON(data, &x.Extensions); err != nil {
+		return unmarshalError(err)
+	}
+	delete(x.Extensions, "description")
+	delete(x.Extensions, "required")
+	delete(x.Extensions, "content")
+	if len(x.Extensions) == 0 {
+		x.Extensions = nil
+	}
+	*requestBody = RequestBody(x)
+	return nil
+}
+
+// Validate returns an error if RequestBody does not comply with the OpenAPI spec.
+func (requestBody *RequestBody) Validate(ctx context.Context, opts ...ValidationOption) error {
+	ctx = WithValidationOptions(ctx, opts...)
+
+	if requestBody.Content == nil {
+		return newRequestBodyContentRequired(requestBody.Origin)
+	}
+
+	if vo := *getValidationOptions(ctx); !vo.examplesValidationDisabled {
+		vo.examplesValidationAsReq, vo.examplesValidationAsRes = true, false
+		ctx = context.WithValue(ctx, validationOptionsKey{}, &vo)
+	}
+
+	if err := requestBody.Content.Validate(ctx); err != nil {
+		return err
+	}
+
+	return validateExtensions(ctx, requestBody.Extensions, requestBody.Origin)
+}
