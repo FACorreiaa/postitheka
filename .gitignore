@@ -42,3 +42,11 @@ tmp/
 /sqlc
 /tailwindcss
 /templ
+
+# The 3D mascot (BRD-001): built by brand/tools/build_mascot3d.py from a source kit kept
+# outside the repo. Rebuild it rather than commit it; a CDN hosts it for a beta deployment.
+/out/
+ios/Postitheka/Mascot3D/Mascot.usdz
+
+# Python bytecode (brand/tools scripts)
+__pycache__/

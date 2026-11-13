@@ -1,0 +1,12 @@
+// TestFlight builds: Release's optimisation and signing, plus the BETA compilation condition,
+// which turns on what is tried on beta before production (BRD-001: the 3D mascot).
+#include "Release.xcconfig"
+
+// Undo Release's exclusion: the 3D mascot's view, model and motion file belong in Beta.
+EXCLUDED_SOURCE_FILE_NAMES =
+
+SWIFT_ACTIVE_COMPILATION_CONDITIONS = BETA $(inherited)
+
+// As Debug until the public hostname exists (REL-004): the simulator reaches the Mac's
+// localhost; a device needs the Mac's .local name.
+API_BASE_URL = http:/$()/localhost:8095
