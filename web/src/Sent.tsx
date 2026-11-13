@@ -1,4 +1,5 @@
-import type { Account, Post, Target } from "./api";
+import { useState } from "react";
+import { type Account, api, messageOf, type Post, type Target } from "./api";
 import mascot from "./assets/mascot-256.webp";
 import { platformNames } from "./rules";
 
@@ -6,7 +7,16 @@ const time = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-di
 const day = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" });
 const full = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
-export function Sent({ posts, accounts }: { posts: Post[] | null; accounts: Account[] }) {
+export function Sent({
+  posts,
+  accounts,
+  onChanged,
+}: {
+  posts: Post[] | null;
+  accounts: Account[];
+  /** A post came back changed (a target sent again). */
+  onChanged: (post: Post) => void;
+}) {
   const names = new Map(accounts.map((a) => [a.id, a.display_name]));
 
   return (
@@ -32,7 +42,12 @@ export function Sent({ posts, accounts }: { posts: Post[] | null; accounts: Acco
               </p>
               <ul className="targets">
                 {p.targets.map((t) => (
-                  <TargetRow key={t.id} target={t} name={t.account_id ? names.get(t.account_id) : undefined} />
+                  <TargetRow
+                    key={t.id}
+                    target={t}
+                    name={t.account_id ? names.get(t.account_id) : undefined}
+                    onChanged={onChanged}
+                  />
                 ))}
               </ul>
             </li>
@@ -43,8 +58,36 @@ export function Sent({ posts, accounts }: { posts: Post[] | null; accounts: Acco
   );
 }
 
-function TargetRow({ target: t, name }: { target: Target; name: string | undefined }) {
-  const where = `${platformNames[t.platform] ?? t.platform}${name ? `, ${name}` : ""}`;
+function TargetRow({
+  target: t,
+  name,
+  onChanged,
+}: {
+  target: Target;
+  name: string | undefined;
+  onChanged: (post: Post) => void;
+}) {
+  const platform = platformNames[t.platform] ?? t.platform;
+  const where = `${platform}${name ? `, ${name}` : ""}`;
+  // An interrupted failure may already be live: say so, and send only when asked twice.
+  const [warning, setWarning] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  async function sendAgain() {
+    setSending(true);
+    setError("");
+    const { data, error } = await api.POST("/v1/targets/{targetId}/retry", {
+      params: { path: { targetId: t.id } },
+    });
+    setSending(false);
+    if (data) {
+      setWarning(false);
+      onChanged(data);
+    } else {
+      setError(messageOf(error));
+    }
+  }
 
   // A handoff gets its postmark too: the user sent it from WhatsApp's own app,
   // so there is no link to show, only where and when.
@@ -83,6 +126,34 @@ function TargetRow({ target: t, name }: { target: Target; name: string | undefin
       <span>
         {where}
         {t.last_error && <span className="reason">{sentence(t.last_error)}</span>}
+        {warning && (
+          <span className="reason caution">
+            The last attempt stopped mid-send, so this may already be on {platform}. Check there before sending
+            it again.
+          </span>
+        )}
+        {error && (
+          <span className="reason error" role="alert">
+            {sentence(error)}
+          </span>
+        )}
+        {/* No account: disconnected, or a WhatsApp handoff, which is sent again from the phone. */}
+        {t.status === "failed" && t.account_id && (
+          <span className="target-actions">
+            <button
+              className="quiet"
+              disabled={sending}
+              onClick={() => (t.interrupted && !warning ? setWarning(true) : void sendAgain())}
+            >
+              {sending ? "Sending…" : warning ? "Send anyway" : "Send again"}
+            </button>
+            {warning && (
+              <button className="quiet" disabled={sending} onClick={() => setWarning(false)}>
+                Cancel
+              </button>
+            )}
+          </span>
+        )}
       </span>
     </li>
   );

@@ -118,7 +118,7 @@ Strangers who have published a post: **0**.
 | AUTH-001 | Open | App ID `com.fernandocorreia.postitheka` registered | Needs hostname and the key (Owner) |
 | API-001 | Done | `migrations/20261022190000_post_idempotency.sql`; `TestCreatePostIsIdempotent` (incl. 8 concurrent requests, one post) | Web retry path checked by typecheck only, not in a browser |
 | MED-001 | Done | `internal/jobs/sweep.go`; `TestSweepDeletesOnlyOldUnattachedUploads` in CI; live run against RustFS removed row and object | |
-| WEB-001 | Open | | |
+| WEB-001 | Built, unverified | `POST /v1/targets/{id}/retry`, `migrations/20261113190000_target_retry.sql` (`interrupted`, `retries`), Send again in Sent with a may-be-live warning; `TestRetryTargetPublishesAgain` (real River client, first job completed), `TestRetryTargetRefusesWhatCannotBeSentAgain` (pending, published, assisted, disconnected, another user's) | Checked in a browser against a local server with seeded targets; never against a real platform |
 | WEB-002 | Done | Dark only since 2026-11-05, so there is one theme to check: every screen looked at in a browser at 1280 and 390 px, no sideways scroll; palette contrast passes WCAG AA for text (lowest 6.5:1) | |
 | PRV-001 | Open | | Owner approves the text |
 | OPS-001 | Built, unverified | `internal/analytics`; `TestProductEventsCarryNoPersonalData`, events asserted in `TestWorkerOutcomes`; empty key is a no-op (`TestNoAPIKeyMeansNothingIsSent`) | Needs production and a PostHog project key (Owner) to see an event arrive |

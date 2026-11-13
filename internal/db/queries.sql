@@ -192,6 +192,20 @@ WHERE id = $1;
 UPDATE post_targets SET status = 'pending', last_error = $2, updated_at = now()
 WHERE id = $1;
 
+-- interrupted: the attempt died mid-request, so the post may be live.
 -- name: MarkTargetFailed :exec
-UPDATE post_targets SET status = 'failed', last_error = $2, updated_at = now()
-WHERE id = $1;
+UPDATE post_targets
+SET status = 'failed', last_error = sqlc.narg(last_error), interrupted = sqlc.arg(interrupted), updated_at = now()
+WHERE id = sqlc.arg(id);
+
+-- Conditional on failed and on the account still being there, so a retry can
+-- never reach a target that is on its way or already published. retries goes
+-- up so the new job's arguments differ from every earlier job's: River keeps
+-- one job per set of arguments, completed ones included.
+-- name: RetryTarget :one
+UPDATE post_targets t
+SET status = 'pending', last_error = NULL, interrupted = false, retries = t.retries + 1, updated_at = now()
+FROM posts p
+WHERE t.id = sqlc.arg(id) AND p.id = t.post_id AND p.user_id = sqlc.arg(user_id)
+  AND t.status = 'failed' AND t.account_id IS NOT NULL
+RETURNING t.*;

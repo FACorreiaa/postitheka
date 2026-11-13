@@ -199,6 +199,10 @@ vocabulary: "Publish" produces "Published"; "Not sent" means failed.
 - **Gzip sizes differ between machines.** Node's zlib gave the same `web/dist` 0.6% more on CI's
   Linux runner than on a Mac, so a size budget set locally to the KiB failed CI. `--update` adds
   1% before rounding; leave that headroom when editing `size-budget.json` by hand.
+- **River's unique jobs count completed ones.** `PublishArgs` is unique by its arguments, and
+  `completed` is one of the default unique states, so queueing the same target again is
+  silently dropped (`UniqueSkippedAsDuplicate`). A retry carries `retry: n` (WEB-001);
+  `TestRetryTargetPublishesAgain` fails without it.
 - **A missing symbol does not prove a file was left out of a build.** The linker dead-strips
   unused code, so `release-proof.sh` also checks that no `Mascot3DView.o` was compiled. Run it
   with `Beta` after changing an exclusion: it must fail there.

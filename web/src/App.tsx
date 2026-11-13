@@ -165,7 +165,11 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
           onConnect={() => accountsDialog.current?.showModal()}
           onPublished={(post) => setPosts((prev) => [post, ...(prev ?? [])])}
         />
-        <Sent posts={posts} accounts={accounts ?? []} />
+        <Sent
+          posts={posts}
+          accounts={accounts ?? []}
+          onChanged={(post) => setPosts((prev) => prev?.map((p) => (p.id === post.id ? post : p)) ?? prev)}
+        />
       </main>
 
       <Accounts

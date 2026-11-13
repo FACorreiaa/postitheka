@@ -57,6 +57,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/targets/{targetId}/handoff`.
     /// - Remark: Generated from `#/paths//v1/targets/{targetId}/handoff/post(completeHandoff)`.
     func completeHandoff(_ input: Operations.completeHandoff.Input) async throws -> Operations.completeHandoff.Output
+    /// Sends a failed target again: it goes back to pending and is queued now. Only a failed target with its account still connected can be retried; an assisted target is sent again from the phone. When the failure was interrupted, the post may already be live, and the client says so before calling this.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/targets/{targetId}/retry`.
+    /// - Remark: Generated from `#/paths//v1/targets/{targetId}/retry/post(retryTarget)`.
+    func retryTarget(_ input: Operations.retryTarget.Input) async throws -> Operations.retryTarget.Output
     /// - Remark: HTTP `GET /v1/posts/{postId}`.
     /// - Remark: Generated from `#/paths//v1/posts/{postId}/get(getPost)`.
     func getPost(_ input: Operations.getPost.Input) async throws -> Operations.getPost.Output
@@ -172,6 +178,20 @@ extension APIProtocol {
             path: path,
             headers: headers,
             body: body
+        ))
+    }
+    /// Sends a failed target again: it goes back to pending and is queued now. Only a failed target with its account still connected can be retried; an assisted target is sent again from the phone. When the failure was interrupted, the post may already be live, and the client says so before calling this.
+    ///
+    ///
+    /// - Remark: HTTP `POST /v1/targets/{targetId}/retry`.
+    /// - Remark: Generated from `#/paths//v1/targets/{targetId}/retry/post(retryTarget)`.
+    public func retryTarget(
+        path: Operations.retryTarget.Input.Path,
+        headers: Operations.retryTarget.Input.Headers = .init()
+    ) async throws -> Operations.retryTarget.Output {
+        try await retryTarget(Operations.retryTarget.Input(
+            path: path,
+            headers: headers
         ))
     }
     /// - Remark: HTTP `GET /v1/posts/{postId}`.

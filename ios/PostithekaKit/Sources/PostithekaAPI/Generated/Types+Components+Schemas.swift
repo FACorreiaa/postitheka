@@ -496,6 +496,11 @@ extension Components {
             public var status: Components.Schemas.Target.statusPayload
             /// - Remark: Generated from `#/components/schemas/Target/last_error`.
             public var last_error: Swift.String?
+            /// Present and true when the target failed because an attempt died mid-request, so the post may already be live on the platform. Check there before retrying.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Target/interrupted`.
+            public var interrupted: Swift.Bool?
             /// - Remark: Generated from `#/components/schemas/Target/remote_url`.
             public var remote_url: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Target/published_at`.
@@ -508,6 +513,7 @@ extension Components {
             ///   - platform:
             ///   - status: handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
             ///   - last_error:
+            ///   - interrupted: Present and true when the target failed because an attempt died mid-request, so the post may already be live on the platform. Check there before retrying.
             ///   - remote_url:
             ///   - published_at:
             public init(
@@ -516,6 +522,7 @@ extension Components {
                 platform: Components.Schemas.Platform,
                 status: Components.Schemas.Target.statusPayload,
                 last_error: Swift.String? = nil,
+                interrupted: Swift.Bool? = nil,
                 remote_url: Swift.String? = nil,
                 published_at: Foundation.Date? = nil
             ) {
@@ -524,6 +531,7 @@ extension Components {
                 self.platform = platform
                 self.status = status
                 self.last_error = last_error
+                self.interrupted = interrupted
                 self.remote_url = remote_url
                 self.published_at = published_at
             }
@@ -533,6 +541,7 @@ extension Components {
                 case platform
                 case status
                 case last_error
+                case interrupted
                 case remote_url
                 case published_at
             }

@@ -24,6 +24,12 @@ import (
 
 type PublishArgs struct {
 	TargetID uuid.UUID `json:"target_id"`
+	// Retry is how many times the user has sent the target again (WEB-001).
+	// Each retry is a new job, and River keeps one job per set of arguments,
+	// completed ones included, so without it a retry would be dropped as a
+	// duplicate of the job that already ran. Omitted when zero, so a first
+	// attempt's arguments are what they always were.
+	Retry int32 `json:"retry,omitempty"`
 }
 
 func (PublishArgs) Kind() string { return "publish_target" }
@@ -256,7 +262,7 @@ func (w *PublishWorker) refresh(ctx context.Context, pub publisher.Publisher, ac
 // fail records a terminal failure and cancels the job, so River does not
 // retry what cannot succeed.
 func (w *PublishWorker) fail(ctx context.Context, row db.GetTargetForPublishRow, reason string, cause error) error {
-	if err := w.q.MarkTargetFailed(ctx, db.MarkTargetFailedParams{ID: row.ID, LastError: new(cause.Error())}); err != nil {
+	if err := w.q.MarkTargetFailed(ctx, db.MarkTargetFailedParams{ID: row.ID, LastError: new(cause.Error()), Interrupted: reason == failInterrupted}); err != nil {
 		return err
 	}
 	w.capture(row, analytics.EventTargetFailed, "reason", reason)

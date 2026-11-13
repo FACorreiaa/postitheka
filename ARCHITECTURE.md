@@ -114,7 +114,9 @@ users ─┬─< api_tokens       token_hash (sha256), last_used_at
             └── retryable ──────┤ (River backoff, or RetryAfter → snooze)
                                 ├── permanent ──────────────► failed (job cancelled)
                                 └── last attempt (10) ──────► failed
- publishing found at job start (previous attempt died) ─────► failed "interrupted"
+ publishing found at job start (previous attempt died) ─────► failed "interrupted" (interrupted = true)
+
+ failed, account still connected ──POST …/retry──► pending, new job (retry n)   (WEB-001)
 
  assisted target (no job): handing_off ──phone: sent──────► handed_off (published_at)
                                │      └─phone: not sent──► failed
@@ -300,6 +302,7 @@ spec because auth wraps every spec route, and it holds nothing secret.
 | `POST /v1/posts` | Validate, store and queue; 422 with every issue. `Idempotency-Key` makes retries safe. `assisted: ["whatsapp"]` adds handoff targets |
 | `GET /v1/posts/{id}` | One post with per-target status |
 | `POST /v1/targets/{id}/handoff` | The phone reports an assisted target: `{sent}`; 409 unless it is still `handing_off` |
+| `POST /v1/targets/{id}/retry` | Sends a failed target again: back to `pending` and a new job in one transaction. 409 unless it is `failed` with its account still connected (an assisted target is sent again from the phone). The client warns first when `interrupted` says the post may be live |
 
 Errors are `{message}`; validation errors are `{message, issues: [{account_id?, platform?,
 field, message}]}`.

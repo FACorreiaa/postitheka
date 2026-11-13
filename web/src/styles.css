@@ -699,6 +699,22 @@ label {
   color: var(--cancel);
 }
 
+/* The "may already be live" warning is advice, not a failure: plain ink. */
+.target.failed .reason.caution {
+  color: var(--ink);
+}
+
+.target-actions {
+  display: flex;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  margin-left: -0.6rem;
+}
+
+.target-actions .quiet {
+  color: var(--gold);
+}
+
 .pill {
   flex: none;
   min-width: 5.5rem;

@@ -405,6 +405,56 @@ func (s *Service) CompleteHandoff(ctx context.Context, userID, targetID uuid.UUI
 	return s.GetPost(ctx, userID, row.PostID)
 }
 
+// RetryTarget sends a failed target again: back to pending, and a new publish
+// job in the same transaction. Only a failed target whose account is still
+// connected qualifies; anything else is a Conflict saying why. Whether an
+// interrupted failure may already be live is the client's warning to give
+// first; the server has no way to know.
+func (s *Service) RetryTarget(ctx context.Context, userID, targetID uuid.UUID) (PostView, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return PostView{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	row, err := s.q.WithTx(tx).RetryTarget(ctx, db.RetryTargetParams{ID: targetID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return PostView{}, s.whyNotRetryable(ctx, userID, targetID)
+	}
+	if err != nil {
+		return PostView{}, fmt.Errorf("retry target: %w", err)
+	}
+	res, err := s.river.InsertTx(ctx, tx, jobs.PublishArgs{TargetID: row.ID, Retry: row.Retries}, nil)
+	if err != nil {
+		return PostView{}, fmt.Errorf("queue retry: %w", err)
+	}
+	if res.UniqueSkippedAsDuplicate {
+		// retries went up in this transaction, so no job can have these
+		// arguments yet. If one does, posting could happen twice: refuse.
+		return PostView{}, fmt.Errorf("queue retry: a job for target %s retry %d already exists", row.ID, row.Retries)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return PostView{}, fmt.Errorf("commit retry: %w", err)
+	}
+	return s.GetPost(ctx, userID, row.PostID)
+}
+
+func (s *Service) whyNotRetryable(ctx context.Context, userID, targetID uuid.UUID) error {
+	current, err := s.q.GetTargetForUser(ctx, db.GetTargetForUserParams{ID: targetID, UserID: userID})
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return ErrNotFound
+	case err != nil:
+		return err
+	case current.Status != "failed":
+		return &Conflict{Message: "only a post that was not sent can be sent again"}
+	case publisher.IsAssisted(publisher.Platform(current.Platform)):
+		return &Conflict{Message: "send it again from the phone"}
+	default:
+		return &Conflict{Message: "the account it was going to has been disconnected"}
+	}
+}
+
 func dedupeStrings(in []string) []string {
 	seen := make(map[string]bool, len(in))
 	out := make([]string, 0, len(in))
