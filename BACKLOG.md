@@ -60,6 +60,14 @@ so far and introduces none: anything still undecided is marked **OPEN** and wait
 - **OPEN:** whether X is premium too, and how a user pays. X posts bill the owner's developer account
   for every user, so public X access needs an answer here.
 
+## Decisions recorded 2026-11-13
+
+- **A 3D mascot is tried on beta only** (owner). The supplied kit is a different robot from the
+  approved postman; the owner chose to use it recoloured to the brand palette, on both sign-in
+  screens, floating, swaying, rising in and turning toward the pointer, with the built model
+  git-ignored and a CDN decided when deploy lands. BRD-001. `brand/README.md` records the
+  exception.
+
 ## Waiting on the owner
 
 Nothing below blocks building; it blocks shipping. Each is an account, a decision or a key that
@@ -134,6 +142,7 @@ Strangers who have published a post: **0**.
 | IOS-002 | Open | | Needs AUTH-001; a pasted token stands in |
 | IOS-003 | Built, unverified | `ComposerView`, `Composer` (kit, tested); `PublishFlowTests` UI test published to a local server and saw the outcome in Sent | Photos path not exercised by the UI test |
 | IOS-004, IOS-005 | Open | | |
+| BRD-001 | Gate 1 passed, waiting on the device check | Branch `brd-001-mascot-3d`. `build_mascot3d.py` builds `mascot.glb` (1047 KB, 616 KB gzip, 15 draw calls, 87k triangles) and `Mascot.usdz` (1144 KB, passes `usdchecker --arkit`). Seen rendering in Chrome (model in ~1.4 s from the dev server, canvas swaps in, turns and floats) and in the iOS 26 simulator on a Beta build; flat mascot kept with a broken URL. Headless Chrome (software WebGL, dev and production builds, 2026-11-13): live in 0.9–1.3 s; one WebGL context left (the probe's is released); 15 draws a frame, none while the tab is hidden or the mascot is scrolled off, resumes after; reduced motion and Save-Data send no request and keep the flat mascot; no WebGL fetches the config only, never three. In the first ~5 runs the scene chunk's fetch was aborted (`net::ERR_ABORTED`, cause not found) and the flat mascot stayed, as designed; not seen again in 36 runs. Both drivers' tests, `task check` and `task ios:check` (Release proof with the model present) green | Entry budget raised 1 KiB to 80896 B (owner, 2026-11-13: Vite's preload wrapper). Gate 1 (the recolour) passed: owner, 2026-11-13. Waiting on the owner's device check: fps, memory, Low Power Mode and Reduce Motion on iOS, a real GPU |
 | IOS-006 | Built, unverified | `POST /v1/targets/{id}/handoff`; `TestAssistedHandoff` (incl. expiry after an hour, `internal/jobs/handoffs.go`); kit `aWhatsAppHandoffOpensAfterPublishingAndIsReported`; UI test `testWhatsAppHandoffClosedWithoutSending` recorded the cancel as failed | WhatsApp is not on the simulator: the share sheet opened and was dismissed, but a real send was never tried. Needs a device |
 
 **Known gaps no item owns yet:** deleting a user removes their media rows by cascade but leaves the objects in the bucket. No route deletes a user yet; whichever item adds one must delete the objects too.
@@ -475,6 +484,43 @@ a target in `handing_off` that the phone completes, so Sent records it as handed
 published. A handoff the phone never reports fails after an hour.
 
 **Done when:** the post opens in WhatsApp ready to send, and Sent shows it as handed off.
+
+---
+
+# Brand
+
+Experiments the owner judges before they reach production. Not on any phase's gate.
+
+### BRD-001 · 3D mascot on beta sign-in (web + iOS) · M
+**Needs:** the owner's go to copy `Postitheka_Mascot_Web_NoTablet.glb` from the kit into an
+empty source directory (Gate 1 is the owner's look at the recolour, before client work is
+judged).
+
+The supplied robot, recoloured to the palette and without its tablet, in 3D on the web's SignIn
+and the iOS SignInView, on beta only. Rules in `brand/README.md` "3D mascot". Shape copied from
+Aaru's BRD-011.
+
+- `brand/tools/build_mascot3d.py` (stdlib, run with `python3 -I`) builds `out/mascot3d/mascot.glb`
+  and `Mascot.usdz` from the source GLB.
+- `design/mascot-motion.json` is the motion; `web/src/lib/mascot-motion.ts` and PostithekaKit's
+  `MascotMotion` turn a time into values, and both tests assert the same numbers.
+- Web: `MASCOT_3D_MODEL_URL` (empty means off) reaches the page through `GET /client-config`;
+  three is imported only by `web/src/lib/mascot3d/scene.ts`, after first paint.
+- iOS: a Beta build configuration; Release excludes the 3D view, model and motion file.
+
+**Done when:**
+- With `MASCOT_3D_MODEL_URL` set, web SignIn shows the flat mascot first and the 3D one once a
+  frame is drawn, at desktop and phone width; empty, reduced motion, Save-Data, no WebGL or a
+  broken URL keep the flat one. A hidden tab stops drawing, and the page holds one WebGL context.
+- A Debug or Beta iOS build shows the 3D mascot on SignInView; Reduce Motion and Low Power Mode
+  keep the flat one.
+- `ios/tools/release-proof.sh` passes: a Release build holds no model file, no motion file and
+  no `Mascot3DView` symbol.
+- `scripts/size-budget.mjs` passes with the entry budget unchanged; only the lazy total grew.
+- `scripts/brand-guard.sh` (motion copies match, no hex literal in the 3D code) and both
+  drivers' tests pass in CI.
+- The owner's go/no-go is recorded here with lazy JS KB, model KB, time to first 3D frame and
+  frame rate, from a device.
 
 ---
 

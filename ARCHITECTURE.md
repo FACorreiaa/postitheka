@@ -284,7 +284,9 @@ real sign-in first (AUTH-001). The middleware runs before the request body is de
 ## API
 
 All routes need `Authorization: Bearer`. The spec is `api/openapi.yaml`. Outside it:
-`GET /healthz` and `GET /oauth/{platform}/callback`.
+`GET /healthz`, `GET /oauth/{platform}/callback` and `GET /client-config`. The last is what the
+web app needs before anyone signs in (`{mascot3dModelUrl}`, null when unset); it is outside the
+spec because auth wraps every spec route, and it holds nothing secret.
 
 | Route | Does |
 | --- | --- |
@@ -314,7 +316,18 @@ an `Idempotency-Key` that stays the same while the post is unchanged, so pressin
 after a dropped connection cannot post twice. The Sent
 list polls every 2 seconds only while a target is `pending` or `publishing`.
 
-In development Vite serves on :5173 and proxies `/v1` to :8095.
+In development Vite serves on :5173 and proxies `/v1` and `/client-config` to :8095.
+
+**3D mascot (BRD-001, beta only).** `GET /client-config` carries `MASCOT_3D_MODEL_URL`; empty
+means the flat mascot and nothing else downloads. `components/Mascot3D.tsx` draws the flat
+mascot first, then, after first paint and only without reduced motion, Save-Data or a missing
+WebGL, imports `lib/mascot3d/scene.ts`, the one module that imports three, as its own chunk.
+The canvas replaces the flat image once a frame is drawn, pauses off-screen and in a hidden tab,
+and is one WebGL context. `lib/mascot-motion.ts` is the pure motion driver
+(`design/mascot-motion.json`). The model is built by `brand/tools/build_mascot3d.py` into
+git-ignored `out/mascot3d/`; Vite serves that folder at `/mascot3d/` in development only, so it
+never reaches `dist` or the binary. A beta deployment points the variable at a CDN (undecided).
+`scripts/size-budget.mjs` holds the entry's gzip budget and the lazy total separately.
 
 ### iOS (`ios/`, built: composer, Sent, accounts, WhatsApp handoff)
 
@@ -324,6 +337,14 @@ checked by `task ios:check`), the rules mirror, the Keychain token store, upload
 `Composer` model. The app target is views only. The base URL comes from the build configuration
 (`API_BASE_URL` in `ios/Config/*.xcconfig`); the app holds no secret but the user's token, in
 the Keychain.
+
+Build configurations: Debug (local server), **Beta** (Release optimisations plus the `BETA`
+compilation condition, for TestFlight) and Release (the App Store). The 3D mascot (BRD-001)
+compiles into Debug and Beta only: `SignInView` picks it under `#if DEBUG || BETA`, and
+`Release.xcconfig` excludes `Mascot3DView.swift`, `Mascot.usdz` and `mascot-motion.json`
+(`EXCLUDED_SOURCE_FILE_NAMES`; the app target is a synchronized folder, so that is the lever).
+`ios/tools/release-proof.sh` builds Release and fails if any of them got in. The motion driver
+is `MascotMotion` in PostithekaKit, tested with the web's numbers.
 
 WhatsApp: after the server accepts a post with `assisted: ["whatsapp"]`, the app opens the share
 sheet with the text and media and reports the outcome (`completed` on the WhatsApp activity
