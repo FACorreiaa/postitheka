@@ -1,0 +1,10 @@
+# gitleaks reads this from the repo root, locally (`task secrets`) and in CI.
+[extend]
+useDefault = true
+
+# vendor/ is third-party source committed by `go mod vendor`. Its generated code (the
+# modernc.org/sqlite translation) is full of long hex constants that the generic-api-key rule
+# takes for keys. Nothing of ours lives there, so a real secret cannot either.
+[[allowlists]]
+description = "Vendored Go modules"
+paths = ['''^vendor/''']
