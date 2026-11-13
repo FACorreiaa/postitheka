@@ -259,6 +259,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /v1/targets/{targetId}/retry:
+    post:
+      operationId: retryTarget
+      description: >
+        Sends a failed target again: it goes back to pending and is queued now.
+        Only a failed target with its account still connected can be retried;
+        an assisted target is sent again from the phone. When the failure was
+        interrupted, the post may already be live, and the client says so
+        before calling this.
+      parameters:
+        - name: targetId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The post, with the target pending again
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The target is not a failed target that can be sent again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /v1/posts/{postId}:
     get:
       operationId: getPost
@@ -561,6 +595,12 @@ components:
             platform's own app.
         last_error:
           type: string
+        interrupted:
+          type: boolean
+          description: >
+            Present and true when the target failed because an attempt died
+            mid-request, so the post may already be live on the platform. Check
+            there before retrying.
         remote_url:
           type: string
         published_at:

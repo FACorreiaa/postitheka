@@ -25,6 +25,12 @@ var ErrNotFound = errors.New("not found")
 // completing a handoff that already has a different outcome.
 var ErrConflict = errors.New("conflict")
 
+// Conflict is an ErrConflict whose message says what the user can do instead.
+type Conflict struct{ Message string }
+
+func (e *Conflict) Error() string        { return e.Message }
+func (e *Conflict) Is(target error) bool { return target == ErrConflict }
+
 // BadRequest is input the caller can fix. Its message is shown to the user.
 type BadRequest struct{ Message string }
 

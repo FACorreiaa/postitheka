@@ -141,6 +141,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/targets/{targetId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Sends a failed target again: it goes back to pending and is queued now. Only a failed target with its account still connected can be retried; an assisted target is sent again from the phone. When the failure was interrupted, the post may already be live, and the client says so before calling this. */
+        post: operations["retryTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/posts/{postId}": {
         parameters: {
             query?: never;
@@ -295,6 +312,8 @@ export interface components {
              */
             status: "pending" | "publishing" | "published" | "failed" | "handing_off" | "handed_off";
             last_error?: string;
+            /** @description Present and true when the target failed because an attempt died mid-request, so the post may already be live on the platform. Check there before retrying. */
+            interrupted?: boolean;
             remote_url?: string;
             /** Format: date-time */
             published_at?: string;
@@ -586,6 +605,39 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             /** @description The target is not an assisted target waiting for its handoff. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    retryTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                targetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The post, with the target pending again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Post"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The target is not a failed target that can be sent again. */
             409: {
                 headers: {
                     [name: string]: unknown;

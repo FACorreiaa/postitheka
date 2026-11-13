@@ -775,6 +775,8 @@ func TestWorkerOutcomes(t *testing.T) {
 		cancelled bool
 		errText   string
 		event     string // what analytics records; empty while it will retry
+		// interrupted: the post may be live, and the client warns before a retry.
+		interrupted bool
 	}
 	cases := map[string]struct {
 		prepare func(e *env, targetID, accountID uuid.UUID)
@@ -806,7 +808,7 @@ func TestWorkerOutcomes(t *testing.T) {
 				_, _ = e.pool.Exec(context.Background(), "UPDATE post_targets SET status = 'publishing' WHERE id = $1", targetID)
 			},
 			attempt: 2,
-			want:    outcome{status: "failed", cancelled: true, errText: "interrupted", event: "target_failed:interrupted"},
+			want:    outcome{status: "failed", cancelled: true, errText: "interrupted", event: "target_failed:interrupted", interrupted: true},
 		},
 		"account disconnected after posting": {
 			prepare: func(e *env, _, accountID uuid.UUID) {
@@ -840,6 +842,9 @@ func TestWorkerOutcomes(t *testing.T) {
 			if tgt.Status != tc.want.status {
 				t.Errorf("status %q, want %q", tgt.Status, tc.want.status)
 			}
+			if tgt.Interrupted != tc.want.interrupted {
+				t.Errorf("interrupted %v, want %v", tgt.Interrupted, tc.want.interrupted)
+			}
 			if !strings.Contains(deref(tgt.LastError), tc.want.errText) {
 				t.Errorf("last error %q, want it to mention %q", deref(tgt.LastError), tc.want.errText)
 			}
@@ -856,6 +861,146 @@ func TestWorkerOutcomes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// WEB-001: a failed target is sent again by a new job, through a real River
+// client, even though the first job's arguments are still taken.
+func TestRetryTargetPublishesAgain(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	acct := e.account(t, alice)
+	view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "again", AccountIDs: []uuid.UUID{acct}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetID := view.Targets[0].ID
+
+	// The first attempt died mid-request: failed, and maybe live.
+	_, _ = e.pool.Exec(ctx, "UPDATE post_targets SET status = 'publishing' WHERE id = $1", targetID)
+	if err := e.runJob(t, targetID, 2); err == nil {
+		t.Fatal("interrupted attempt: want the job cancelled")
+	}
+	if tgt := e.target(t, alice, view.Post.ID); tgt.Status != "failed" || !tgt.Interrupted {
+		t.Fatalf("target %+v, want failed and interrupted", tgt)
+	}
+	// The first job ran to completion, as one that found its target already
+	// failed does. River would drop a second job with the same arguments.
+	if _, err := e.pool.Exec(ctx, "UPDATE river_job SET state = 'completed', finalized_at = now()"); err != nil {
+		t.Fatal(err)
+	}
+
+	retried, err := e.svc.RetryTarget(ctx, alice, targetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tgt := retried.Targets[0]; tgt.Status != "pending" || tgt.Interrupted || tgt.LastError != nil {
+		t.Fatalf("after retry %+v, want pending with the failure cleared", tgt)
+	}
+
+	rc, err := river.NewClient(riverpgxv5.New(e.pool), &river.Config{
+		Queues:            map[string]river.QueueConfig{river.QueueDefault: {MaxWorkers: 2}},
+		Workers:           e.workers,
+		FetchPollInterval: 200 * time.Millisecond,
+		Logger:            slog.New(slog.DiscardHandler),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rc.Start(ctx); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = rc.Stop(context.Background()) })
+
+	deadline := time.Now().Add(15 * time.Second)
+	var tgt db.PostTarget
+	for time.Now().Before(deadline) {
+		if tgt = e.target(t, alice, view.Post.ID); tgt.Status == "published" {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if tgt.Status != "published" {
+		t.Fatalf("target is %q after 15s (last error %v)", tgt.Status, deref(tgt.LastError))
+	}
+	if n := e.discord.posts.Load(); n != 1 {
+		t.Errorf("discord received %d posts, want 1", n)
+	}
+}
+
+func TestRetryTargetRefusesWhatCannotBeSentAgain(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	bob := e.user(t, "bob@example.com")
+	acct := e.account(t, alice)
+
+	post := func(in service.CreatePostInput) uuid.UUID {
+		t.Helper()
+		view, err := e.svc.CreatePost(ctx, alice, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return view.Targets[0].ID
+	}
+	failed := func() uuid.UUID {
+		t.Helper()
+		id := post(service.CreatePostInput{Text: "no", AccountIDs: []uuid.UUID{acct}})
+		e.discord.postStatus.Store(http.StatusBadRequest)
+		defer e.discord.postStatus.Store(http.StatusOK)
+		if err := e.runJob(t, id, 1); err == nil {
+			t.Fatal("want the rejected post cancelled")
+		}
+		return id
+	}
+
+	pending := post(service.CreatePostInput{Text: "on its way", AccountIDs: []uuid.UUID{acct}})
+	published := post(service.CreatePostInput{Text: "landed", AccountIDs: []uuid.UUID{acct}})
+	if err := e.runJob(t, published, 1); err != nil {
+		t.Fatal(err)
+	}
+	handoff := post(service.CreatePostInput{Text: "for the group", Assisted: []string{"whatsapp"}})
+	if _, err := e.svc.CompleteHandoff(ctx, alice, handoff, false); err != nil {
+		t.Fatal(err)
+	}
+	rejected := failed()
+
+	cases := map[string]struct {
+		user   uuid.UUID
+		target uuid.UUID
+		want   string // the conflict's message; empty for not found
+	}{
+		"pending":        {alice, pending, "only a post that was not sent"},
+		"published":      {alice, published, "only a post that was not sent"},
+		"assisted":       {alice, handoff, "from the phone"},
+		"someone else's": {bob, rejected, ""},
+		"no such target": {alice, uuid.New(), ""},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := e.svc.RetryTarget(ctx, tc.user, tc.target)
+			var conflict *service.Conflict
+			switch {
+			case tc.want == "" && !errors.Is(err, service.ErrNotFound):
+				t.Errorf("error %v, want not found", err)
+			case tc.want != "" && (!errors.As(err, &conflict) || !strings.Contains(conflict.Message, tc.want)):
+				t.Errorf("error %v, want a conflict mentioning %q", err, tc.want)
+			}
+		})
+	}
+
+	// Disconnecting the account leaves its failed targets nowhere to go.
+	if _, err := e.pool.Exec(ctx, "DELETE FROM accounts WHERE id = $1", acct); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.RetryTarget(ctx, alice, rejected); !errors.Is(err, service.ErrConflict) {
+		t.Errorf("disconnected: %v, want a conflict", err)
+	}
+	var queued int
+	_ = e.pool.QueryRow(ctx, "SELECT count(*) FROM river_job WHERE args->>'retry' IS NOT NULL").Scan(&queued)
+	if queued != 0 {
+		t.Errorf("%d retry jobs queued by refused retries, want none", queued)
 	}
 }
 

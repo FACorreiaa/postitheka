@@ -37,7 +37,7 @@ SET status = $1,
 FROM posts p
 WHERE t.id = $3 AND p.id = t.post_id AND p.user_id = $4
   AND t.status = 'handing_off'
-RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at
+RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries
 `
 
 type CompleteHandoffParams struct {
@@ -68,6 +68,8 @@ func (q *Queries) CompleteHandoff(ctx context.Context, arg CompleteHandoffParams
 		&i.RemoteUrl,
 		&i.PublishedAt,
 		&i.UpdatedAt,
+		&i.Interrupted,
+		&i.Retries,
 	)
 	return i, err
 }
@@ -132,7 +134,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 
 const createAssistedTarget = `-- name: CreateAssistedTarget :one
 INSERT INTO post_targets (post_id, platform, status) VALUES ($1, $2, 'handing_off')
-RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at
+RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries
 `
 
 type CreateAssistedTargetParams struct {
@@ -154,6 +156,8 @@ func (q *Queries) CreateAssistedTarget(ctx context.Context, arg CreateAssistedTa
 		&i.RemoteUrl,
 		&i.PublishedAt,
 		&i.UpdatedAt,
+		&i.Interrupted,
+		&i.Retries,
 	)
 	return i, err
 }
@@ -243,7 +247,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 
 const createPostTarget = `-- name: CreatePostTarget :one
 INSERT INTO post_targets (post_id, account_id, platform) VALUES ($1, $2, $3)
-RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at
+RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries
 `
 
 type CreatePostTargetParams struct {
@@ -266,6 +270,8 @@ func (q *Queries) CreatePostTarget(ctx context.Context, arg CreatePostTargetPara
 		&i.RemoteUrl,
 		&i.PublishedAt,
 		&i.UpdatedAt,
+		&i.Interrupted,
+		&i.Retries,
 	)
 	return i, err
 }
@@ -569,7 +575,7 @@ func (q *Queries) GetTargetForPublish(ctx context.Context, id uuid.UUID) (GetTar
 }
 
 const getTargetForUser = `-- name: GetTargetForUser :one
-SELECT t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at FROM post_targets t
+SELECT t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries FROM post_targets t
 JOIN posts p ON p.id = t.post_id
 WHERE t.id = $1 AND p.user_id = $2
 `
@@ -593,6 +599,8 @@ func (q *Queries) GetTargetForUser(ctx context.Context, arg GetTargetForUserPara
 		&i.RemoteUrl,
 		&i.PublishedAt,
 		&i.UpdatedAt,
+		&i.Interrupted,
+		&i.Retries,
 	)
 	return i, err
 }
@@ -698,7 +706,7 @@ func (q *Queries) ListPostMedia(ctx context.Context, postIds []uuid.UUID) ([]Lis
 }
 
 const listPostTargets = `-- name: ListPostTargets :many
-SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at FROM post_targets
+SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries FROM post_targets
 WHERE post_id = ANY($1::uuid[])
 ORDER BY post_id, platform, id
 `
@@ -723,6 +731,8 @@ func (q *Queries) ListPostTargets(ctx context.Context, postIds []uuid.UUID) ([]P
 			&i.RemoteUrl,
 			&i.PublishedAt,
 			&i.UpdatedAt,
+			&i.Interrupted,
+			&i.Retries,
 		); err != nil {
 			return nil, err
 		}
@@ -842,17 +852,20 @@ func (q *Queries) MarkMediaVerified(ctx context.Context, arg MarkMediaVerifiedPa
 }
 
 const markTargetFailed = `-- name: MarkTargetFailed :exec
-UPDATE post_targets SET status = 'failed', last_error = $2, updated_at = now()
-WHERE id = $1
+UPDATE post_targets
+SET status = 'failed', last_error = $1, interrupted = $2, updated_at = now()
+WHERE id = $3
 `
 
 type MarkTargetFailedParams struct {
-	ID        uuid.UUID
-	LastError *string
+	LastError   *string
+	Interrupted bool
+	ID          uuid.UUID
 }
 
+// interrupted: the attempt died mid-request, so the post may be live.
 func (q *Queries) MarkTargetFailed(ctx context.Context, arg MarkTargetFailedParams) error {
-	_, err := q.db.Exec(ctx, markTargetFailed, arg.ID, arg.LastError)
+	_, err := q.db.Exec(ctx, markTargetFailed, arg.LastError, arg.Interrupted, arg.ID)
 	return err
 }
 
@@ -939,6 +952,44 @@ func (q *Queries) ReplaceAccountCredentials(ctx context.Context, arg ReplaceAcco
 		&i.Platform,
 		&i.DisplayName,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const retryTarget = `-- name: RetryTarget :one
+UPDATE post_targets t
+SET status = 'pending', last_error = NULL, interrupted = false, retries = t.retries + 1, updated_at = now()
+FROM posts p
+WHERE t.id = $1 AND p.id = t.post_id AND p.user_id = $2
+  AND t.status = 'failed' AND t.account_id IS NOT NULL
+RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries
+`
+
+type RetryTargetParams struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+}
+
+// Conditional on failed and on the account still being there, so a retry can
+// never reach a target that is on its way or already published. retries goes
+// up so the new job's arguments differ from every earlier job's: River keeps
+// one job per set of arguments, completed ones included.
+func (q *Queries) RetryTarget(ctx context.Context, arg RetryTargetParams) (PostTarget, error) {
+	row := q.db.QueryRow(ctx, retryTarget, arg.ID, arg.UserID)
+	var i PostTarget
+	err := row.Scan(
+		&i.ID,
+		&i.PostID,
+		&i.AccountID,
+		&i.Platform,
+		&i.Status,
+		&i.LastError,
+		&i.RemoteID,
+		&i.RemoteUrl,
+		&i.PublishedAt,
+		&i.UpdatedAt,
+		&i.Interrupted,
+		&i.Retries,
 	)
 	return i, err
 }

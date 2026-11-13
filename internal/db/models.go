@@ -76,6 +76,8 @@ type PostTarget struct {
 	RemoteUrl   *string
 	PublishedAt pgtype.Timestamptz
 	UpdatedAt   time.Time
+	Interrupted bool
+	Retries     int32
 }
 
 type User struct {

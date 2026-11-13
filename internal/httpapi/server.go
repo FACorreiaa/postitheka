@@ -250,6 +250,20 @@ func (s *Server) CompleteHandoff(ctx context.Context, req CompleteHandoffRequest
 	return CompleteHandoff200JSONResponse(toPost(view)), nil
 }
 
+func (s *Server) RetryTarget(ctx context.Context, req RetryTargetRequestObject) (RetryTargetResponseObject, error) {
+	view, err := s.svc.RetryTarget(ctx, userID(ctx), req.TargetId)
+	var conflict *service.Conflict
+	switch {
+	case errors.Is(err, service.ErrNotFound):
+		return RetryTarget404JSONResponse{NotFoundJSONResponse{Message: "no such target"}}, nil
+	case errors.As(err, &conflict):
+		return RetryTarget409JSONResponse{Message: conflict.Message}, nil
+	case err != nil:
+		return nil, err
+	}
+	return RetryTarget200JSONResponse(toPost(view)), nil
+}
+
 func (s *Server) GetPost(ctx context.Context, req GetPostRequestObject) (GetPostResponseObject, error) {
 	view, err := s.svc.GetPost(ctx, userID(ctx), req.PostId)
 	if errors.Is(err, service.ErrNotFound) {
@@ -295,6 +309,9 @@ func toTarget(t db.PostTarget) Target {
 		Status:    TargetStatus(t.Status),
 		LastError: t.LastError,
 		RemoteUrl: t.RemoteUrl,
+	}
+	if t.Interrupted {
+		out.Interrupted = &t.Interrupted
 	}
 	if t.AccountID.Valid {
 		out.AccountId = &t.AccountID.UUID
