@@ -1,3 +1,8 @@
 // Empty until the public hostname exists (REL-004). The app then says it has
 // no server rather than guessing one.
 API_BASE_URL =
+
+// The 3D mascot (BRD-001) is a beta experiment: its view, model and motion file are in Debug
+// and Beta builds only. The app target is a synchronized folder, so this setting, not a target
+// membership, is what keeps them out; ios/tools/release-proof.sh checks it worked.
+EXCLUDED_SOURCE_FILE_NAMES = Mascot3DView.swift Mascot.usdz mascot-motion.json

@@ -168,7 +168,7 @@ func serve(cfg config.Config) error {
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
-		Handler:           routes(pool, svc),
+		Handler:           routes(cfg, pool, svc),
 		ReadHeaderTimeout: 10 * time.Second,
 		IdleTimeout:       120 * time.Second,
 	}
@@ -201,7 +201,7 @@ func serve(cfg config.Config) error {
 	return errors.Join(httpErr, riverErr)
 }
 
-func routes(pool *pgxpool.Pool, svc *service.Service) http.Handler {
+func routes(cfg config.Config, pool *pgxpool.Pool, svc *service.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer)
 
@@ -219,6 +219,9 @@ func routes(pool *pgxpool.Pool, svc *service.Service) http.Handler {
 	// Outside the spec too: platforms redirect the browser here with no
 	// bearer token. The state is what identifies the user.
 	r.Get("/oauth/{platform}/callback", httpapi.OAuthCallback(svc, slog.Default()))
+
+	// Outside the spec too: the sign-in page reads it before there is a token.
+	r.Get("/client-config", httpapi.ClientConfig(cfg.Mascot3DModelURL))
 
 	httpapi.Mount(r, svc, slog.Default())
 

@@ -85,6 +85,8 @@ postitheka/
   web/                      # the composer; web/embed.go serves web/dist
   ios/                      # Postitheka app (views) + PostithekaKit (generated client, model, tests)
   brand/                    # logo, icons, mascot; brand/README.md says which file goes where
+  design/mascot-motion.json # the 3D mascot's motion (BRD-001); clients hold byte-identical copies
+  scripts/                  # brand-guard.sh, size-budget.mjs (+ size-budget.json); run by `task check`
   docs/platform-research.md # what each platform allows (dated; re-check before building)
   docs/platform-rollout.md  # the plan for the platform phase: decisions, needs, order of work
   marketing/                # marketing agent instructions; rules/*.md are still empty
@@ -99,10 +101,11 @@ task dev                            # API + workers on :8095, migrates on boot
 task web:dev                        # composer on :5173, proxies /v1 to :8095
 task user:create -- you@example.com # prints an API token (stand-in for sign-in)
 task test                           # Go tests; DB tests skip without DATABASE_URL
-task check                          # the gate: codegen current, gofumpt, vet, typecheck, tests, build
+task check                          # the gate: codegen current, gofumpt, vet, typecheck, web tests, size budget, brand guard, tests, build
 task secrets                        # gitleaks over the history, as CI runs it
 task generate                       # api:gen (Go + TS + Swift) and sqlc
-task ios:check                      # the iOS gate: Swift client current, kit tests, app builds
+task ios:check                      # the iOS gate: Swift client current, kit tests, Debug + Beta build, Release proof
+task ios:release-proof              # Release build holds no 3D mascot model, motion file or view (BRD-001)
 task build                          # web build, then one binary with the web app inside
 ```
 
@@ -189,6 +192,22 @@ vocabulary: "Publish" produces "Published"; "Not sent" means failed.
 - **Transport errors carry the request URL.** `net/http` writes the full URL, query included,
   into a `*url.Error`. Threads takes tokens and the app secret in query strings, so its `call`
   strips the URL; `TestErrorsCarryNoSecrets` guards it. Do the same for any platform like it.
+- **Vite wraps every dynamic `import()` in `__vitePreload`**, about 350 B gzip on the entry,
+  and no setting removes it (`modulePreload: false` only drops the polyfill). Keep page wiring
+  for a lazy feature inside the lazy module; `scripts/size-budget.mjs` holds the entry to its
+  budget.
+- **Gzip sizes differ between machines.** Node's zlib gave the same `web/dist` 0.6% more on CI's
+  Linux runner than on a Mac, so a size budget set locally to the KiB failed CI. `--update` adds
+  1% before rounding; leave that headroom when editing `size-budget.json` by hand.
+- **A missing symbol does not prove a file was left out of a build.** The linker dead-strips
+  unused code, so `release-proof.sh` also checks that no `Mascot3DView.o` was compiled. Run it
+  with `Beta` after changing an exclusion: it must fail there.
+- **The 3D mascot's source has inside-out meshes** (the shell and the eyes: triangles and
+  normals facing in). three drew them because the materials are double-sided; RealityKit
+  ignores `doubleSided` and culled them, so on iOS the eyes vanished and the body went dark.
+  `build_mascot3d.py` flips them (`flip` in `PAINT`); check a new source on iOS, not only
+  the web. RealityKit's virtual camera also has no environment light, so the USD caps
+  metalness at 0.3 and `Mascot3DView` adds a front fill light.
 - **Platform research agents can be wrong.** Limits that came back unconfirmed from research
   (LinkedIn's text length, image size) were checked against the platform's own pages before
   going into `Rules()`.

@@ -67,3 +67,43 @@ rsvg-convert -w 3732 -h 642 tools/wordmark-trace.svg -o /tmp/word.png
 python tools/build_word.py tools/wordmark-trace.svg /tmp/word.png svg
 python tools/build_raster.py source/mascot-cutout-raw.png .
 ```
+
+## 3D mascot (beta only, BRD-001)
+
+An experiment the owner judges on a device before anything reaches production. It is the one
+exception to "the mascot is the postman": the owner supplied a 3D kit of a different robot
+(white and blue, holding a tablet with a P-arrow mark) and decided on 2026-11-13 to try it
+**recoloured to this palette, on beta only**. It is not the approved mascot, and it does not
+replace any file above.
+
+- **Never in production.** The web shows it only when `MASCOT_3D_MODEL_URL` is set, and only a
+  beta or local environment sets it. The iOS app compiles it into Debug and Beta builds only;
+  `Release.xcconfig` excludes the view, the model and the motion file, and
+  `ios/tools/release-proof.sh` fails if a Release build contains any of them.
+- **The tablet is removed.** Its mark is not the stamp, and a recolour cannot change a shape.
+- **Colours are tokens.** The build script paints each material with a token read from
+  `web/src/styles.css`, and the scene's lights are tokens too (gold key light, glow rim). No
+  hex literal in the 3D code; `scripts/brand-guard.sh` checks.
+- **Motion is data:** `design/mascot-motion.json`, applied by one pure driver per client
+  (`web/src/lib/mascot-motion.ts`, `PostithekaKit` `MascotMotion`). It floats on the flat
+  mascot's period, sways slightly, rises in once, and on the web turns a little toward the
+  pointer. No eyes move: the model has no rig.
+- **The flat mascot is the first paint and the fallback.** It stays under reduced motion,
+  Save-Data, Low Power Mode, without WebGL, or when the model does not load.
+
+Rebuild, from the repo root, after any change to the paint or the source:
+
+```sh
+python3 -I brand/tools/build_mascot3d.py \
+    --src ~/Work/production/apps/postitheka-3d-src/Postitheka_Mascot_Web_NoTablet.glb \
+    --out out/mascot3d --ios ios/Postitheka/Mascot3D
+```
+
+Locally, set `MASCOT_3D_MODEL_URL=/mascot3d/mascot.glb` in `.env` and run `task dev` with
+`task web:dev`; Vite serves `out/mascot3d/`. A Debug or Beta iOS build picks up the copied
+`Mascot.usdz`.
+
+The source kit stays outside the repo and is treated as untrusted: only its
+`Postitheka_Mascot_Web_NoTablet.glb` is copied, into an empty directory of its own, and none of
+its scripts or its USDZ are used. The build output (`out/mascot3d/`, and the copy in
+`ios/Postitheka/Mascot3D/`) is git-ignored.

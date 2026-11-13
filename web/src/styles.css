@@ -266,6 +266,30 @@ label {
   animation: hover 5s ease-in-out infinite;
 }
 
+/* The 3D mascot (BRD-001, beta only) draws over the flat one in the same box, so the swap does
+   not move the layout; the flat one fades once a frame is on the canvas. */
+.mascot3d {
+  position: relative;
+  width: 100%;
+}
+
+.mascot3d canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Each fades out while the other fades in. */
+.mascot3d > * {
+  transition: opacity 0.4s;
+}
+
+.mascot3d.live img,
+.mascot3d:not(.live) canvas {
+  opacity: 0;
+}
+
 /* The ring it hovers over on the key art's floor. */
 .hero::after {
   content: "";

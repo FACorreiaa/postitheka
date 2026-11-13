@@ -80,3 +80,13 @@ export function putFile(
     xhr.send(file);
   });
 }
+
+/** The 3D mascot's model URL from `GET /client-config` (BRD-001), or null: unset, or the
+ * server did not answer. Outside the spec, since every spec route needs a token; nothing in
+ * it is secret, and nothing in it is worth delaying sign-in for. */
+export function fetchMascot3dModelUrl(): Promise<string | null> {
+  return fetch("/client-config")
+    .then((response) => response.json())
+    .then((body: { mascot3dModelUrl?: string | null }) => body.mascot3dModelUrl || null)
+    .catch(() => null);
+}

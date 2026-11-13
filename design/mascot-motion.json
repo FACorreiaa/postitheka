@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "about": "How the 3D mascot moves (BRD-001). The whole model moves as one: it has no rig. Every value is an offset from rest. The model is one unit tall and stands on the origin, so translateY is in mascot heights; rotations are degrees; scale is a multiplier where 1 is rest. Copied to web/src/lib/mascot3d/ and ios/Postitheka/Mascot3D/; scripts/brand-guard.sh fails when a copy differs.",
+  "rest": { "rotateYDegrees": -12 },
+  "idle": [
+    {
+      "property": "translateY",
+      "periodSeconds": 5,
+      "easing": "sine",
+      "keyframes": [
+        { "t": 0, "v": 0 },
+        { "t": 0.5, "v": 0.03 },
+        { "t": 1, "v": 0 }
+      ]
+    },
+    {
+      "property": "rotateYDegrees",
+      "periodSeconds": 12,
+      "easing": "sine",
+      "keyframes": [
+        { "t": 0, "v": -3 },
+        { "t": 0.5, "v": 3 },
+        { "t": 1, "v": -3 }
+      ]
+    }
+  ],
+  "entrance": { "durationSeconds": 0.6, "translateY": -0.05, "scale": 0.96 },
+  "pointer": { "yawDegrees": 12, "pitchDegrees": 6, "timeConstantSeconds": 0.4 }
+}

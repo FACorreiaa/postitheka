@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Accounts, type ConnectOutcome } from "./Accounts";
 import { type Account, api, messageOf, type PlatformInfo, type Post, readToken, setUnauthorizedHandler, writeToken } from "./api";
 import lockup from "./assets/lockup-horizontal-on-dark.svg";
-import mascot from "./assets/mascot.webp";
+import { Mascot3D } from "./components/Mascot3D";
 import { Composer } from "./Composer";
 import { DISCORD_URL } from "./links";
 import { platformNames } from "./rules";
@@ -83,7 +83,7 @@ function SignIn({ onSignIn }: { onSignIn: (token: string) => void }) {
         </form>
       </div>
       <figure className="hero">
-        <img src={mascot} alt="" width={718} height={646} />
+        <Mascot3D />
       </figure>
     </main>
   );

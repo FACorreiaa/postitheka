@@ -65,6 +65,11 @@ type Config struct {
 	PostHogAPIKey string
 	PostHogHost   string
 
+	// Mascot3DModelURL is where the web app's sign-in page loads the 3D mascot from
+	// (BRD-001). A beta experiment: only a beta or local environment sets it, and empty
+	// means the flat mascot. Not a secret; the page reads it from GET /client-config.
+	Mascot3DModelURL string
+
 	LogLevel  string
 	LogFormat string
 
@@ -95,6 +100,7 @@ func Load() (Config, error) {
 		ThreadsAppSecret:     env("THREADS_APP_SECRET", ""),
 		PostHogAPIKey:        env("POSTHOG_API_KEY", ""),
 		PostHogHost:          strings.TrimSuffix(env("POSTHOG_HOST", "https://eu.i.posthog.com"), "/"),
+		Mascot3DModelURL:     env("MASCOT_3D_MODEL_URL", ""),
 		LogLevel:             env("LOG_LEVEL", "info"),
 		LogFormat:            env("LOG_FORMAT", ""),
 		ShutdownTimeout:      30 * time.Second,

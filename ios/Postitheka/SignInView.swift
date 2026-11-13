@@ -75,9 +75,7 @@ private struct BrandHero: View {
         VStack(spacing: 16) {
             if showsMascot {
                 VStack(spacing: 8) {
-                    Image("Mascot")
-                        .resizable()
-                        .scaledToFit()
+                    mascot
                         .frame(height: 176)
                         .accessibilityHidden(true)
                     FloorRing()
@@ -94,6 +92,16 @@ private struct BrandHero: View {
                 .font(.subheadline)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// The 3D mascot on Debug and Beta builds (BRD-001), the flat one on the App Store's, where
+    /// `Mascot3DView` is not compiled at all.
+    @ViewBuilder private var mascot: some View {
+        #if DEBUG || BETA
+            Mascot3DView()
+        #else
+            Image("Mascot").resizable().scaledToFit()
+        #endif
     }
 }
 

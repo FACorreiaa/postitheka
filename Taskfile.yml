@@ -141,7 +141,7 @@ tasks:
       - go test ./... -count=1
 
   check:
-    desc: The gate — generated code is current, formatting, vet, tests, build
+    desc: The gate — generated code is current, formatting, vet, web tests and size budget, brand guard, tests, build
     vars:
       GENERATED: internal/httpapi/api.gen.go internal/db/*.go web/src/schema.d.ts ios/PostithekaKit/Sources/PostithekaAPI/Generated/*.swift
       # Hashed before the generators run, and compared after: if generating
@@ -156,6 +156,11 @@ tasks:
       - 'test -z "$(go tool gofumpt -l .)" || (go tool gofumpt -l . && echo "run: task fmt" >&2 && exit 1)'
       - task: vet
       - cd web && npm run typecheck
+      - cd web && npm test
+      # Built here so the size budget measures what ships; the binary embeds this dist.
+      - cd web && npm run build
+      - node scripts/size-budget.mjs
+      - sh scripts/brand-guard.sh
       - go test ./... -count=1
       - go build ./...
 
@@ -182,6 +187,19 @@ tasks:
         xcodebuild build -project ios/Postitheka.xcodeproj -scheme Postitheka
         -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet
 
+  ios:build:beta:
+    desc: Build the Beta configuration (TestFlight; holds the BRD-001 3D mascot) for the simulator, unsigned
+    cmds:
+      - >-
+        xcodebuild build -project ios/Postitheka.xcodeproj -scheme Postitheka -configuration Beta
+        -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet
+
+  ios:release-proof:
+    desc: Build Release and fail if the 3D mascot's model, motion file or view got into it (BRD-001)
+    platforms: [darwin]
+    cmds:
+      - sh ios/tools/release-proof.sh
+
   ios:check:
     desc: The iOS gate — Swift client current, kit tests, app builds (macOS)
     vars:
@@ -192,6 +210,8 @@ tasks:
       - 'test "$(shasum ios/PostithekaKit/Sources/PostithekaAPI/Generated/*.swift)" = "{{.BEFORE}}" || (echo "the Swift client was stale; commit the regenerated files" >&2 && exit 1)'
       - task: ios:test
       - task: ios:build
+      - task: ios:build:beta
+      - task: ios:release-proof
 
   ios:uitest:
     desc: "Drive the app against a running local server (needs TOKEN=pk_... and an account)"
