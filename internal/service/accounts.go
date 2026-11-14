@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -94,6 +95,32 @@ func (s *Service) ListAccounts(ctx context.Context, userID uuid.UUID) ([]Account
 		out[i] = Account(r)
 	}
 	return out, nil
+}
+
+// MaxBrandLength is counted in characters, not bytes: a brand is a name a
+// person typed, and it has to fit on a chip in the composer.
+const MaxBrandLength = 40
+
+// SetAccountBrand labels an account with the product it posts for. An empty
+// brand clears the label. The label groups accounts in a client and nothing
+// else: it is not a tenant, and no query is scoped by it.
+func (s *Service) SetAccountBrand(ctx context.Context, userID, accountID uuid.UUID, brand string) (Account, error) {
+	brand = strings.TrimSpace(brand)
+	if utf8.RuneCountInString(brand) > MaxBrandLength {
+		return Account{}, &BadRequest{Message: fmt.Sprintf("a brand is at most %d characters", MaxBrandLength)}
+	}
+	var stored *string
+	if brand != "" {
+		stored = &brand
+	}
+	acct, err := s.q.SetAccountBrand(ctx, db.SetAccountBrandParams{ID: accountID, UserID: userID, Brand: stored})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Account{}, ErrNotFound
+	}
+	if err != nil {
+		return Account{}, err
+	}
+	return Account(acct), nil
 }
 
 // DeleteAccount disconnects an account. Its post targets keep their history

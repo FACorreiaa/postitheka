@@ -153,6 +153,20 @@ func (s *Server) StartConnect(ctx context.Context, req StartConnectRequestObject
 	return StartConnect200JSONResponse{AuthorizeUrl: url}, nil
 }
 
+func (s *Server) UpdateAccount(ctx context.Context, req UpdateAccountRequestObject) (UpdateAccountResponseObject, error) {
+	acct, err := s.svc.SetAccountBrand(ctx, userID(ctx), req.AccountId, req.Body.Brand)
+	if msg, ok := badRequest(err); ok {
+		return UpdateAccount400JSONResponse{BadRequestJSONResponse{Message: msg}}, nil
+	}
+	if errors.Is(err, service.ErrNotFound) {
+		return UpdateAccount404JSONResponse{NotFoundJSONResponse{Message: "no such account"}}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return UpdateAccount200JSONResponse(toAccount(acct)), nil
+}
+
 func (s *Server) DeleteAccount(ctx context.Context, req DeleteAccountRequestObject) (DeleteAccountResponseObject, error) {
 	err := s.svc.DeleteAccount(ctx, userID(ctx), req.AccountId)
 	if errors.Is(err, service.ErrNotFound) {
@@ -284,7 +298,7 @@ func badRequest(err error) (string, bool) {
 }
 
 func toAccount(a service.Account) Account {
-	return Account{Id: a.ID, Platform: Platform(a.Platform), DisplayName: a.DisplayName, CreatedAt: a.CreatedAt}
+	return Account{Id: a.ID, Platform: Platform(a.Platform), DisplayName: a.DisplayName, Brand: a.Brand, CreatedAt: a.CreatedAt}
 }
 
 func toPost(v service.PostView) Post {

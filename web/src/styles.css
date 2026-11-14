@@ -512,6 +512,32 @@ label {
   padding: 0;
 }
 
+/* Brand filter: which product's stamps are on the table. Quiet until pressed,
+   so it reads as a filter and not as another row of destinations. */
+.brands {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 1rem;
+}
+
+.brands button {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: var(--s-1);
+}
+
+.brands button:hover {
+  color: var(--gold-bright);
+}
+
+.brands button[aria-pressed="true"] {
+  border-color: var(--gold);
+  color: var(--gold-bright);
+}
+
 .stamp-wrap {
   display: grid;
   gap: 0.35rem;
@@ -828,8 +854,44 @@ label {
   border-top: 1px solid var(--rule);
 }
 
-.account-list li > span {
+.account-list li > span:first-child {
   display: grid;
+}
+
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* The line under the list explaining what a brand is. */
+.account-list + datalist + .help {
+  margin: -0.75rem 0 1.5rem;
+}
+
+.brand-input {
+  width: 8.5rem;
+  padding: 0.3rem 0.5rem;
+  font-size: var(--s-1);
+}
+
+/* On a phone the name, the brand and Disconnect do not fit one line: the
+   brand field was squeezed until it cut its own text. The actions drop to
+   their own row and the field takes what is left of it. */
+@media (max-width: 30rem) {
+  .account-list li {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .account-actions {
+    width: 100%;
+  }
+
+  .brand-input {
+    flex: 1;
+    width: auto;
+  }
 }
 
 .account-list .help {

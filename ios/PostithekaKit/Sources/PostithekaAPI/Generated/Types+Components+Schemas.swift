@@ -172,6 +172,11 @@ extension Components {
             public var platform: Components.Schemas.Platform
             /// - Remark: Generated from `#/components/schemas/Account/display_name`.
             public var display_name: Swift.String
+            /// The product this account posts for, as the user named it. Absent when the account has no brand.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Account/brand`.
+            public var brand: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Account/created_at`.
             public var created_at: Foundation.Date
             /// Creates a new `Account`.
@@ -180,23 +185,45 @@ extension Components {
             ///   - id:
             ///   - platform:
             ///   - display_name:
+            ///   - brand: The product this account posts for, as the user named it. Absent when the account has no brand.
             ///   - created_at:
             public init(
                 id: Swift.String,
                 platform: Components.Schemas.Platform,
                 display_name: Swift.String,
+                brand: Swift.String? = nil,
                 created_at: Foundation.Date
             ) {
                 self.id = id
                 self.platform = platform
                 self.display_name = display_name
+                self.brand = brand
                 self.created_at = created_at
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case platform
                 case display_name
+                case brand
                 case created_at
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/UpdateAccountRequest`.
+        public struct UpdateAccountRequest: Codable, Hashable, Sendable {
+            /// Surrounding space is trimmed. An empty string clears the brand.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/UpdateAccountRequest/brand`.
+            public var brand: Swift.String
+            /// Creates a new `UpdateAccountRequest`.
+            ///
+            /// - Parameters:
+            ///   - brand: Surrounding space is trimmed. An empty string clears the brand.
+            public init(brand: Swift.String) {
+                self.brand = brand
+            }
+            public enum CodingKeys: String, CodingKey {
+                case brand
             }
         }
         /// - Remark: Generated from `#/components/schemas/ConnectDiscordRequest`.

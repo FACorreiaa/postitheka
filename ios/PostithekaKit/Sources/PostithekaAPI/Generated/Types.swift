@@ -32,6 +32,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/accounts/{platform}/connect`.
     /// - Remark: Generated from `#/paths//v1/accounts/{platform}/connect/post(startConnect)`.
     func startConnect(_ input: Operations.startConnect.Input) async throws -> Operations.startConnect.Output
+    /// Sets or clears the account's brand: a label for the product this account posts for, so a client can show one product's accounts at a time. It groups accounts and nothing else; posting is unaffected.
+    ///
+    ///
+    /// - Remark: HTTP `PATCH /v1/accounts/{accountId}`.
+    /// - Remark: Generated from `#/paths//v1/accounts/{accountId}/patch(updateAccount)`.
+    func updateAccount(_ input: Operations.updateAccount.Input) async throws -> Operations.updateAccount.Output
     /// - Remark: HTTP `DELETE /v1/accounts/{accountId}`.
     /// - Remark: Generated from `#/paths//v1/accounts/{accountId}/delete(deleteAccount)`.
     func deleteAccount(_ input: Operations.deleteAccount.Input) async throws -> Operations.deleteAccount.Output
@@ -108,6 +114,22 @@ extension APIProtocol {
         body: Operations.startConnect.Input.Body
     ) async throws -> Operations.startConnect.Output {
         try await startConnect(Operations.startConnect.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Sets or clears the account's brand: a label for the product this account posts for, so a client can show one product's accounts at a time. It groups accounts and nothing else; posting is unaffected.
+    ///
+    ///
+    /// - Remark: HTTP `PATCH /v1/accounts/{accountId}`.
+    /// - Remark: Generated from `#/paths//v1/accounts/{accountId}/patch(updateAccount)`.
+    public func updateAccount(
+        path: Operations.updateAccount.Input.Path,
+        headers: Operations.updateAccount.Input.Headers = .init(),
+        body: Operations.updateAccount.Input.Body
+    ) async throws -> Operations.updateAccount.Output {
+        try await updateAccount(Operations.updateAccount.Input(
             path: path,
             headers: headers,
             body: body

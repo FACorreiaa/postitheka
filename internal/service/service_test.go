@@ -1029,3 +1029,53 @@ func deref(s *string) string {
 	}
 	return *s
 }
+
+// BRAND-001. The brand is a label, not a tenant: it is set and cleared on an
+// account the user owns, and another user's account answers "not found", the
+// same as an account that does not exist.
+func TestAccountBrand(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	bob := e.user(t, "bob@example.com")
+	acctID := e.account(t, alice)
+
+	accounts, err := e.svc.ListAccounts(ctx, alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(accounts) != 1 || accounts[0].Brand != nil {
+		t.Fatalf("a new account has a brand: %+v", accounts)
+	}
+
+	got, err := e.svc.SetAccountBrand(ctx, alice, acctID, "  Aaru  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Brand == nil || *got.Brand != "Aaru" {
+		t.Fatalf("brand = %v, want Aaru with the space trimmed", got.Brand)
+	}
+	if accounts, err = e.svc.ListAccounts(ctx, alice); err != nil || accounts[0].Brand == nil || *accounts[0].Brand != "Aaru" {
+		t.Fatalf("the list does not carry the brand: %+v, %v", accounts, err)
+	}
+
+	// Exactly at the limit, in characters: 40 two-byte letters are 80 bytes.
+	if _, err := e.svc.SetAccountBrand(ctx, alice, acctID, strings.Repeat("é", service.MaxBrandLength)); err != nil {
+		t.Fatalf("a brand of exactly %d characters was refused: %v", service.MaxBrandLength, err)
+	}
+	var bad *service.BadRequest
+	if _, err := e.svc.SetAccountBrand(ctx, alice, acctID, strings.Repeat("é", service.MaxBrandLength+1)); !errors.As(err, &bad) {
+		t.Fatalf("a brand one character too long: got %v, want a BadRequest", err)
+	}
+
+	if _, err := e.svc.SetAccountBrand(ctx, bob, acctID, "Mine now"); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("bob labelled alice's account: got %v, want ErrNotFound", err)
+	}
+	if _, err := e.svc.SetAccountBrand(ctx, alice, uuid.New(), "Aaru"); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("an account that does not exist: got %v, want ErrNotFound", err)
+	}
+
+	if got, err = e.svc.SetAccountBrand(ctx, alice, acctID, "   "); err != nil || got.Brand != nil {
+		t.Fatalf("a blank brand did not clear it: %v, %v", got.Brand, err)
+	}
+}

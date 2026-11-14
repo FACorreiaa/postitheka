@@ -84,7 +84,8 @@ export interface paths {
         delete: operations["deleteAccount"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** @description Sets or clears the account's brand: a label for the product this account posts for, so a client can show one product's accounts at a time. It groups accounts and nothing else; posting is unaffected. */
+        patch: operations["updateAccount"];
         trace?: never;
     };
     "/v1/media": {
@@ -229,8 +230,14 @@ export interface components {
             id: string;
             platform: components["schemas"]["Platform"];
             display_name: string;
+            /** @description The product this account posts for, as the user named it. Absent when the account has no brand. */
+            brand?: string;
             /** Format: date-time */
             created_at: string;
+        };
+        UpdateAccountRequest: {
+            /** @description Surrounding space is trimmed. An empty string clears the brand. */
+            brand: string;
         };
         ConnectDiscordRequest: {
             /** @example https://discord.com/api/webhooks/123/abc */
@@ -487,6 +494,35 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: components["parameters"]["AccountId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };

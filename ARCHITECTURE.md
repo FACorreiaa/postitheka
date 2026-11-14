@@ -71,7 +71,7 @@ a job cut off mid-request leaves its target `publishing`, and the next attempt f
 
 ```text
 users ─┬─< api_tokens       token_hash (sha256), last_used_at
-       ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id
+       ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id, brand
        ├─< oauth_states     state_hash (sha256), platform, verifier (sealed, AAD = hash), client
        ├─< media            object_key, content_type, size_bytes, verified_at
        └─< posts            text, scheduled_at, idempotency_key + request_hash
@@ -86,6 +86,9 @@ users ─┬─< api_tokens       token_hash (sha256), last_used_at
 - Disconnecting an account sets `post_targets.account_id` to NULL and keeps the history;
   `platform` is copied onto the target for the same reason. An assisted target (WhatsApp) has
   no account from the start: there is nothing to connect.
+- `accounts.brand` is a label for the product an account posts for (BRAND-001). Clients filter
+  the composer by it. It is not a tenant: every query is still scoped by `user_id` alone, and
+  reconnecting an account keeps its brand.
 - `accounts.remote_id` is the platform's id for what was connected (a LinkedIn member), unique
   per user and platform. Connecting it again replaces the credentials of the same row, so its
   post history stays attached; that is how an expired OAuth token is renewed. NULL for Discord.
@@ -296,6 +299,7 @@ spec because auth wraps every spec route, and it holds nothing secret.
 | `GET /v1/accounts` | Connected accounts (never credentials) |
 | `POST /v1/accounts/discord` | Connect a webhook; 400 if Discord does not recognise it |
 | `POST /v1/accounts/{platform}/connect` | Start an OAuth connect: `{client}` → `{authorize_url}`; 404 if the platform does not connect by OAuth here |
+| `PATCH /v1/accounts/{id}` | Set or clear the account's brand: `{brand}`, trimmed, at most 40 characters, empty clears it |
 | `DELETE /v1/accounts/{id}` | Disconnect; queued targets for it fail as "disconnected" |
 | `POST /v1/media` | Reserve an upload, get a presigned PUT |
 | `GET /v1/posts?limit=` | Newest first, with targets and media ids |

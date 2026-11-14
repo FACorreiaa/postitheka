@@ -115,6 +115,20 @@ final class AppModel {
         return outcome
     }
 
+    /// Sets or clears an account's brand. Returns what to tell the user when
+    /// the server refuses it.
+    func setBrand(_ account: Account, to brand: String) async -> String? {
+        do {
+            let updated = try await api.setBrand(accountID: account.id, brand: brand)
+            if let i = accounts.firstIndex(where: { $0.id == updated.id }) { accounts[i] = updated }
+            composer.accounts = accounts
+            return nil
+        } catch {
+            if error == .unauthorized { signOut() }
+            return error.localizedDescription
+        }
+    }
+
     func disconnect(_ account: Account) async {
         await run {
             try await api.disconnect(accountID: account.id)

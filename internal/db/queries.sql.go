@@ -92,7 +92,7 @@ func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) 
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO accounts (id, user_id, platform, display_name, credentials, remote_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, platform, display_name, created_at
+RETURNING id, user_id, platform, display_name, created_at, brand
 `
 
 type CreateAccountParams struct {
@@ -110,6 +110,7 @@ type CreateAccountRow struct {
 	Platform    string
 	DisplayName string
 	CreatedAt   time.Time
+	Brand       *string
 }
 
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error) {
@@ -128,6 +129,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 		&i.Platform,
 		&i.DisplayName,
 		&i.CreatedAt,
+		&i.Brand,
 	)
 	return i, err
 }
@@ -371,7 +373,7 @@ func (q *Queries) ExpireHandoffs(ctx context.Context, arg ExpireHandoffsParams) 
 }
 
 const getAccountByRemoteID = `-- name: GetAccountByRemoteID :one
-SELECT id, user_id, platform, display_name, created_at
+SELECT id, user_id, platform, display_name, created_at, brand
 FROM accounts
 WHERE user_id = $1 AND platform = $2 AND remote_id = $3
 `
@@ -388,6 +390,7 @@ type GetAccountByRemoteIDRow struct {
 	Platform    string
 	DisplayName string
 	CreatedAt   time.Time
+	Brand       *string
 }
 
 func (q *Queries) GetAccountByRemoteID(ctx context.Context, arg GetAccountByRemoteIDParams) (GetAccountByRemoteIDRow, error) {
@@ -399,12 +402,13 @@ func (q *Queries) GetAccountByRemoteID(ctx context.Context, arg GetAccountByRemo
 		&i.Platform,
 		&i.DisplayName,
 		&i.CreatedAt,
+		&i.Brand,
 	)
 	return i, err
 }
 
 const getAccountsByIDs = `-- name: GetAccountsByIDs :many
-SELECT id, user_id, platform, display_name, created_at
+SELECT id, user_id, platform, display_name, created_at, brand
 FROM accounts
 WHERE user_id = $1 AND id = ANY($2::uuid[])
 `
@@ -420,6 +424,7 @@ type GetAccountsByIDsRow struct {
 	Platform    string
 	DisplayName string
 	CreatedAt   time.Time
+	Brand       *string
 }
 
 func (q *Queries) GetAccountsByIDs(ctx context.Context, arg GetAccountsByIDsParams) ([]GetAccountsByIDsRow, error) {
@@ -437,6 +442,7 @@ func (q *Queries) GetAccountsByIDs(ctx context.Context, arg GetAccountsByIDsPara
 			&i.Platform,
 			&i.DisplayName,
 			&i.CreatedAt,
+			&i.Brand,
 		); err != nil {
 			return nil, err
 		}
@@ -617,7 +623,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, user_id, platform, display_name, created_at
+SELECT id, user_id, platform, display_name, created_at, brand
 FROM accounts
 WHERE user_id = $1
 ORDER BY created_at
@@ -629,6 +635,7 @@ type ListAccountsRow struct {
 	Platform    string
 	DisplayName string
 	CreatedAt   time.Time
+	Brand       *string
 }
 
 func (q *Queries) ListAccounts(ctx context.Context, userID uuid.UUID) ([]ListAccountsRow, error) {
@@ -646,6 +653,7 @@ func (q *Queries) ListAccounts(ctx context.Context, userID uuid.UUID) ([]ListAcc
 			&i.Platform,
 			&i.DisplayName,
 			&i.CreatedAt,
+			&i.Brand,
 		); err != nil {
 			return nil, err
 		}
@@ -920,7 +928,7 @@ func (q *Queries) MarkTargetPublishing(ctx context.Context, id uuid.UUID) (int64
 const replaceAccountCredentials = `-- name: ReplaceAccountCredentials :one
 UPDATE accounts SET credentials = $3, display_name = $4
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, platform, display_name, created_at
+RETURNING id, user_id, platform, display_name, created_at, brand
 `
 
 type ReplaceAccountCredentialsParams struct {
@@ -936,6 +944,7 @@ type ReplaceAccountCredentialsRow struct {
 	Platform    string
 	DisplayName string
 	CreatedAt   time.Time
+	Brand       *string
 }
 
 func (q *Queries) ReplaceAccountCredentials(ctx context.Context, arg ReplaceAccountCredentialsParams) (ReplaceAccountCredentialsRow, error) {
@@ -952,6 +961,7 @@ func (q *Queries) ReplaceAccountCredentials(ctx context.Context, arg ReplaceAcco
 		&i.Platform,
 		&i.DisplayName,
 		&i.CreatedAt,
+		&i.Brand,
 	)
 	return i, err
 }
@@ -990,6 +1000,41 @@ func (q *Queries) RetryTarget(ctx context.Context, arg RetryTargetParams) (PostT
 		&i.UpdatedAt,
 		&i.Interrupted,
 		&i.Retries,
+	)
+	return i, err
+}
+
+const setAccountBrand = `-- name: SetAccountBrand :one
+UPDATE accounts SET brand = $3
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, platform, display_name, created_at, brand
+`
+
+type SetAccountBrandParams struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+	Brand  *string
+}
+
+type SetAccountBrandRow struct {
+	ID          uuid.UUID
+	UserID      uuid.UUID
+	Platform    string
+	DisplayName string
+	CreatedAt   time.Time
+	Brand       *string
+}
+
+func (q *Queries) SetAccountBrand(ctx context.Context, arg SetAccountBrandParams) (SetAccountBrandRow, error) {
+	row := q.db.QueryRow(ctx, setAccountBrand, arg.ID, arg.UserID, arg.Brand)
+	var i SetAccountBrandRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Platform,
+		&i.DisplayName,
+		&i.CreatedAt,
+		&i.Brand,
 	)
 	return i, err
 }
