@@ -168,10 +168,12 @@ export interface paths {
         get: operations["getPost"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** @description Cancels a post that has not started sending, and removes it. Every target must still be pending; otherwise the answer is 409 and nothing changes. This does not delete anything from a platform. */
+        delete: operations["cancelPost"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** @description Moves a post that has not started sending to another time. A time that has passed means now. Every target must still be pending: once any has been sent, is being sent, or has failed, the answer is 409. The post's targets are replaced, so their ids change. */
+        patch: operations["reschedulePost"];
         trace?: never;
     };
 }
@@ -231,6 +233,10 @@ export interface components {
             display_name: string;
             /** Format: date-time */
             created_at: string;
+        };
+        ReschedulePostRequest: {
+            /** Format: date-time */
+            scheduled_at: string;
         };
         ConnectDiscordRequest: {
             /** @example https://discord.com/api/webhooks/123/abc */
@@ -670,6 +676,75 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    cancelPost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The post has started sending, so it can no longer be cancelled. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    reschedulePost: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                postId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReschedulePostRequest"];
+            };
+        };
+        responses: {
+            /** @description Rescheduled */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Post"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            /** @description The post has started sending, so it can no longer be moved. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
         };
     };
 }

@@ -301,6 +301,8 @@ spec because auth wraps every spec route, and it holds nothing secret.
 | `GET /v1/posts?limit=` | Newest first, with targets and media ids |
 | `POST /v1/posts` | Validate, store and queue; 422 with every issue. `Idempotency-Key` makes retries safe. `assisted: ["whatsapp"]` adds handoff targets |
 | `GET /v1/posts/{id}` | One post with per-target status |
+| `PATCH /v1/posts/{id}` | Moves an unsent post: `{scheduled_at}`, a past time meaning now. 409 unless every target is still `pending`. The targets are replaced (new ids) and queued for the new time; the jobs for the old ones find nothing to send and stop |
+| `DELETE /v1/posts/{id}` | Cancels an unsent post and removes it; 409 unless every target is still `pending`. Its queued jobs stop when they find no target, and the sweep removes its uploads. Nothing is deleted from a platform |
 | `POST /v1/targets/{id}/handoff` | The phone reports an assisted target: `{sent}`; 409 unless it is still `handing_off` |
 | `POST /v1/targets/{id}/retry` | Sends a failed target again: back to `pending` and a new job in one transaction. 409 unless it is `failed` with its account still connected (an assisted target is sent again from the phone). The client warns first when `interrupted` says the post may be live |
 

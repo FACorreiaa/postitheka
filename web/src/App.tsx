@@ -169,6 +169,7 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
           posts={posts}
           accounts={accounts ?? []}
           onChanged={(post) => setPosts((prev) => prev?.map((p) => (p.id === post.id ? post : p)) ?? prev)}
+          onRemoved={(id) => setPosts((prev) => prev?.filter((p) => p.id !== id) ?? prev)}
         />
       </main>
 

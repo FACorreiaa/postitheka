@@ -405,6 +405,102 @@ func (s *Service) CompleteHandoff(ctx context.Context, userID, targetID uuid.UUI
 	return s.GetPost(ctx, userID, row.PostID)
 }
 
+// lockUnsent takes the post and its targets for a change that is only safe
+// while nothing has been sent: every target must still be pending. The locks
+// are what make that check hold. A publish job claims its target with an
+// UPDATE, which waits for this transaction; by the time it runs, the target
+// is gone and the job stops without posting.
+//
+// A target between two attempts is pending as well (the platform was down,
+// say). Nothing reached the platform, so it qualifies.
+func (s *Service) lockUnsent(ctx context.Context, q *db.Queries, userID, postID uuid.UUID, verb string) (db.Post, []db.PostTarget, error) {
+	post, err := q.LockPost(ctx, db.LockPostParams{ID: postID, UserID: userID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return db.Post{}, nil, ErrNotFound
+	}
+	if err != nil {
+		return db.Post{}, nil, err
+	}
+	targets, err := q.LockPostTargets(ctx, postID)
+	if err != nil {
+		return db.Post{}, nil, err
+	}
+	for _, t := range targets {
+		if t.Status != "pending" {
+			return db.Post{}, nil, &Conflict{Message: "this post has started sending, so it can no longer be " + verb}
+		}
+	}
+	return post, targets, nil
+}
+
+// CancelPost removes a post that has not started sending. Its publish jobs
+// are left in the queue: each finds its target gone when its time comes and
+// cancels itself. Its uploads become unattached, and the sweep removes them.
+func (s *Service) CancelPost(ctx context.Context, userID, postID uuid.UUID) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	qtx := s.q.WithTx(tx)
+
+	if _, _, err := s.lockUnsent(ctx, qtx, userID, postID, "cancelled"); err != nil {
+		return err
+	}
+	if err := qtx.DeletePost(ctx, postID); err != nil {
+		return fmt.Errorf("cancel post: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit cancel: %w", err)
+	}
+	return nil
+}
+
+// ReschedulePost moves a post that has not started sending to another time; a
+// time already past means now.
+//
+// The targets are replaced rather than updated. A publish job is unique by
+// its target, and the job already queued would fire at the old time; a new
+// target gives the new job its own arguments and leaves the old job with
+// nothing to publish. That keeps "never post twice" without reaching into
+// River's tables to move a job.
+func (s *Service) ReschedulePost(ctx context.Context, userID, postID uuid.UUID, at time.Time) (PostView, error) {
+	if now := s.now(); at.Before(now) {
+		at = now
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return PostView{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	qtx := s.q.WithTx(tx)
+
+	_, targets, err := s.lockUnsent(ctx, qtx, userID, postID, "rescheduled")
+	if err != nil {
+		return PostView{}, err
+	}
+	if err := qtx.DeletePostTargets(ctx, postID); err != nil {
+		return PostView{}, fmt.Errorf("reschedule: drop targets: %w", err)
+	}
+	if err := qtx.SetPostScheduledAt(ctx, db.SetPostScheduledAtParams{ID: postID, ScheduledAt: at}); err != nil {
+		return PostView{}, fmt.Errorf("reschedule: %w", err)
+	}
+	for _, old := range targets {
+		target, err := qtx.CreatePostTarget(ctx, db.CreatePostTargetParams{PostID: postID, AccountID: old.AccountID, Platform: old.Platform})
+		if err != nil {
+			return PostView{}, fmt.Errorf("reschedule: create target: %w", err)
+		}
+		if _, err := s.river.InsertTx(ctx, tx, jobs.PublishArgs{TargetID: target.ID}, &river.InsertOpts{ScheduledAt: at}); err != nil {
+			return PostView{}, fmt.Errorf("reschedule: queue target: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return PostView{}, fmt.Errorf("commit reschedule: %w", err)
+	}
+	return s.GetPost(ctx, userID, postID)
+}
+
 // RetryTarget sends a failed target again: back to pending, and a new publish
 // job in the same transaction. Only a failed target whose account is still
 // connected qualifies; anything else is a Conflict saying why. Whether an

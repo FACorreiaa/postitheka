@@ -314,6 +314,71 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: reschedulePost
+      description: >
+        Moves a post that has not started sending to another time. A time that
+        has passed means now. Every target must still be pending: once any has
+        been sent, is being sent, or has failed, the answer is 409. The post's
+        targets are replaced, so their ids change.
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReschedulePostRequest"
+      responses:
+        "200":
+          description: Rescheduled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Post"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The post has started sending, so it can no longer be moved.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    delete:
+      operationId: cancelPost
+      description: >
+        Cancels a post that has not started sending, and removes it. Every
+        target must still be pending; otherwise the answer is 409 and nothing
+        changes. This does not delete anything from a platform.
+      parameters:
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Cancelled
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The post has started sending, so it can no longer be cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
 components:
   securitySchemes:
@@ -444,6 +509,14 @@ components:
         display_name:
           type: string
         created_at:
+          type: string
+          format: date-time
+
+    ReschedulePostRequest:
+      type: object
+      required: [scheduled_at]
+      properties:
+        scheduled_at:
           type: string
           format: date-time
 

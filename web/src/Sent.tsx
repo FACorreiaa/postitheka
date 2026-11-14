@@ -11,11 +11,14 @@ export function Sent({
   posts,
   accounts,
   onChanged,
+  onRemoved,
 }: {
   posts: Post[] | null;
   accounts: Account[];
-  /** A post came back changed (a target sent again). */
+  /** A post came back changed (a target sent again, or the post moved). */
   onChanged: (post: Post) => void;
+  /** A post was cancelled before it was sent. */
+  onRemoved: (id: string) => void;
 }) {
   const names = new Map(accounts.map((a) => [a.id, a.display_name]));
 
@@ -50,11 +53,126 @@ export function Sent({
                   />
                 ))}
               </ul>
+              {unsent(p) && <Unsent post={p} onChanged={onChanged} onRemoved={onRemoved} />}
             </li>
           ))}
         </ol>
       )}
     </section>
+  );
+}
+
+/**
+ * Nothing has gone out yet, so the post can still be cancelled or moved. The
+ * server decides for real; this only hides buttons that would be refused.
+ */
+function unsent(p: Post): boolean {
+  return p.targets.length > 0 && p.targets.every((t) => t.status === "pending");
+}
+
+/** The value a datetime-local input wants: local time, to the minute. */
+function localInput(at: Date): string {
+  const local = new Date(at.getTime() - at.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
+function Unsent({
+  post,
+  onChanged,
+  onRemoved,
+}: {
+  post: Post;
+  onChanged: (post: Post) => void;
+  onRemoved: (id: string) => void;
+}) {
+  const [mode, setMode] = useState<"idle" | "moving" | "cancelling">("idle");
+  const [at, setAt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const path = { params: { path: { postId: post.id } } };
+
+  async function move() {
+    setBusy(true);
+    setError("");
+    const { data, error } = await api.PATCH("/v1/posts/{postId}", {
+      ...path,
+      body: { scheduled_at: new Date(at).toISOString() },
+    });
+    setBusy(false);
+    if (data) {
+      setMode("idle");
+      onChanged(data);
+    } else {
+      setError(messageOf(error));
+    }
+  }
+
+  async function cancel() {
+    setBusy(true);
+    setError("");
+    const { error, response } = await api.DELETE("/v1/posts/{postId}", path);
+    setBusy(false);
+    // Already gone is what was asked for.
+    if (response.ok || response.status === 404) onRemoved(post.id);
+    else setError(messageOf(error));
+  }
+
+  return (
+    <div className="post-actions">
+      {mode === "idle" && (
+        <>
+          <button
+            className="quiet"
+            onClick={() => {
+              setAt(localInput(new Date(post.scheduled_at)));
+              setError("");
+              setMode("moving");
+            }}
+          >
+            Reschedule
+          </button>
+          <button
+            className="quiet"
+            onClick={() => {
+              setError("");
+              setMode("cancelling");
+            }}
+          >
+            Cancel post
+          </button>
+        </>
+      )}
+      {mode === "moving" && (
+        <>
+          <label className="schedule">
+            <span>Publish at</span>
+            <input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
+          </label>
+          <button className="quiet" disabled={busy || !at} onClick={move}>
+            {busy ? "Saving…" : "Save"}
+          </button>
+          <button className="quiet" disabled={busy} onClick={() => setMode("idle")}>
+            Keep time
+          </button>
+        </>
+      )}
+      {mode === "cancelling" && (
+        <>
+          <span className="reason caution">This removes the post. It will not be sent.</span>
+          <button className="quiet" disabled={busy} onClick={cancel}>
+            {busy ? "Cancelling…" : "Cancel post"}
+          </button>
+          <button className="quiet" disabled={busy} onClick={() => setMode("idle")}>
+            Keep post
+          </button>
+        </>
+      )}
+      {error && (
+        <span className="reason error" role="alert">
+          {sentence(error)}
+        </span>
+      )}
+    </div>
   );
 }
 

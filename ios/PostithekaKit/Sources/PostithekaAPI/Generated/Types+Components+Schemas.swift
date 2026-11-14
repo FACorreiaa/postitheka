@@ -199,6 +199,21 @@ extension Components {
                 case created_at
             }
         }
+        /// - Remark: Generated from `#/components/schemas/ReschedulePostRequest`.
+        public struct ReschedulePostRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/ReschedulePostRequest/scheduled_at`.
+            public var scheduled_at: Foundation.Date
+            /// Creates a new `ReschedulePostRequest`.
+            ///
+            /// - Parameters:
+            ///   - scheduled_at:
+            public init(scheduled_at: Foundation.Date) {
+                self.scheduled_at = scheduled_at
+            }
+            public enum CodingKeys: String, CodingKey {
+                case scheduled_at
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ConnectDiscordRequest`.
         public struct ConnectDiscordRequest: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ConnectDiscordRequest/webhook_url`.
