@@ -353,6 +353,17 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description This user is creating posts or reserving uploads faster than the server allows. Nothing was created. Any request can also answer 429 when its address has sent too many requests without a valid token. */
+        TooManyRequests: {
+            headers: {
+                /** @description Whole seconds to wait before trying again. */
+                "Retry-After": number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description No such resource for this user. */
         NotFound: {
             headers: {
@@ -515,6 +526,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            429: components["responses"]["TooManyRequests"];
         };
     };
     listPosts: {
@@ -576,6 +588,7 @@ export interface operations {
                     "application/json": components["schemas"]["ValidationError"];
                 };
             };
+            429: components["responses"]["TooManyRequests"];
         };
     };
     completeHandoff: {

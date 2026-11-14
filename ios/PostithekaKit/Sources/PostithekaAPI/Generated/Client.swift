@@ -638,6 +638,36 @@ public struct Client: APIProtocol {
                         preconditionFailure("bestContentType chose an invalid content type.")
                     }
                     return .unauthorized(.init(body: body))
+                case 429:
+                    let headers: Components.Responses.TooManyRequests.Headers = .init(Retry_hyphen_After: try converter.getRequiredHeaderFieldAsURI(
+                        in: response.headerFields,
+                        name: "Retry-After",
+                        as: Swift.Int.self
+                    ))
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.TooManyRequests.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas._Error.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .tooManyRequests(.init(
+                        headers: headers,
+                        body: body
+                    ))
                 default:
                     return .undocumented(
                         statusCode: response.status.code,
@@ -845,6 +875,36 @@ public struct Client: APIProtocol {
                         preconditionFailure("bestContentType chose an invalid content type.")
                     }
                     return .unauthorized(.init(body: body))
+                case 429:
+                    let headers: Components.Responses.TooManyRequests.Headers = .init(Retry_hyphen_After: try converter.getRequiredHeaderFieldAsURI(
+                        in: response.headerFields,
+                        name: "Retry-After",
+                        as: Swift.Int.self
+                    ))
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Components.Responses.TooManyRequests.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas._Error.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .tooManyRequests(.init(
+                        headers: headers,
+                        body: body
+                    ))
                 case 422:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
                     let body: Operations.createPost.Output.UnprocessableContent.Body

@@ -201,6 +201,11 @@ func serve(cfg config.Config) error {
 	return errors.Join(httpErr, riverErr)
 }
 
+const (
+	maxRequestBytes = 1 << 20
+	requestTimeout  = 30 * time.Second
+)
+
 func routes(cfg config.Config, pool *pgxpool.Pool, svc *service.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer)
@@ -218,12 +223,23 @@ func routes(cfg config.Config, pool *pgxpool.Pool, svc *service.Service) http.Ha
 
 	// Outside the spec too: platforms redirect the browser here with no
 	// bearer token. The state is what identifies the user.
-	r.Get("/oauth/{platform}/callback", httpapi.OAuthCallback(svc, slog.Default()))
+	// Neither route below has a user to count against, so both are limited by
+	// address (OPS-002).
+	limits := httpapi.DefaultLimits
+	public := httpapi.AddressLimit(limits.PublicPerMinute)
+	r.With(public).Get("/oauth/{platform}/callback", httpapi.OAuthCallback(svc, slog.Default()))
 
 	// Outside the spec too: the sign-in page reads it before there is a token.
-	r.Get("/client-config", httpapi.ClientConfig(cfg.Mascot3DModelURL))
+	r.With(public).Get("/client-config", httpapi.ClientConfig(cfg.Mascot3DModelURL))
 
-	httpapi.Mount(r, svc, slog.Default())
+	r.Group(func(api chi.Router) {
+		// Every API body is JSON: media goes straight to object storage, so
+		// nothing legitimate comes near a megabyte. The timeout is a ceiling
+		// on a stuck handler, well above the slowest real one (connecting a
+		// Discord webhook asks Discord first).
+		api.Use(middleware.RequestSize(maxRequestBytes), middleware.Timeout(requestTimeout))
+		httpapi.Mount(api, svc, slog.Default(), limits)
+	})
 
 	// An unknown API path is a JSON 404, not the web app's HTML: a client
 	// calling a route that does not exist should hear so in its own format.

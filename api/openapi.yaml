@@ -151,6 +151,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /v1/posts:
     get:
@@ -211,6 +213,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "422":
           description: >
             At least one target would reject the post, or the Idempotency-Key
@@ -339,6 +343,21 @@ components:
             $ref: "#/components/schemas/Error"
     Unauthorized:
       description: Missing or unknown bearer token.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    TooManyRequests:
+      description: >
+        This user is creating posts or reserving uploads faster than the
+        server allows. Nothing was created. Any request can also answer 429
+        when its address has sent too many requests without a valid token.
+      headers:
+        Retry-After:
+          description: Whole seconds to wait before trying again.
+          required: true
+          schema:
+            type: integer
       content:
         application/json:
           schema:
