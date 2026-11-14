@@ -77,7 +77,7 @@ HEIC is on no platform's list, so reserving an upload for one is refused.
 
 ### Discord: ready to use
 - **Owner:** create a server channel and a webhook, then paste the URL into Accounts.
-- **Code:** nothing. Forum and media channels still fail until DSC-001.
+- **Code:** nothing. Forum and media channels are named for the post's first line (DSC-001); one that requires a tag still fails.
 
 ### LinkedIn: ready to use from a local server
 - **Owner:** create a developer app with "Share on LinkedIn" and "Sign In with LinkedIn using OpenID

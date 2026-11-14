@@ -73,7 +73,7 @@ These appear in old docs, in brand copy or in the code, but a user cannot use th
 | **Bluesky, Mastodon** | Deferred | `BACKLOG.md`, Deferred |
 | **"Publish everywhere"** as a literal claim | Three networks and a hand-off, none live | `cmd/server/main.go` |
 | **LinkedIn Company Pages** | Personal profile only | `internal/publisher/linkedin/linkedin.go` |
-| **Discord forum and media channels** | Fail permanently without `thread_name` | DSC-001 |
+| **Discord forum channels that require a tag** | The post fails with Discord's own message. Forum and media channels without that rule work: the thread is named for the post's first line (DSC-001, built, never run against a real forum) | DSC-001 |
 | **Different text per network** | Decided as premium, not built | `docs/platform-rollout.md` |
 | **Free / premium / any price** | No tiers or billing exist | No billing code |
 | **Retry a failed post** | No route or button | WEB-001 |
@@ -225,7 +225,7 @@ These appear in old docs, in brand copy or in the code, but a user cannot use th
 - **Workflow.** 1) In Discord: channel settings, Integrations, Webhooks, New Webhook, Copy Webhook URL. 2) In Postitheka: Accounts, paste it, optionally name it, Connect. 3) The channel appears as a stamp.
 - **Location.** Web: Accounts > "Connect a Discord channel". iOS: Accounts > "Connect a Discord channel".
 - **Code.** `internal/publisher/discord/discord.go`, `internal/service/accounts.go`; tests `discord_test.go`, `TestConnectDiscordRejectsForeignURLs`.
-- **Status.** `experimental` by this document's definition: **never posted to a real channel** (FND-002 caveat). It is the most complete destination and needs no developer app, so one test post would make it `verified`. Forum and media channels fail (DSC-001).
+- **Status.** `experimental` by this document's definition: **never posted to a real channel** (FND-002 caveat). It is the most complete destination and needs no developer app, so one test post would make it `verified`. Forum and media channels start a thread named for the post's first line (DSC-001, stub-tested only); one that requires a tag fails.
 - **Priority.** High. The only destination that can be filmed end to end without the owner creating developer apps.
 - **Headline.** "Every channel is a stamp."
 - **Recording.** Tier B with a private Discord server created for filming, with no members besides the owner. Never use the community server or any real community. Blur or crop the webhook URL: it is a credential.

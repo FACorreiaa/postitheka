@@ -246,7 +246,7 @@ Checked dates matter: re-check a platform's docs before building it.
 
 | Platform | Mode | Status | Notes |
 | --- | --- | --- | --- |
-| Discord | Direct (webhook) | **Built** | Checked 2026-10-22: 2,000 chars, 10 files, 20 MiB per file. No review. Forum channels need `thread_name` (not yet). |
+| Discord | Direct (webhook) | **Built** | Checked 2026-10-22: 2,000 chars, 10 files, 20 MiB per file. No review. Forum and media channels get a `thread_name` from the post's first line, sent after Discord refuses the plain message with error 220001; a forum that requires a tag still fails. |
 | LinkedIn | Direct (OAuth 2.0) | **Built** (stub-tested) | Checked 2026-10-23: 3,000 characters, 20 images of 5 MB, or one MP4 up to 500 MB. Self-serve. Needs the owner's developer app to use. |
 | Threads | Direct (OAuth, threads.com) | **Built** (stub-tested) | Checked 2026-10-23: 500 characters (emoji counted in UTF-8 bytes), 5 links, carousel of 2–20; JPEG/PNG 8 MB, MP4/MOV 1 GB. Testers before App Review; needs the owner's Threads app. |
 | X | Direct (OAuth 2.0 PKCE) | Not started | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23); owner decision. Weighted `CountText`. |

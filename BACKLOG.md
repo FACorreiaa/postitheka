@@ -127,7 +127,7 @@ Strangers who have published a post: **0**.
 | X-002 | Built, unverified | `publisher.Refresher`, `PublishWorker.refresh` (row lock, re-check, seal, then publish); `TestTokenRefresh` (three concurrent posts refresh once and publish with the new token, revoked grant fails asking for reconnect, transient failure stays pending); mutation-checked; Threads implements it | Never run against a real platform |
 | ACC-001 | Open | | |
 | LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
-| DSC-001 | Open | | |
+| DSC-001 | Built, unverified | `internal/publisher/discord`: a refusal with Discord's error 220001 is answered by sending the message again with `thread_name`; `TestPublishToAForumChannelNamesTheThread`, `TestPublishMediaToAForumChannelSendsTheFilesAgain`, `TestANormalChannelGetsNoThreadName`, `TestOtherRefusalsAreNotSentAgain`, `TestThreadName` | Never posted to a real forum channel: the error code and the 100-character name limit are from Discord's docs. A forum that requires a tag still fails (40067), with Discord's message |
 | META-001 | Open | | Owner |
 | THR-001 | Built, unverified | `internal/publisher/threads`; `threads_test.go` (connect with the long-lived exchange, text, image, video processing, carousel order, `ERROR`/`EXPIRED`/timeout, publish without a clear answer incl. a cancelled request, error classes, refresh, no secrets in errors); mutation-checked; `max_links` and `text_counting` in the spec, mirrored and tested in web and iOS | Needs the owner's Threads app and tester account to post for real |
 | X-001 | Open | | Credits bought once on TestFlight (decided 2026-11-05); public use needs the tier decision |
@@ -347,9 +347,12 @@ reconnecting (ACC-001). Company Pages need the Community Management API: not in 
 error classes; the owner posts to their own profile from a local server once the app exists.
 
 ### DSC-001 · Discord forum channels · S
-Forum and media channels need `thread_name`; today they fail permanently with a 400. Detect the
-channel type when connecting (from the webhook's channel) and send a thread name taken from the
-post's first line.
+Forum and media channels need `thread_name`; without it they fail permanently with a 400. The
+channel type cannot be read when connecting: the webhook object does not carry it, and reading
+the channel needs a bot. So the channel says so itself. Discord refuses the plain message with
+error 220001, and the message is sent once more with a thread name taken from the post's first
+line (100 characters at most; "1 file" or "3 files" when there is no text). The refusal saved
+nothing, so this cannot post twice; it does upload a forum post's files twice.
 
 **Done when:** a stubbed forum webhook receives `thread_name`, and a normal channel does not.
 
