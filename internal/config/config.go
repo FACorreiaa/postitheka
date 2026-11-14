@@ -73,6 +73,9 @@ type Config struct {
 	LogLevel  string
 	LogFormat string
 
+	// ShutdownTimeout is how long in-flight requests and publish jobs get after
+	// SIGTERM. The deployment's terminationGracePeriodSeconds must be longer,
+	// or the kubelet kills the process before a running upload can finish.
 	ShutdownTimeout time.Duration
 }
 
@@ -81,7 +84,14 @@ func (c Config) IsProduction() bool { return c.Env == "production" }
 // Load reads the environment into a Config and refuses to start without
 // anything the app cannot work without. An app that boots without its
 // encryption key would accept a connection and then fail to store it.
-func Load() (Config, error) {
+func Load() (Config, error) { return load(true) }
+
+// LoadForMigrate reads only what applying the schema needs: the database and
+// the logger. The migrate hook runs before the app's own secrets have to
+// exist, and a schema change should not fail because a storage key is unset.
+func LoadForMigrate() (Config, error) { return load(false) }
+
+func load(serving bool) (Config, error) {
 	c := Config{
 		Env:                env("GO_ENV", "development"),
 		ListenAddr:         env("LISTEN_ADDR", ":8095"),
@@ -103,7 +113,6 @@ func Load() (Config, error) {
 		Mascot3DModelURL:     env("MASCOT_3D_MODEL_URL", ""),
 		LogLevel:             env("LOG_LEVEL", "info"),
 		LogFormat:            env("LOG_FORMAT", ""),
-		ShutdownTimeout:      30 * time.Second,
 	}
 
 	var err error
@@ -115,6 +124,12 @@ func Load() (Config, error) {
 	}
 	if c.PublishWorkers, err = envInt("PUBLISH_WORKERS", 4); err != nil {
 		return Config{}, err
+	}
+	if c.ShutdownTimeout, err = envDuration("SHUTDOWN_TIMEOUT", 30*time.Second); err != nil {
+		return Config{}, err
+	}
+	if c.ShutdownTimeout <= 0 {
+		return Config{}, fmt.Errorf("config: SHUTDOWN_TIMEOUT must be positive, got %s", c.ShutdownTimeout)
 	}
 	if c.PublishWorkers < 1 {
 		return Config{}, fmt.Errorf("config: PUBLISH_WORKERS must be at least 1, got %d", c.PublishWorkers)
@@ -143,16 +158,17 @@ func Load() (Config, error) {
 		}
 	}
 
+	required := map[string]string{"DATABASE_URL": c.DatabaseURL}
+	if serving {
+		required["TOKEN_ENCRYPTION_KEY"] = c.TokenEncryptionKey
+		required["S3_ENDPOINT"] = c.S3Endpoint
+		required["S3_BUCKET"] = c.S3Bucket
+		required["S3_ACCESS_KEY"] = c.S3AccessKey
+		required["S3_SECRET_KEY"] = c.S3SecretKey
+		required["PUBLIC_URL"] = c.PublicURL
+	}
 	var missing []string
-	for name, v := range map[string]string{
-		"DATABASE_URL":         c.DatabaseURL,
-		"TOKEN_ENCRYPTION_KEY": c.TokenEncryptionKey,
-		"S3_ENDPOINT":          c.S3Endpoint,
-		"S3_BUCKET":            c.S3Bucket,
-		"S3_ACCESS_KEY":        c.S3AccessKey,
-		"S3_SECRET_KEY":        c.S3SecretKey,
-		"PUBLIC_URL":           c.PublicURL,
-	} {
+	for name, v := range required {
 		if v == "" {
 			missing = append(missing, name)
 		}
@@ -181,6 +197,18 @@ func envInt(key string, fallback int) (int, error) {
 	v, err := strconv.Atoi(raw)
 	if err != nil {
 		return 0, fmt.Errorf("config: %s must be an integer, got %q", key, raw)
+	}
+	return v, nil
+}
+
+func envDuration(key string, fallback time.Duration) (time.Duration, error) {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback, nil
+	}
+	v, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, fmt.Errorf("config: %s must be a duration such as 30s or 2m, got %q", key, raw)
 	}
 	return v, nil
 }

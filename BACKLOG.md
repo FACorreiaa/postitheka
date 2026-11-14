@@ -114,7 +114,7 @@ Strangers who have published a post: **0**.
 | REL-001 | Done | PR #1: CI green, `internal/service` tests ran (3.6 s, none skipped), image built | |
 | REL-002 | Done | Image workflow run 39870125984 on `main` (38a1c3a) after PR #1 merged, 2026-10-22 | Package visibility not checked |
 | REL-003 | Open | | Owner: Cloudflare account |
-| REL-004 | Open | | Hostname deferred by the owner |
+| REL-004 | In progress | App side on branch `rel-004-deploy-prep` (2026-11-14): `/health/ready`, `/health/live`, `server migrate` needs only `DATABASE_URL`, `SHUTDOWN_TIMEOUT`, promote job in the Image workflow; `task check` green. Infra manifests on `platform/infra` branch `postitheka-onboard`, unmerged | Hostname chosen 2026-11-14: subdomain of facorreia.com (`postitheka.facorreia.com` in the manifests, label to confirm). Waits on the owner: DNS record, R2 (REL-003), sealed secrets, node directory, `INFRA_TOKEN`, merge |
 | AUTH-001 | Open | App ID `com.fernandocorreia.postitheka` registered | Needs hostname and the key (Owner) |
 | API-001 | Done | `migrations/20261022190000_post_idempotency.sql`; `TestCreatePostIsIdempotent` (incl. 8 concurrent requests, one post) | Web retry path checked by typecheck only, not in a browser |
 | MED-001 | Done | `internal/jobs/sweep.go`; `TestSweepDeletesOnlyOldUnattachedUploads` in CI; live run against RustFS removed row and object | |
@@ -222,7 +222,8 @@ rule (`PUT`, header `Content-Type`, the production origin) and documents it in t
 ### REL-004 · Deploy on maat · M
 **Needs:** REL-002, REL-003. **OPEN:** the public hostname, and how public apps are exposed from
 `maat` (read `platform/infra/docs` first). In `platform/infra`: namespace, Deployment
-(`AUTO_MIGRATE=false`), PreSync Job running `server migrate`, Service, probes on `/healthz`,
+(`AUTO_MIGRATE=false`), PreSync Job running `server migrate`, Service, probes on `/health/ready`
+and `/health/live` (the shared chart's defaults; `/healthz` stays for people and scripts),
 sealed secrets for `DATABASE_URL`, `TOKEN_ENCRYPTION_KEY` and the S3 keys, sealed for this
 namespace. Ask the owner before merging to the infra repo: merging deploys.
 
