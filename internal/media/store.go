@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -110,6 +111,30 @@ func (s *Store) Delete(ctx context.Context, key string) error {
 		return fmt.Errorf("media: delete: %w", err)
 	}
 	return nil
+}
+
+// DeletePrefix removes every object whose key starts with prefix and reports
+// how many. It is how a user's uploads are removed with the user: by where
+// they are stored, not by the rows that name them, so an upload that never got
+// a row, or lost it, goes too. Running it again after a failure is safe.
+func (s *Store) DeletePrefix(ctx context.Context, prefix string) (int, error) {
+	if !strings.HasSuffix(prefix, "/") || strings.Trim(prefix, "/") == "" {
+		// An empty or partial prefix would match other users' objects.
+		return 0, fmt.Errorf("media: delete prefix %q: want a directory ending in /", prefix)
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel() // stops the listing if a delete fails
+	n := 0
+	for obj := range s.client.ListObjects(ctx, s.bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
+		if obj.Err != nil {
+			return n, fmt.Errorf("media: list %s: %w", prefix, obj.Err)
+		}
+		if err := s.client.RemoveObject(ctx, s.bucket, obj.Key, minio.RemoveObjectOptions{}); err != nil {
+			return n, fmt.Errorf("media: delete: %w", err)
+		}
+		n++
+	}
+	return n, nil
 }
 
 // Open implements publisher.MediaSource.

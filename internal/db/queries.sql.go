@@ -349,6 +349,21 @@ func (q *Queries) DeleteUnattachedMedia(ctx context.Context, ids []uuid.UUID) ([
 	return items, nil
 }
 
+const deleteUser = `-- name: DeleteUser :execrows
+DELETE FROM users WHERE id = $1
+`
+
+// Everything a user owns goes with the row: tokens, accounts, posts, targets,
+// media rows, OAuth states. The objects in the bucket do not; DeleteUser in
+// the service removes those.
+func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUser, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const expireHandoffs = `-- name: ExpireHandoffs :execrows
 UPDATE post_targets
 SET status = 'failed', last_error = $1, updated_at = now()

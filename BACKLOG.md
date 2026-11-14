@@ -117,6 +117,7 @@ Strangers who have published a post: **0**.
 | REL-004 | Open | | Hostname deferred by the owner |
 | AUTH-001 | Open | App ID `com.fernandocorreia.postitheka` registered | Needs hostname and the key (Owner) |
 | API-001 | Done | `migrations/20261022190000_post_idempotency.sql`; `TestCreatePostIsIdempotent` (incl. 8 concurrent requests, one post) | Web retry path checked by typecheck only, not in a browser |
+| MED-002 | Built, unverified | `Service.DeleteUser`, `media.Store.DeletePrefix`, `server user delete EMAIL` (`task user:delete`); `TestDeleteUserRemovesTheirUploadsFromStorage` (objects with and without a row, another user's untouched, storage down leaves the user in place, queued job posts nothing); live run against RustFS removed two objects and left another prefix alone | Not run against R2. No route or button yet: a signed-in user cannot delete their own account until AUTH-001. An upload URL issued before the deletion still works for its 30 minutes |
 | MED-001 | Done | `internal/jobs/sweep.go`; `TestSweepDeletesOnlyOldUnattachedUploads` in CI; live run against RustFS removed row and object | |
 | WEB-001 | Built, unverified | `POST /v1/targets/{id}/retry`, `migrations/20261113190000_target_retry.sql` (`interrupted`, `retries`), Send again in Sent with a may-be-live warning; `TestRetryTargetPublishesAgain` (real River client, first job completed), `TestRetryTargetRefusesWhatCannotBeSentAgain` (pending, published, assisted, disconnected, another user's) | Checked in a browser against a local server with seeded targets; never against a real platform |
 | WEB-002 | Done | Dark only since 2026-11-05, so there is one theme to check: every screen looked at in a browser at 1280 and 390 px, no sideways scroll; palette contrast passes WCAG AA for text (lowest 6.5:1) | |
@@ -254,6 +255,16 @@ rule if the key layout allows it.
 
 **Done when:** an unattached upload older than the cutoff is gone from the bucket and the
 database, and an attached one is untouched (test).
+
+### MED-002 · Deleting a user removes their uploads · S
+Deleting a user cascades through the database (FND-005) but left their files in the bucket.
+`DeleteUser` removes everything under the user's key prefix, then the user, then the prefix
+again for anything that landed in between. By prefix rather than by media row, so a file with no
+row goes too. The operator runs it as `server user delete EMAIL`; the in-app route comes with
+sign-in (AUTH-001), which the App Store requires for account deletion.
+
+**Done when:** deleting a user leaves none of their objects in the bucket and another user's
+untouched (test, and a run against local storage).
 
 ### WEB-001 · Retry a failed target · S
 A failed target can only be re-sent by writing the post again. Add a retry route that re-queues

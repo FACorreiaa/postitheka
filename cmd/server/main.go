@@ -77,8 +77,10 @@ func dispatch(args []string) error {
 		return nil
 	case len(args) == 3 && args[0] == "user" && args[1] == "create":
 		return createUser(cfg, args[2])
+	case len(args) == 3 && args[0] == "user" && args[1] == "delete":
+		return deleteUser(cfg, args[2])
 	default:
-		return fmt.Errorf("unknown command %q; want no arguments, \"migrate\", or \"user create EMAIL\"", strings.Join(args, " "))
+		return fmt.Errorf("unknown command %q; want no arguments, \"migrate\", \"user create EMAIL\" or \"user delete EMAIL\"", strings.Join(args, " "))
 	}
 }
 
@@ -258,6 +260,43 @@ func createUser(cfg config.Config, email string) error {
 	fmt.Fprintf(os.Stderr, "user %s\n", id)
 	// The token alone on stdout, so it can be piped straight into a secret.
 	fmt.Println(token)
+	return nil
+}
+
+// deleteUser removes a user with everything they own, uploads included. It is
+// the operator's side of account deletion until a signed-in user can ask for
+// it from the app (AUTH-001). There is no undo.
+func deleteUser(cfg config.Config, email string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	store, err := media.New(media.Options{
+		Endpoint:  cfg.S3Endpoint,
+		Region:    cfg.S3Region,
+		Bucket:    cfg.S3Bucket,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+		UseSSL:    cfg.S3UseSSL,
+	})
+	if err != nil {
+		return err
+	}
+
+	svc := service.New(service.Deps{Pool: pool, Storage: store})
+	id, objects, err := svc.DeleteUserByEmail(ctx, email)
+	if errors.Is(err, service.ErrNotFound) {
+		return fmt.Errorf("no user with the email address %q", email)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "deleted user %s and %d uploaded files\n", id, objects)
 	return nil
 }
 

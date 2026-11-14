@@ -32,7 +32,7 @@ func (s *Service) ReserveUpload(ctx context.Context, userID uuid.UUID, contentTy
 	id := uuid.New()
 	// Keys are namespaced by user, so a bucket listing or a lifecycle rule
 	// can be scoped to one person's files.
-	key := fmt.Sprintf("uploads/%s/%s", userID, media.Filename(id, contentType))
+	key := uploadPrefix(userID) + media.Filename(id, contentType)
 
 	if err := s.q.CreateMedia(ctx, db.CreateMediaParams{
 		ID:          id,
@@ -49,4 +49,10 @@ func (s *Service) ReserveUpload(ctx context.Context, userID uuid.UUID, contentTy
 		return Upload{}, err
 	}
 	return Upload{MediaID: id, URL: url, ContentType: contentType, ExpiresAt: s.now().Add(uploadTTL)}, nil
+}
+
+// uploadPrefix is where a user's uploads live in the bucket. Every object a
+// user owns is under it, which is what lets DeleteUser remove them all.
+func uploadPrefix(userID uuid.UUID) string {
+	return "uploads/" + userID.String() + "/"
 }

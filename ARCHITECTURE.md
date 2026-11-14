@@ -275,7 +275,12 @@ Checked dates matter: re-check a platform's docs before building it.
    before the rows commit, so a failure leaves rows without objects for the next sweep, never
    objects no row points to.
 
-Not yet handled: a deleted user's objects stay in the bucket (no route deletes users yet).
+A deleted user's objects go with the user (MED-002): `Service.DeleteUser` empties
+`uploads/{user id}/` before deleting the row, so a failure leaves the user in place to try
+again, and once more after it, for an upload that landed in between. It works by key prefix, so
+an object with no media row is removed too. Only the operator can run it for now
+(`server user delete EMAIL`); there is no route. Not handled: an upload URL issued before the
+deletion stays valid for its 30 minutes, and a file sent to it afterwards has no owner.
 
 ## Auth
 
