@@ -35,6 +35,12 @@ struct AccountsView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(account.display_name)
                                 Text(account.platform.displayName).font(.caption).foregroundStyle(.secondary)
+                                if account.needsReconnect {
+                                    Text(account.platform == .discord
+                                        ? "The webhook no longer works. Connect the channel again, then disconnect this one."
+                                        : "Access expired or was withdrawn. Swipe to reconnect.")
+                                        .font(.caption).foregroundStyle(.red)
+                                }
                             }
                             Spacer()
                             if let brand = account.brand {
@@ -44,6 +50,13 @@ struct AccountsView: View {
                         .swipeActions {
                             Button("Disconnect", role: .destructive) {
                                 Task { await model.disconnect(account) }
+                            }
+                            // Signing in again renews this same account, so its history stays.
+                            if account.needsReconnect, model.platforms.contains(where: { $0.platform == account.platform && $0.connect == .oauth }) {
+                                Button("Reconnect") {
+                                    Task { await connect(account.platform) }
+                                }
+                                .tint(Brand.glow)
                             }
                             Button("Brand") {
                                 brandDraft = account.brand ?? ""

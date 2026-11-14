@@ -611,6 +611,23 @@ label {
   --field: var(--cancel);
 }
 
+/* Credentials the platform refused: the stamp cannot be affixed. */
+.stamp.stale {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.stamp-issues .link {
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--gold);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 .stamp-issues {
   margin: 0;
   padding: 0 0.25rem;
@@ -850,6 +867,10 @@ label {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* A row with Reconnect on it does not fit one line: the actions drop below
+     the name instead of crushing the brand field. */
+  flex-wrap: wrap;
+  gap: 0.4rem;
   padding: 0.6rem 0;
   border-top: 1px solid var(--rule);
 }
@@ -862,6 +883,14 @@ label {
   display: flex;
   align-items: center;
   gap: 0.4rem;
+  margin-left: auto;
+}
+
+.stale-note {
+  color: var(--cancel);
+  font-size: var(--s-1);
+  line-height: 1.35;
+  max-width: 22rem;
 }
 
 /* The line under the list explaining what a brand is. */
@@ -870,7 +899,9 @@ label {
 }
 
 .brand-input {
-  width: 8.5rem;
+  /* The basis, not width: dialog inputs are width 100% by a later rule. */
+  flex: 0 1 8.5rem;
+  min-width: 6rem;
   padding: 0.3rem 0.5rem;
   font-size: var(--s-1);
 }
@@ -889,8 +920,11 @@ label {
   }
 
   .brand-input {
-    flex: 1;
-    width: auto;
+    flex: 1 1 6rem;
+  }
+
+  .account-actions {
+    flex-wrap: wrap;
   }
 }
 

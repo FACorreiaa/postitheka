@@ -74,6 +74,7 @@ const (
 	failDisconnected = "disconnected"
 	failUnavailable  = "platform_unavailable"
 	failCredentials  = "credentials"
+	failReconnect    = "needs_reconnect"
 	failRejected     = "rejected"
 	failExhausted    = "retries_exhausted"
 )
@@ -107,12 +108,19 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 	if !row.AccountID.Valid {
 		return w.fail(ctx, row, failDisconnected, errors.New("the account was disconnected"))
 	}
+	if row.NeedsReconnectAt.Valid {
+		// The platform already refused these credentials. Asking again would
+		// fail the same way, and repeated bad logins are what gets an app
+		// throttled.
+		return w.fail(ctx, row, failReconnect, errors.New("the account needs reconnecting; connect it again, then send this again"))
+	}
 	pub, ok := w.registry.Get(publisher.Platform(row.Platform))
 	if !ok {
 		return w.fail(ctx, row, failUnavailable, fmt.Errorf("%s publishing is not available on this server", row.Platform))
 	}
 	creds, err := w.box.Open(row.Credentials, row.AccountID.UUID[:])
 	if err != nil {
+		w.needsReconnect(ctx, row)
 		return w.fail(ctx, row, failCredentials, errors.New("stored credentials cannot be decrypted; reconnect the account"))
 	}
 
@@ -122,6 +130,8 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 	switch {
 	case err == nil:
 	case publisher.IsPermanent(err):
+		// A refresh the platform refused for good: the grant is gone.
+		w.needsReconnect(ctx, row)
 		return w.fail(ctx, row, failCredentials, fmt.Errorf("%w; reconnect the account", err))
 	default:
 		w.log.Warn("refresh failed", slog.String("target", id.String()), slog.String("platform", row.Platform), slog.Any("error", err))
@@ -187,6 +197,9 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 
 	var ra *publisher.RetryAfterError
 	switch {
+	case publisher.NeedsReconnect(pubErr):
+		w.needsReconnect(ctx, row)
+		return w.fail(ctx, row, failReconnect, pubErr)
 	case publisher.IsPermanent(pubErr):
 		return w.fail(ctx, row, failRejected, pubErr)
 	case job.Attempt >= job.MaxAttempts:
@@ -257,6 +270,15 @@ func (w *PublishWorker) refresh(ctx context.Context, pub publisher.Publisher, ac
 		return nil, fmt.Errorf("store refreshed credentials: %w", err)
 	}
 	return fresh, nil
+}
+
+// needsReconnect marks the target's account as needing reconnection. Best
+// effort: the target fails either way, and the next post to the account marks
+// it if this did not.
+func (w *PublishWorker) needsReconnect(ctx context.Context, row db.GetTargetForPublishRow) {
+	if err := w.q.MarkAccountNeedsReconnect(ctx, row.AccountID.UUID); err != nil {
+		w.log.Error("account not marked as needing reconnection", slog.String("account", row.AccountID.UUID.String()), slog.Any("error", err))
+	}
 }
 
 // fail records a terminal failure and cancels the job, so River does not

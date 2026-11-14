@@ -22,6 +22,13 @@ public enum APIError: LocalizedError, Equatable {
     }
 }
 
+extension Account {
+    /// The platform refused this account's credentials: expired past
+    /// refreshing, withdrawn, or a deleted webhook. Nothing can be posted to
+    /// it until it is connected again.
+    public var needsReconnect: Bool { needs_reconnect ?? false }
+}
+
 /// What publishing a post came to.
 public enum PublishOutcome: Sendable {
     case created(Post)

@@ -1079,3 +1079,80 @@ func TestAccountBrand(t *testing.T) {
 		t.Fatalf("a blank brand did not clear it: %v, %v", got.Brand, err)
 	}
 }
+
+func TestRefusedCredentialsMarkTheAccount(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	acct := e.account(t, alice)
+	other := e.account(t, alice)
+
+	post := func(text string, account uuid.UUID) service.PostView {
+		t.Helper()
+		view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: text, AccountIDs: []uuid.UUID{account}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return view
+	}
+	marked := func() map[uuid.UUID]bool {
+		t.Helper()
+		accts, err := e.svc.ListAccounts(ctx, alice)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[uuid.UUID]bool{}
+		for _, a := range accts {
+			out[a.ID] = a.NeedsReconnectAt.Valid
+		}
+		return out
+	}
+
+	// A post the platform rejects is about the post, not the account.
+	rejected := post("no", acct)
+	e.discord.postStatus.Store(http.StatusBadRequest)
+	_ = e.runJob(t, rejected.Targets[0].ID, 1)
+	if marked()[acct] {
+		t.Fatal("a rejected post marked the account")
+	}
+
+	first := post("one", acct)
+	queued := post("two", acct)
+
+	// The webhook is gone: Discord answers 401.
+	e.discord.postStatus.Store(http.StatusUnauthorized)
+	if err := e.runJob(t, first.Targets[0].ID, 1); err == nil {
+		t.Fatal("want the job cancelled")
+	}
+	e.discord.postStatus.Store(http.StatusOK)
+	if got := marked(); !got[acct] || got[other] {
+		t.Fatalf("marked %v, want only the refused account", got)
+	}
+	if tgt := e.target(t, alice, first.Post.ID); tgt.Status != "failed" {
+		t.Fatalf("target %s, want failed", tgt.Status)
+	}
+
+	// What was already queued for the account fails without asking again.
+	before := e.discord.posts.Load()
+	if err := e.runJob(t, queued.Targets[0].ID, 1); err == nil {
+		t.Fatal("want the queued job cancelled")
+	}
+	if n := e.discord.posts.Load(); n != before {
+		t.Fatalf("%d more requests reached the platform, want none", n-before)
+	}
+	tgt := e.target(t, alice, queued.Post.ID)
+	if tgt.Status != "failed" || tgt.LastError == nil || !strings.Contains(*tgt.LastError, "needs reconnecting") {
+		t.Fatalf("queued target %s %v, want failed asking for a reconnect", tgt.Status, tgt.LastError)
+	}
+
+	// A new post to it is refused at the door; the other account still works.
+	_, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "three", AccountIDs: []uuid.UUID{acct, other}})
+	var ve *service.ValidationError
+	if !errors.As(err, &ve) || len(ve.Issues) != 1 || ve.Issues[0].AccountID == nil || *ve.Issues[0].AccountID != acct {
+		t.Fatalf("got %v, want one issue on the marked account", err)
+	}
+	ok := post("four", other)
+	if err := e.runJob(t, ok.Targets[0].ID, 1); err != nil {
+		t.Fatal(err)
+	}
+}

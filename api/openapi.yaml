@@ -478,6 +478,12 @@ components:
         created_at:
           type: string
           format: date-time
+        needs_reconnect:
+          type: boolean
+          description: >
+            True when the platform has refused this account's credentials
+            (expired past refreshing, revoked, a deleted webhook). Posts to it
+            are refused until it is connected again. Absent otherwise.
 
     UpdateAccountRequest:
       type: object
