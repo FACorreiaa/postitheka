@@ -393,7 +393,15 @@ The image is multi-stage: Node builds `web/dist`, Go builds a static binary, Alp
 - OAuth: single-use state, stored hashed, 15 minutes; PKCE verifier sealed; client secrets only in
   the environment; the callback redirects only to the app's own `/` or the `postitheka://`
   scheme, never to a URL taken from the request.
-- No rate limiting on the API yet (OPS-002).
+- Rate limits (OPS-002) are token buckets in the process's memory (`internal/ratelimit`), each
+  per minute: 30 posts and 120 upload reservations per user, 30 failed authentications per
+  address, 120 requests per address on the routes with no token (`/oauth/.../callback`,
+  `/client-config`). Past a limit the answer is 429 with `Retry-After`. Only failed
+  authentication is counted by address, so a signed-in user is never held up by a neighbour.
+  The address is the last entry of `X-Forwarded-For`, the one the ingress wrote. In memory is
+  right for one replica; a second would double every allowance. The numbers are judgement, not
+  measurement.
+- API request bodies are capped at 1 MiB and handlers at 30 seconds (`cmd/server`).
 - Analytics (`POSTHOG_API_KEY`, empty means off) records four events, keyed by user id:
   `signed_up` (a user row created), `account_connected` (platform), `target_published`
   (platform, attempt) and `target_failed` (platform, a coarse reason such as `rejected` or

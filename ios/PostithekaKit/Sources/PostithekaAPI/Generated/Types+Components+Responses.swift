@@ -68,6 +68,55 @@ extension Components {
                 self.body = body
             }
         }
+        public struct TooManyRequests: Sendable, Hashable {
+            /// - Remark: Generated from `#/components/responses/TooManyRequests/headers`.
+            public struct Headers: Sendable, Hashable {
+                /// Whole seconds to wait before trying again.
+                ///
+                /// - Remark: Generated from `#/components/responses/TooManyRequests/headers/Retry-After`.
+                public var Retry_hyphen_After: Swift.Int
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - Retry_hyphen_After: Whole seconds to wait before trying again.
+                public init(Retry_hyphen_After: Swift.Int) {
+                    self.Retry_hyphen_After = Retry_hyphen_After
+                }
+            }
+            /// Received HTTP response headers
+            public var headers: Components.Responses.TooManyRequests.Headers
+            /// - Remark: Generated from `#/components/responses/TooManyRequests/content`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/components/responses/TooManyRequests/content/application\/json`.
+                case json(Components.Schemas._Error)
+                /// The associated value of the enum case if `self` is `.json`.
+                ///
+                /// - Throws: An error if `self` is not `.json`.
+                /// - SeeAlso: `.json`.
+                public var json: Components.Schemas._Error {
+                    get throws {
+                        switch self {
+                        case let .json(body):
+                            return body
+                        }
+                    }
+                }
+            }
+            /// Received HTTP response body
+            public var body: Components.Responses.TooManyRequests.Body
+            /// Creates a new `TooManyRequests`.
+            ///
+            /// - Parameters:
+            ///   - headers: Received HTTP response headers
+            ///   - body: Received HTTP response body
+            public init(
+                headers: Components.Responses.TooManyRequests.Headers,
+                body: Components.Responses.TooManyRequests.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
         public struct NotFound: Sendable, Hashable {
             /// - Remark: Generated from `#/components/responses/NotFound/content`.
             @frozen public enum Body: Sendable, Hashable {

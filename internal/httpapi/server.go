@@ -23,15 +23,16 @@ import (
 )
 
 type Server struct {
-	svc *service.Service
-	log *slog.Logger
+	svc    *service.Service
+	log    *slog.Logger
+	limits limiters
 }
 
 var _ StrictServerInterface = (*Server)(nil)
 
 // Mount registers the API on r, every route behind bearer authentication.
-func Mount(r chi.Router, svc *service.Service, log *slog.Logger) http.Handler {
-	s := &Server{svc: svc, log: log}
+func Mount(r chi.Router, svc *service.Service, log *slog.Logger, limits Limits) http.Handler {
+	s := &Server{svc: svc, log: log, limits: newLimiters(limits)}
 	strict := NewStrictHandlerWithOptions(s, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc: func(w http.ResponseWriter, _ *http.Request, err error) {
 			writeError(w, http.StatusBadRequest, err.Error())
@@ -54,16 +55,27 @@ type userKey struct{}
 
 // authenticate runs before the request body is decoded, so an unauthenticated
 // caller learns nothing about what a valid request looks like.
+//
+// Only a request that fails is counted against its address. Past the limit
+// the answer is 429 instead of 401, so a client guessing tokens, or one stuck
+// in a loop with a revoked one, is told to stop rather than told "no" again.
 func (s *Server) authenticate(next http.Handler) http.Handler {
+	refuse := func(w http.ResponseWriter, r *http.Request, msg string) {
+		if ok, wait := s.limits.failed.Allow(clientAddress(r)); !ok {
+			writeTooManyRequests(w, wait)
+			return
+		}
+		writeError(w, http.StatusUnauthorized, msg)
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if !ok {
-			writeError(w, http.StatusUnauthorized, "missing bearer token")
+			refuse(w, r, "missing bearer token")
 			return
 		}
 		userID, err := s.svc.Authenticate(r.Context(), strings.TrimSpace(token))
 		if errors.Is(err, service.ErrUnauthenticated) {
-			writeError(w, http.StatusUnauthorized, "unknown token")
+			refuse(w, r, "unknown token")
 			return
 		}
 		if err != nil {
@@ -179,6 +191,9 @@ func (s *Server) DeleteAccount(ctx context.Context, req DeleteAccountRequestObje
 }
 
 func (s *Server) CreateUpload(ctx context.Context, req CreateUploadRequestObject) (CreateUploadResponseObject, error) {
+	if ok, wait := s.limits.uploads.Allow(userID(ctx).String()); !ok {
+		return CreateUpload429JSONResponse{tooManyRequests(wait)}, nil
+	}
 	up, err := s.svc.ReserveUpload(ctx, userID(ctx), req.Body.ContentType, req.Body.SizeBytes)
 	if msg, ok := badRequest(err); ok {
 		return CreateUpload400JSONResponse{BadRequestJSONResponse{Message: msg}}, nil
@@ -212,6 +227,12 @@ func (s *Server) ListPosts(ctx context.Context, req ListPostsRequestObject) (Lis
 }
 
 func (s *Server) CreatePost(ctx context.Context, req CreatePostRequestObject) (CreatePostResponseObject, error) {
+	// Before anything is read or stored: a refused request must cost nothing.
+	// A repeat with an Idempotency-Key is counted too, since it is the cheap
+	// way to hammer this route.
+	if ok, wait := s.limits.posts.Allow(userID(ctx).String()); !ok {
+		return CreatePost429JSONResponse{tooManyRequests(wait)}, nil
+	}
 	in := service.CreatePostInput{
 		AccountIDs:     req.Body.AccountIds,
 		ScheduledAt:    req.Body.ScheduledAt,

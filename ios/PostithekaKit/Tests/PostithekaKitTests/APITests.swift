@@ -105,4 +105,21 @@ struct ConnectTests {
             Issue.record("an unknown platform read as connected"); return
         }
     }
+
+    // OPS-002: the server refuses with 429 and a Retry-After. The app says how
+    // long to wait instead of "The server answered 429."
+    @Test func aRateLimitSaysHowLongToWait() async {
+        let stub = StubTransport()
+        stub.enqueue(429, #"{"message":"too many requests; wait and try again"}"#, headers: ["Retry-After": "42"])
+        let api = API(baseURL: URL(string: "http://localhost:8095")!, tokens: MemoryTokenStore("pk_test"), transport: stub)
+
+        await #expect(throws: APIError.message("Too many requests. Try again in 42 seconds.")) {
+            _ = try await api.publish(text: "hello", mediaIDs: [], accountIDs: ["a1"], scheduledAt: nil, idempotencyKey: "k1")
+        }
+
+        stub.enqueue(429, #"{"message":"too many requests; wait and try again"}"#, headers: ["Retry-After": "1"])
+        await #expect(throws: APIError.message("Too many requests. Try again in a second.")) {
+            _ = try await api.reserveUpload(contentType: "image/png", size: 10)
+        }
+    }
 }
