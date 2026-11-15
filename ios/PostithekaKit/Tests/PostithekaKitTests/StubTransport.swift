@@ -13,6 +13,10 @@ final class StubTransport: ClientTransport, @unchecked Sendable {
 
     private let lock = NSLock()
     private var responses: [(status: Int, json: String)]
+    // Extra response headers, for the answers after the ones in `responses`
+    // that need them. Keyed by position in the queue would be more exact; one
+    // pending set is all any test needs.
+    private var pendingHeaders: [[String: String]] = []
     private(set) var sent: [Sent] = []
     var failNext = false
 
@@ -20,24 +24,34 @@ final class StubTransport: ClientTransport, @unchecked Sendable {
         self.responses = responses
     }
 
-    func enqueue(_ status: Int, _ json: String) {
-        lock.withLock { responses.append((status, json)) }
+    func enqueue(_ status: Int, _ json: String, headers: [String: String] = [:]) {
+        lock.withLock {
+            responses.append((status, json))
+            pendingHeaders.append(headers)
+        }
     }
 
     func send(_ request: HTTPRequest, body: HTTPBody?, baseURL _: URL, operationID _: String) async throws -> (HTTPResponse, HTTPBody?) {
         var text = ""
         if let body { text = try await String(collecting: body, upTo: 1 << 20) }
-        let next: (Int, String)? = lock.withLock {
+        let next: (Int, String, [String: String])? = lock.withLock {
             sent.append(Sent(request: request, body: text))
             if failNext {
                 failNext = false
                 return nil
             }
-            return responses.isEmpty ? nil : responses.removeFirst()
+            guard !responses.isEmpty else { return nil }
+            let (status, json) = responses.removeFirst()
+            // Responses given to init carry no headers, and come first.
+            let extra = pendingHeaders.count > responses.count ? pendingHeaders.removeFirst() : [:]
+            return (status, json, extra)
         }
-        guard let (status, json) = next else { throw URLError(.networkConnectionLost) }
+        guard let (status, json, extra) = next else { throw URLError(.networkConnectionLost) }
         var fields = HTTPFields()
         fields[.contentType] = "application/json"
+        for (name, value) in extra {
+            if let field = HTTPField.Name(name) { fields[field] = value }
+        }
         return (HTTPResponse(status: .init(code: status), headerFields: fields), HTTPBody(json))
     }
 }

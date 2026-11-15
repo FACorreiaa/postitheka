@@ -145,6 +145,7 @@ public struct API: Sendable {
         switch out {
         case .created(let r): return try body { try r.body.json }
         case .badRequest(let r): throw .message(try body { try r.body.json.message })
+        case .tooManyRequests(let r): throw Self.tooMany(retryAfter: r.headers.Retry_hyphen_After)
         case .unauthorized: throw .unauthorized
         case .undocumented(let code, _): throw Self.unexpected(code)
         }
@@ -169,6 +170,7 @@ public struct API: Sendable {
         case .created(let r): return .created(try body { try r.body.json })
         case .unprocessableContent(let r): return .rejected(try body { try r.body.json.issues })
         case .badRequest(let r): throw .message(try body { try r.body.json.message })
+        case .tooManyRequests(let r): throw Self.tooMany(retryAfter: r.headers.Retry_hyphen_After)
         case .unauthorized: throw .unauthorized
         case .undocumented(let code, _): throw Self.unexpected(code)
         }
@@ -257,6 +259,14 @@ public struct API: Sendable {
         } catch {
             throw .message("The server sent something this version of the app cannot read.")
         }
+    }
+
+    /// The server's rate limit, in words a person can act on. The wait is the
+    /// Retry-After header: whole seconds, never less than one.
+    static func tooMany(retryAfter seconds: Int) -> APIError {
+        .message(seconds == 1
+            ? "Too many requests. Try again in a second."
+            : "Too many requests. Try again in \(seconds) seconds.")
     }
 
     private static func unexpected(_ code: Int) -> APIError {
