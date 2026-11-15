@@ -16,7 +16,7 @@ There is no older marketing plan for this app. Positioning here is built from th
 1. The product is **Postitheka**: one word, capital P, the name from "post" + *-theka*, a collection. There is no other public or internal name.
 2. Every claim must trace to `features.md`. If a feature has a status other than `verified`, follow the limits written on that feature.
 3. **Nothing is live.** Postitheka is not deployed, has no public address, no sign-up, and is not on TestFlight or the App Store. Never write "available now", "try it today", "download" or "sign up". Until that changes, any material is a preview of software in development, and must say so.
-4. **Name only the networks that are built.** Built: Discord (channels, by webhook), LinkedIn (personal profile), Threads, Instagram (professional accounts; photos, reels, carousels), and WhatsApp as a hand-off from the iPhone app. Not built: X, Facebook, TikTok, Reddit. No publisher has posted to a real platform yet: every one has run only against a stub in tests.
+4. **Name only the networks that are built.** Built: Discord (channels, by webhook), LinkedIn (personal profile), Threads, Instagram (professional accounts; photos, reels, carousels), Facebook Pages (never a personal profile), and WhatsApp as a hand-off from the iPhone app. Not built: X, TikTok, Reddit. No publisher has posted to a real platform yet: every one has run only against a stub in tests.
 5. Never invent users, testimonials, statistics or results. The repository records **0 strangers** and no usage data.
 6. Postitheka has no AI in it. Never say it writes, rewrites or optimises posts. Rewriting per platform with an LLM is listed as deferred, not planned.
 7. Items marked **Needs confirmation** are open decisions. Do not resolve them by guessing.
@@ -58,7 +58,7 @@ There is no older marketing plan for this app. Positioning here is built from th
 | **WhatsApp** | Yes, as an **assisted hand-off**: the iPhone app opens WhatsApp's share sheet and you tap Send | Not proven. Never tried on a device; the simulator has no WhatsApp | A real iPhone with WhatsApp. iPhone only. Cannot be scheduled | `ios/Postitheka/ShareSheet.swift`, `internal/jobs/handoffs.go` |
 | **X** | **No** | No | Developer app plus pay-per-use credits ($0.015 a post, $0.20 with a URL, billed to the owner) | `BACKLOG.md` X-001 |
 | **Instagram** | Built, stub-tested only (2026-11-14) | No. Offered only when `INSTAGRAM_APP_ID` is set, and no Meta app exists | Meta app, Professional account, App Review for strangers | IG-001 |
-| **Facebook Pages** | **No** | No | Meta app, Business Verification and App Review | FB-001 |
+| **Facebook Pages** | Built, stub-tested only (2026-11-15) | No. Offered only when `FACEBOOK_APP_ID` is set, and no Meta app exists | Meta app, Business Verification and App Review | FB-001 |
 | **TikTok** | **No** | No | Developer app and audit; drafts first | TT-001, TT-002 |
 | **Reddit** | **No** | No | Reddit's approval; the rollout recommends doing Reddit by hand | RDT-001, RDT-002 |
 | **Bluesky, Mastodon** | **No** | No | Deferred in `BACKLOG.md` | |

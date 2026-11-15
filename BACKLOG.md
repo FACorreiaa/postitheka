@@ -86,7 +86,7 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | X developer app + credits | X-001 used for real | Pay-per-use: $0.015 a post, $0.20 with a URL (2026-10-23) |
 | TikTok developer app | TT-001 used for real, TT-002 | Photos also need a domain verified with TikTok |
 | Reddit API access request | RDT-001 | Approval required since Nov 2025; commercial use needs an agreement |
-| Meta app with the Threads API use case, owner as Threads Tester | THR-001 used before review | `THREADS_APP_ID` / `THREADS_APP_SECRET` (the Threads ones, not the main app's) in `.env`; redirect `PUBLIC_URL/oauth/threads/callback`. Instagram is the same app with the Instagram use case: `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` from "API setup with Instagram login", redirect `PUBLIC_URL/oauth/instagram/callback`, and a professional account with a role on the app. Meta may refuse a plain-http redirect (not checked); then `PUBLIC_URL` must be an https tunnel to the local server |
+| Meta app with the Threads API use case, owner as Threads Tester | THR-001 used before review | `THREADS_APP_ID` / `THREADS_APP_SECRET` (the Threads ones, not the main app's) in `.env`; redirect `PUBLIC_URL/oauth/threads/callback`. Instagram is the same app with the Instagram use case: `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` from "API setup with Instagram login", redirect `PUBLIC_URL/oauth/instagram/callback`, and a professional account with a role on the app. Facebook Pages use the Meta app's own id and secret: `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`, redirect `PUBLIC_URL/oauth/facebook/callback` under Facebook Login. Meta may refuse a plain-http redirect (not checked); then `PUBLIC_URL` must be an https tunnel to the local server |
 | Meta app, Business Verification, App Review | THR-001, IG-001, FB-001 for strangers | Weeks; needs PRV-001 live. Not needed for accounts with a role on the app (Standard Access, checked 2026-11-05) |
 | Approve privacy policy and terms text | PRV-001 | Agent drafts |
 
@@ -136,7 +136,7 @@ Strangers who have published a post: **0**.
 | X-001 | Open | | Credits bought once on TestFlight (decided 2026-11-05); public use needs the tier decision |
 | TT-001 | Open | | |
 | TT-002 | Open | | Owner |
-| FB-001 | Open | | META-001 for strangers; role holders can use it before |
+| FB-001 | Built, unverified | `internal/publisher/facebook`, `publisher.MultiConnector`; `facebook_test.go` (connect: long-lived exchange, Pages across result pages, only Pages the person can post to; text, photo, several photos as one post, video; a publish without a clear answer is never retried; error classes; no secrets in errors; rules), `TestOAuthConnectStoresEveryAccountGranted` | Needs the owner's Meta app with Facebook Login and a Page to post for real. Never run against Facebook. Text length, photo count and video limits are our own caps: Meta's reference states none. META-001 for strangers |
 | IG-001 | Built, unverified | `internal/publisher/instagram`; `instagram_test.go` (connect with the long-lived exchange and the account id from the profile, both answer shapes; image, reel, carousel order; `ERROR`/`EXPIRED`/timeout; publish without a clear answer incl. a cancelled request; error classes by code and subcode; refresh; no secrets in errors; rules) | Needs the owner's Meta app with the Instagram use case and a professional account with a role on it to post for real. Never run against Instagram. META-001 for strangers |
 | RDT-001 | Open | | Owner |
 | RDT-002 | Open | | OPEN: title and subreddit |
@@ -429,8 +429,8 @@ exchange is on `api.instagram.com` and everything else on `graph.instagram.com`;
 containers are created under is `user_id` from `/me`, not the one the code exchange returns.
 The daily limit is not read ahead of time: Instagram's refusal (subcode 2207042) is retried
 hourly. Left for later: aspect ratio and duration checks (VID-001), the 30 hashtag and 20
-@-tag limits, alt text, and marking the account for reconnect on error 190 once ACC-001 has
-merged (`publisher.Reconnect`).
+@-tag limits and alt text. A refused token (error 190) marks the account for reconnecting
+(`publisher.Reconnect`, since 2026-11-15).
 
 ### X-001 · X publisher · M
 **Owner:** buys X API credits once the app is on TestFlight and ready to test (decided 2026-11-05).
@@ -482,6 +482,25 @@ before it. Pages only: posting to personal profiles is not possible. Connect lis
 user's Pages and creates one account per chosen Page.
 
 **Done when:** tests against a stub pass, and a post lands on a real Page from production.
+
+**Built 2026-11-15, against a stub only.** How it differs from the plan above:
+- **No Page picker of ours.** Facebook's consent dialog asks which Pages to share, so every Page
+  shared that the person can create content on becomes an account (`publisher.MultiConnector`,
+  `ExchangeAll`). To add or drop a Page, connect again and change the choice there. A login that
+  shares no usable Page ends as `connect_error=failed`, with no message of its own yet.
+- **Video goes by URL** (`file_url` on `graph-video.facebook.com`), not through the Resumable
+  Upload API. Whether Facebook answers before or after it has fetched the file is not documented;
+  the request gets 4 minutes.
+- **Scopes:** `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, the set the photo
+  and video references ask for. The Pages guide lists more; they were left out.
+- **Limits are ours where Meta states none** (checked 2026-11-15): 5,000 characters, 10 photos,
+  video MP4 only and 300 MB. From the reference: photos of 10 MB. Raise them against a Meta page
+  that says so, or after a real post.
+- **Never retried once the publishing request is sent** unless Facebook clearly refused it: there
+  is no idempotency key and nothing to ask afterwards. The user sees "check the Page before
+  posting again". Uploading the photos of a multi-photo post is retried freely.
+- A video post is saved with no link: Meta documents the address of a Page post, not of a video.
+- Left for later: links as link posts (`link`), scheduled publishing on Facebook's side, Reels.
 
 ### VID-001 · Video rules · M
 Platforms limit video duration, aspect ratio and codec, which `Rules` cannot express today. Add

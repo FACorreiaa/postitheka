@@ -21,7 +21,7 @@ Postitheka is a **public product**, so strangers connect their own accounts. Tha
   audience". Until it passes, direct posts are private-only, so drafts come first.
 - **X:** the owner buys credits once the app is on TestFlight and ready to test. The publisher is
   built against stubs before then. Set a spending limit, and post without URLs by default.
-- **Facebook and the job timeout:** the changes under Code work are accepted. Neither is built yet.
+- **Facebook and the job timeout:** the changes under Code work are accepted. Facebook was built 2026-11-15 (FB-001); the job timeout is not.
 - **Text per platform is a premium feature.** Free users write one text for all platforms, so selecting
   X caps it at 280 characters. Premium users can write a different text per platform.
 
@@ -52,7 +52,7 @@ write a different text per platform. Still open: whether X is premium too, and h
 | Threads | Yes, 500 | Up to 20, JPEG/PNG, 8 MB | MP4/MOV, 5 min, 1 GB | Carousel: not checked | Free | Built, not on `main` |
 | X | Yes, 280 weighted | Up to 4, 5 MB | 20 min, 8 GB | Unconfirmed | $0.015 a post, $0.20 with a URL | Not built |
 | Instagram | **No** | Up to 20, **JPEG only**, 8 MB, 4:5 to 1.91:1 | Reels, MP4/MOV, 3 s to 15 min, 300 MB | Carousel, cropped to the first item's ratio | Free | Built, stub-tested |
-| Facebook | Yes, limit unconfirmed | One by URL; several unconfirmed | Resumable upload; limits unconfirmed | Unconfirmed | Free | Not built |
+| Facebook | Yes; Meta states no limit, capped at 5,000 | By URL, 10 MB; several as one post, capped at 10 | One MP4 by URL; Meta states no limit, capped at 300 MB | Photos only; a video goes alone | Free | Built, stub-tested |
 | TikTok | **No** | By URL from a verified domain, JPEG/WebP | MP4/WebM/MOV, 10 min, 4 GB | Not checked | Free | Not built |
 | Reddit | Yes, plus a required title | **None through the official API** | **None through the official API** | n/a | Unpublished if commercial | Not built |
 
@@ -102,9 +102,13 @@ HEIC is on no platform's list, so reserving an upload for one is refused.
   Set `THREADS_APP_ID` and `THREADS_APP_SECRET`, the Threads values rather than the main app's.
 - **Code:** merge first (step 1). It is on `initial-build`, not `main`.
 
-### Facebook: needs step 2, then code
+### Facebook: needs step 2
 - **Owner:** a Facebook **Page**, because personal profiles cannot be posted to. The same Meta app
-  with Facebook Login, and the owner must be able to create content on the Page.
+  with Facebook Login, and the owner must be able to create content on the Page. Set
+  `FACEBOOK_APP_ID` and `FACEBOOK_APP_SECRET`, the Meta app's own values, and list
+  `PUBLIC_URL/oauth/facebook/callback` under Facebook Login.
+- **Built 2026-11-15** (FB-001), against a stub only. What follows was the plan; `BACKLOG.md`
+  FB-001 says what was built instead (video by URL, no Page picker, three permissions).
 - **Code:** FB-001. Text and links go to `/{page}/feed`, a photo to `/{page}/photos` by URL, and a
   video to `/{page}/videos` with a handle from the Resumable Upload API, all with a Page access
   token (Graph v27.0 in the examples).

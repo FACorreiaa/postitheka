@@ -86,6 +86,15 @@ type OAuthConnector interface {
 	Exchange(ctx context.Context, code, verifier, redirectURL string) (Connection, error)
 }
 
+// MultiConnector is implemented by an OAuthConnector whose one consent can
+// yield several accounts: a Facebook login shares any number of Pages, and
+// each is an account of its own. The service prefers it over Exchange.
+type MultiConnector interface {
+	// ExchangeAll trades the code for every account the user granted. It
+	// returns an error rather than an empty list.
+	ExchangeAll(ctx context.Context, code, verifier, redirectURL string) ([]Connection, error)
+}
+
 // Refresher is implemented by a publisher whose credentials expire and can be
 // renewed without the user: with a refresh token (X, TikTok), or by
 // refreshing the long-lived token itself (Threads, Instagram). The worker
