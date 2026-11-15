@@ -12,7 +12,7 @@ public import struct Foundation.Date
 extension Components {
     /// Types generated from the `#/components/schemas` section of the OpenAPI document.
     public enum Schemas {
-        /// whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+        /// whatsapp and reddit are assisted only: the iOS app hands the post to the platform's own app and the user sends it there. WhatsApp has no posting API; Reddit is by hand by choice, and its title and subreddit are set in Reddit's app.
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/Platform`.
@@ -25,6 +25,7 @@ extension Components {
             case facebook = "facebook"
             case tiktok = "tiktok"
             case whatsapp = "whatsapp"
+            case reddit = "reddit"
         }
         /// - Remark: Generated from `#/components/schemas/PlatformInfo`.
         public struct PlatformInfo: Codable, Hashable, Sendable {
@@ -579,7 +580,7 @@ extension Components {
             public var media_ids: [Swift.String]?
             /// - Remark: Generated from `#/components/schemas/CreatePostRequest/account_ids`.
             public var account_ids: [Swift.String]
-            /// Platforms the client will hand the post to itself (WhatsApp, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
+            /// Platforms the client will hand the post to itself (WhatsApp and Reddit, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/CreatePostRequest/assisted`.
@@ -595,7 +596,7 @@ extension Components {
             ///   - text:
             ///   - media_ids: In display order.
             ///   - account_ids:
-            ///   - assisted: Platforms the client will hand the post to itself (WhatsApp, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
+            ///   - assisted: Platforms the client will hand the post to itself (WhatsApp and Reddit, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
             ///   - scheduled_at: Omit to publish now.
             public init(
                 options: Components.Schemas.CreatePostRequest.optionsPayload? = nil,

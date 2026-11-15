@@ -31,6 +31,8 @@ so far and introduces none: anything still undecided is marked **OPEN** and wait
 - **The web composer came before X** (owner said "continue"; the agent chose the order). X needs
   a decision on a paid API tier, which is the owner's.
 - **WhatsApp is assisted publish** through the iOS share sheet; it has no posting API.
+- **Reddit is assisted publish too** (owner, 2026-11-15): its API needs approval, commercial use
+  needs an agreement, and its documented part takes no media. The API route is dropped.
 - **Local S3 is RustFS**, because MinIO no longer publishes images.
 - **Sign-in is a CLI-minted token until AUTH-001.** That is acceptable for the owner and not for
   strangers, so AUTH-001 is on the path to the P1 gate.
@@ -85,7 +87,6 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | LinkedIn developer app with "Share on LinkedIn" and "Sign In with LinkedIn using OpenID Connect" | LI-001 used for real | Self-serve. `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` in `.env`; redirect `http://localhost:8095/oauth/linkedin/callback` locally, `PUBLIC_URL/oauth/linkedin/callback` in production |
 | X developer app + credits | X-001 used for real | Pay-per-use: $0.015 a post, $0.20 with a URL (2026-10-23) |
 | TikTok developer app | TT-001 used for real, TT-002 | Photos also need a domain verified with TikTok |
-| Reddit API access request | RDT-001 | Approval required since Nov 2025; commercial use needs an agreement |
 | Meta app with the Threads API use case, owner as Threads Tester | THR-001 used before review | `THREADS_APP_ID` / `THREADS_APP_SECRET` (the Threads ones, not the main app's) in `.env`; redirect `PUBLIC_URL/oauth/threads/callback`. Instagram is the same app with the Instagram use case: `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` from "API setup with Instagram login", redirect `PUBLIC_URL/oauth/instagram/callback`, and a professional account with a role on the app. Facebook Pages use the Meta app's own id and secret: `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`, redirect `PUBLIC_URL/oauth/facebook/callback` under Facebook Login. Meta may refuse a plain-http redirect (not checked); then `PUBLIC_URL` must be an https tunnel to the local server |
 | Meta app, Business Verification, App Review | THR-001, IG-001, FB-001 for strangers | Weeks; needs PRV-001 live. Not needed for accounts with a role on the app (Standard Access, checked 2026-11-05) |
 | Approve privacy policy and terms text | PRV-001 | Agent drafts |
@@ -96,7 +97,7 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | --- | --- | --- | --- |
 | **P0 · Foundations** | 6/6 | **Met** | Nothing |
 | **P1 · First stranger** | 4/12 (2 built, unverified) | Not met | Not deployed; no real sign-in |
-| **P2 · Platforms** | 0/15 (4 built, unverified) | Not met | Needs P1 deployed; X needs credits, Reddit approval; Meta and TikTok need review |
+| **P2 · Platforms** | 0/15 (13 built, unverified; RDT-001 dropped) | Not met | Needs P1 deployed; X needs credits; Meta and TikTok need review |
 | **P3 · iOS** | 1/6 (2 built, unverified) | Not met | IOS-002 needs AUTH-001; nothing tested on a device |
 
 Strangers who have published a post: **0**.
@@ -138,8 +139,8 @@ Strangers who have published a post: **0**.
 | TT-002 | Open | | Owner |
 | FB-001 | Built, unverified | `internal/publisher/facebook`, `publisher.MultiConnector`; `facebook_test.go` (connect: long-lived exchange, Pages across result pages, only Pages the person can post to; text, photo, several photos as one post, video; a publish without a clear answer is never retried; error classes; no secrets in errors; rules), `TestOAuthConnectStoresEveryAccountGranted` | Needs the owner's Meta app with Facebook Login and a Page to post for real. Never run against Facebook. Text length, photo count and video limits are our own caps: Meta's reference states none. META-001 for strangers |
 | IG-001 | Built, unverified | `internal/publisher/instagram`; `instagram_test.go` (connect with the long-lived exchange and the account id from the profile, both answer shapes; image, reel, carousel order; `ERROR`/`EXPIRED`/timeout; publish without a clear answer incl. a cancelled request; error classes by code and subcode; refresh; no secrets in errors; rules) | Needs the owner's Meta app with the Instagram use case and a professional account with a role on it to post for real. Never run against Instagram. META-001 for strangers |
-| RDT-001 | Open | | Owner |
-| RDT-002 | Open | | OPEN: title and subreddit |
+| RDT-001 | Dropped 2026-11-15 | | Reddit is posted to by hand, so no API access is needed |
+| RDT-002 | Built, unverified | `publisher.Reddit` in `IsAssisted`; `TestAssistedHandoff` ("reddit and whatsapp each get a handoff"); kit `redditAndWhatsAppAreHandedOverOneAfterTheOther`; `ShareSheet.swift`, `AssistedStamp` | Never tried on a device: what Reddit's share extension accepts, its activity identifier (matched by the prefix `com.reddit.Reddit.`), and two share sheets in a row are all unseen |
 | VID-001 | Built, unverified | Length, shape and width limits in `Rules`, checked against what the client read from the file: `video_rules_test.go`, `web/src/rules.test.ts`, the kit's `RulesTests.swift` (the same cases three times), `TestReserveUploadKeepsWhatTheClientReadFromAVideo`. No codec check. Not seen with a real video file in a browser or on a device | |
 | OPT-001 | Built, unverified | `options` on `post_targets`, `Rules.Options`, `POST /v1/posts` `options` by account id; first use is Discord's forum post title. `options_test.go`, `TestTargetOptionsReachThePublisher`, `TestCreatePostRefusesOptionsItCannotUse`, `TestOptionsChangeTheIdempotencyDigestOnlyWhenSet`, `TestAForumPostTakesTheTitleTheAuthorGaveIt`, `web/src/rules.test.ts`, the kit's `RulesTests.swift` and `ComposerTests.swift`. Web field seen in a browser; iOS field built, not looked at on a device; never sent to a real forum channel | |
 | IOS-001 | Done | `ios/`: Xcode project + `PostithekaKit`, client generated by swift-openapi-generator 1.14.0; `task ios:check` green locally and in CI (PR #2, run 39951558861, 2026-10-23) | |
@@ -315,8 +316,8 @@ What each platform allows, with sources and the date checked, is in
 `docs/platform-research.md` (re-checked 2026-10-23). Every platform below except Discord connects
 through OAuth, so OAUTH-001 comes first. Order after it: LinkedIn (self-serve, usable as soon as
 the owner creates the app), Threads and Instagram (usable by app testers before review), X
-(code now, pay-per-use credits to use), TikTok (private-only until audited), Reddit (needs
-Reddit's approval first).
+(code now, pay-per-use credits to use), TikTok (private-only until audited). Reddit is by hand
+(RDT-002).
 
 ### OAUTH-001 · OAuth connect flow · M
 Shared by every OAuth platform. `POST /v1/accounts/{platform}/connect` returns the consent URL;
@@ -484,22 +485,24 @@ interaction toggles off). The agent prepares the audit material; the owner submi
 
 **Done when:** TikTok approves direct posting with public visibility.
 
-### RDT-001 · Reddit API access · S · Owner
-Since November 2025 Reddit approves every new Data API client, and commercial use needs a
+### RDT-001 · Reddit API access · S · Owner · Dropped
+Dropped 2026-11-15: the owner chose to post to Reddit by hand (RDT-002), so nothing is requested.
+Kept for the record of why. Since November 2025 Reddit approves every new Data API client, and commercial use needs a
 separate written agreement. Native image and video upload is not in Reddit's official API docs,
 so under "official APIs only" Reddit is text and link posts. The owner requests access.
 
 **Done when:** Reddit approves the app for posting on users' behalf.
 
-### RDT-002 · Reddit publisher · M
-**OPEN:** Reddit posts need a title and a subreddit, which a post does not have. Either an
-account is one subreddit and the title is the post's first line, or the composer gets a title
-field. **Needs:** RDT-001 for real use, OAUTH-001, X-002. Text and link posts only, checked
-against the subreddit's `post_requirements` (flair, title length, banned domains) when the post
-is created.
+### RDT-002 · Reddit by hand · S
+Decided by the owner on 2026-11-15: Reddit is an assisted publish, like WhatsApp. The iOS app
+hands the text and media to Reddit through the share sheet; the author picks the community and
+the title there, which settles the old open question of where a title and subreddit come from.
+The server sends nothing and stores no Reddit credentials. A post going to both WhatsApp and
+Reddit gets one share sheet after the other, each reported alone. iOS only; the web shows the
+outcome. Cannot be scheduled, like any handoff.
 
-**Done when:** tests against a stub cover connect, a text post, a link post, a subreddit that
-requires flair, and error classes.
+**Done when:** the post opens in Reddit ready to send from a real iPhone, and Sent shows it as
+handed off.
 
 ### FB-001 · Facebook Pages publisher · M
 **Needs:** OAUTH-001; META-001 for strangers, since role holders on the app can use Standard Access

@@ -54,7 +54,9 @@ struct ComposerView: View {
                             }
                         }
                     }
-                    WhatsAppStamp(composer: composer)
+                    ForEach(ShareSheet.platforms, id: \.self) { platform in
+                        AssistedStamp(platform: platform, composer: composer)
+                    }
                 }
                 .brandRow()
 
@@ -96,7 +98,7 @@ struct ComposerView: View {
             .onChange(of: scheduling) { _, on in composer.scheduledAt = on ? .now.addingTimeInterval(3600) : nil }
             .onChange(of: composer.pendingHandoff?.id) { _, id in
                 guard id != nil, let handoff = composer.pendingHandoff else { return }
-                ShareSheet.present(text: handoff.text, files: handoff.files) { sent in
+                ShareSheet.present(handoff) { sent in
                     Task {
                         if let post = await composer.finishHandoff(sent: sent) {
                             model.replace(post)
@@ -168,31 +170,42 @@ private struct StampRow: View {
     }
 }
 
-/// WhatsApp has no posting API, so its stamp is not an account: choosing it
-/// opens the share sheet after Publish, and the user sends it from WhatsApp.
-private struct WhatsAppStamp: View {
+/// An assisted platform's stamp is not an account: choosing it opens the share
+/// sheet after Publish, and the user sends the post from that platform's app.
+/// WhatsApp has no posting API; Reddit is by hand by choice (RDT-002).
+private struct AssistedStamp: View {
+    let platform: Platform
     @Bindable var composer: Composer
 
     var body: some View {
+        let name = platform.displayName
+        let chosen = composer.handTo.contains(platform)
         Button {
-            composer.handToWhatsApp.toggle()
+            if chosen { composer.handTo.remove(platform) } else { composer.handTo.insert(platform) }
         } label: {
             HStack(spacing: 12) {
-                Image(systemName: composer.handToWhatsApp ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(composer.handToWhatsApp ? Color.accentColor : .secondary)
+                Image(systemName: chosen ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(chosen ? Color.accentColor : .secondary)
                 VStack(alignment: .leading, spacing: 4) {
                     // Explicit colours: inside a Form's Button, .primary and .secondary
                     // resolve against the tint and every line would turn gold.
-                    Text("WhatsApp").foregroundStyle(Brand.cream)
-                    Text(ShareSheet.isWhatsAppInstalled ? "You send it from WhatsApp" : "WhatsApp is not installed on this phone")
+                    Text(name).foregroundStyle(Brand.cream)
+                    Text(ShareSheet.isInstalled(platform) ? hint : "\(name) is not installed on this phone")
                         .font(.caption).foregroundStyle(Color.secondary)
-                    if composer.handToWhatsApp && composer.scheduledAt != nil {
+                    if chosen && composer.scheduledAt != nil {
                         Text("Cannot be scheduled: it is handed over now").font(.caption).foregroundStyle(.red)
                     }
                 }
             }
         }
-        .accessibilityAddTraits(composer.handToWhatsApp ? .isSelected : [])
+        .accessibilityAddTraits(chosen ? .isSelected : [])
+    }
+
+    private var hint: String {
+        switch platform {
+        case .reddit: "You choose the community and title in Reddit"
+        default: "You send it from \(platform.displayName)"
+        }
     }
 }
 

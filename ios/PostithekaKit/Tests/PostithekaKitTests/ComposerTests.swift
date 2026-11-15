@@ -78,7 +78,7 @@ struct ComposerTests {
         c.selected = []
         c.text = "group"
         #expect(!c.canPublish, "no destination yet")
-        c.handToWhatsApp = true
+        c.handTo = [.whatsapp]
         #expect(c.canPublish, "WhatsApp alone is a destination")
 
         _ = await c.publish()
@@ -96,10 +96,38 @@ struct ComposerTests {
         #expect(c.pendingHandoff == nil)
     }
 
+    @Test func redditAndWhatsAppAreHandedOverOneAfterTheOther() async {
+        let created = #"{"id":"p3","text":"both","media_ids":[],"scheduled_at":"2026-11-15T10:00:00Z","created_at":"2026-11-15T10:00:00Z","targets":[{"id":"t1","platform":"reddit","status":"handing_off"},{"id":"t2","platform":"whatsapp","status":"handing_off"}]}"#
+        let afterReddit = #"{"id":"p3","text":"both","media_ids":[],"scheduled_at":"2026-11-15T10:00:00Z","created_at":"2026-11-15T10:00:00Z","targets":[{"id":"t1","platform":"reddit","status":"handed_off","published_at":"2026-11-15T10:00:05Z"},{"id":"t2","platform":"whatsapp","status":"handing_off"}]}"#
+        let afterBoth = #"{"id":"p3","text":"both","media_ids":[],"scheduled_at":"2026-11-15T10:00:00Z","created_at":"2026-11-15T10:00:00Z","targets":[{"id":"t1","platform":"reddit","status":"handed_off","published_at":"2026-11-15T10:00:05Z"},{"id":"t2","platform":"whatsapp","status":"failed","last_error":"the share sheet closed without sending"}]}"#
+        let stub = StubTransport([(201, created), (200, afterReddit), (200, afterBoth)])
+        let c = composer(stub)
+        c.selected = []
+        c.text = "both"
+        c.handTo = [.whatsapp, .reddit]
+
+        _ = await c.publish()
+
+        let sentBody = try? JSONSerialization.jsonObject(with: Data(stub.sent[0].body.utf8)) as? [String: Any]
+        #expect(sentBody?["assisted"] as? [String] == ["reddit", "whatsapp"])
+        #expect(c.handTo.isEmpty)
+        #expect(c.pendingHandoff?.platform == .reddit)
+
+        _ = await c.finishHandoff(sent: true)
+        #expect(stub.sent[1].request.path == "/v1/targets/t1/handoff")
+        #expect(c.pendingHandoff?.platform == .whatsapp, "the next share sheet is due")
+        #expect(c.pendingHandoff?.text == "both")
+
+        _ = await c.finishHandoff(sent: false)
+        #expect(stub.sent[2].request.path == "/v1/targets/t2/handoff")
+        #expect(stub.sent[2].body.contains("false"))
+        #expect(c.pendingHandoff == nil)
+    }
+
     @Test func aHandoffCannotBeScheduled() {
         let c = composer(StubTransport())
         c.text = "x"
-        c.handToWhatsApp = true
+        c.handTo = [.whatsapp]
         c.scheduledAt = .now.addingTimeInterval(3600)
         #expect(!c.canPublish)
     }

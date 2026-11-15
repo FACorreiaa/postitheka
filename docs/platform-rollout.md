@@ -34,7 +34,7 @@ and the free and premium tiers are the likely place for it (decision 5).
 | # | Decision | Recommendation | Why |
 | --- | --- | --- | --- |
 | 3 | TikTok after the audit opens: when to apply? | Ship drafts first, then apply (TT-002) | Review wants a working, public app |
-| 4 | Reddit: API or by hand? | By hand | Approval is doubtful, the API has no media, and subreddit rules decide what survives |
+| 4 | Reddit: API or by hand? | **Decided 2026-11-15: by hand** (built, RDT-002) | Approval is doubtful, the API has no media, and subreddit rules decide what survives |
 | 5 | Is X itself premium, and how does a user pay? | Make X premium; choose payment before building tiers | Every X post costs the owner money; no billing exists yet |
 | 6 | Public hostname (deferred 2026-10-22) | Choose one when starting step 2 | OAuth callbacks, TestFlight and scheduled posts need a server that stays up |
 | 7 | LinkedIn: personal profile or Company Page? | Personal profile first | Company Pages need an application for the Community Management API |
@@ -54,12 +54,12 @@ write a different text per platform. Still open: whether X is premium too, and h
 | Instagram | **No** | Up to 20, **JPEG only**, 8 MB, 4:5 to 1.91:1 | Reels, MP4/MOV, 3 s to 15 min, 300 MB | Carousel, cropped to the first item's ratio | Free | Built, stub-tested |
 | Facebook | Yes; Meta states no limit, capped at 5,000 | By URL, 10 MB; several as one post, capped at 10 | One MP4 by URL; Meta states no limit, capped at 300 MB | Photos only; a video goes alone | Free | Built, stub-tested |
 | TikTok | **No** | By URL from a verified domain, JPEG/WebP | MP4/WebM/MOV, 10 min, 4 GB | Not checked | Free | Not built |
-| Reddit | Yes, plus a required title | **None through the official API** | **None through the official API** | n/a | Unpublished if commercial | Not built |
+| Reddit | By hand: whatever Reddit's app takes from the share sheet (not seen on a device) | By hand | By hand | n/a | Free: no API is used | Built as a handoff, never tried on a device |
 
 The API already treats text and media as optional: a post needs one or the other. Each platform's
 own requirements then apply, and because of "all or nothing at the door", one failing stamp gets
 the whole post refused with a 422 until that stamp is deselected. So a text-only post cannot include
-Instagram or TikTok, and a post with media cannot include Reddit.
+Instagram or TikTok. Reddit is handed over on the phone, so the server checks nothing for it.
 
 ### What to export so one post fits everywhere
 
@@ -149,7 +149,7 @@ HEIC is on no platform's list, so reserving an upload for one is refused.
   the post "Promotional content", which is what promoting our own apps needs. It also forbids adding
   promotional watermarks and logos through the client.
 
-### Reddit: recommend by hand
+### Reddit: by hand (decided by the owner 2026-11-15, built as RDT-002)
 - Every new API client needs approval, and commercial use needs a separate agreement (official text
   read 2026-10-23; Reddit's page refused automated reads on 2026-11-05).
 - Third-party guides report personal bots are usually refused, and one says requests stop on
@@ -158,12 +158,13 @@ HEIC is on no platform's list, so reserving an upload for one is refused.
 - Our own judgement, not a platform rule: subreddits often restrict self-promotion, so each post
   needs reading that community's rules. That does not suit cross-posting.
 
-### Alternative for TikTok and Reddit: assisted publish
-The iOS share sheet already hands WhatsApp posts to the app, and the same flow could hand a post to
-the TikTok or Reddit app, media included. It needs `IsAssisted` extended and the product rule
-changed, since that rule reserves assisted publish for platforms with no posting API. So it is the
-owner's call. Unverified: what those apps accept from the share sheet. The WhatsApp handoff has not
-been tried on a device either.
+### Assisted publish: Reddit built, TikTok possible
+The iOS share sheet hands a post to WhatsApp and, since 2026-11-15, to Reddit, media included.
+`IsAssisted` covers both and the product rule in `CLAUDE.md` now allows a platform the owner chose
+to post to by hand. The same flow could hand a post to the TikTok app; that stays the owner's call.
+Unverified: what Reddit's app accepts from the share sheet, and the identifier of its share
+extension (the app matches the prefix `com.reddit.Reddit.`). Neither handoff has been tried on a
+device.
 
 ## Order of work
 

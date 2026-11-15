@@ -85,7 +85,7 @@ users ─┬─< api_tokens       token_hash (sha256), last_used_at
 - `accounts.id` is generated in Go, because the credentials are sealed to it before the insert.
   A blob copied to another row does not open.
 - Disconnecting an account sets `post_targets.account_id` to NULL and keeps the history;
-  `platform` is copied onto the target for the same reason. An assisted target (WhatsApp) has
+  `platform` is copied onto the target for the same reason. An assisted target (WhatsApp, Reddit) has
   no account from the start: there is nothing to connect.
 - `accounts.brand` is a label for the product an account posts for (BRAND-001). Clients filter
   the composer by it. It is not a tenant: every query is still scoped by `user_id` alone, and
@@ -132,7 +132,7 @@ An assisted post cannot be scheduled: the handoff happens on the phone, now. The
 through `POST /v1/targets/{id}/handoff`, conditional on `handing_off`, so a repeat of the same
 outcome is accepted and anything else is a 409. `expire_handoffs` runs every ten minutes and
 fails handoffs older than an hour (the app was killed with the share sheet open); its message
-says to check WhatsApp, because the user may have tapped Send before the report was lost.
+says to check the app it was handed to, because the user may have tapped Send before the report was lost.
 
 A repeat with a known key is answered before validation: the first post may have been accepted
 under conditions that no longer hold, such as an account since disconnected. Two concurrent
@@ -266,7 +266,7 @@ Checked dates matter: re-check a platform's docs before building it.
 | LinkedIn | Direct (OAuth 2.0) | **Built** (stub-tested) | Checked 2026-10-23: 3,000 characters, 20 images of 5 MB, or one MP4 up to 500 MB. Self-serve. Needs the owner's developer app to use. |
 | Threads | Direct (OAuth, threads.com) | **Built** (stub-tested) | Checked 2026-10-23: 500 characters (emoji counted in UTF-8 bytes), 5 links, carousel of 2–20; JPEG/PNG 8 MB, MP4/MOV 1 GB. Testers before App Review; needs the owner's Threads app. |
 | X | Direct (OAuth 2.0 PKCE) | **Built** (stub-tested) | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23), billed to the developer app. Checked 2026-11-15: 280 weighted characters (`x_weighted`), 4 photos (JPG/PNG/WEBP, 5 MB) or 1 video (0.5 s to 20 min, 1:3 to 3:1; 1 GiB is our cap). Chunked upload in 4 MB segments. Tokens last 2 hours and the refresh token rotates. No idempotency key: an unanswered create is not retried. No GIF. |
-| Reddit | Direct (OAuth 2.0) | Not started | Needs Reddit's approval first; text and links only. |
+| Reddit | Assisted (iOS share sheet) | **Built** (never tried on a device) | By hand by the owner's choice (2026-11-15): the API needs Reddit's approval and its documented part takes no images or video. The author picks the community and title in Reddit's app. The server sends nothing; it records the handoff the phone reports. |
 | Facebook | Direct (Facebook Login) | **Built** (stub-tested) | Pages only; one account per Page shared at login. Checked 2026-11-15: text, photos (JPEG/PNG/GIF, 10 MB) singly or several in one post, or one MP4 by URL. Meta states no text, photo-count or video limit, so those are our caps (5,000 characters, 10 photos, 300 MB). Role holders before App Review; needs the owner's Meta app. |
 | Instagram | Direct (Instagram Login) | **Built** (stub-tested) | Checked 2026-11-14: caption of 2,200 characters, no post without media, carousel of 2–20; JPEG only, 8 MB; a single video is a reel, MP4/MOV 300 MB; all media by URL (`PublicURL`). Business/Creator accounts, no Page needed. 100 posts in 24 hours. Role holders before App Review; needs the owner's Instagram app. |
 | TikTok | Direct, to the inbox (Content Posting API, `video.upload`) | **Built** (stub-tested) | A video goes to the account's TikTok inbox and the target ends `drafted`: the author adds the caption and posts it in TikTok, so the post's text is not sent. Checked 2026-11-15: one video, MP4/MOV/WebM, at most 10 minutes, no side over 4096 px, pushed in 10 MB chunks; at most 5 unfinished drafts in 24 hours; access token 2 hours, refresh token 180 days. Our own cap: 1 GiB (TikTok takes 4 GB). No photos (pull from a verified domain only). Direct posting waits for TikTok's audit (TT-002); until then such posts are private-only. |
@@ -323,7 +323,7 @@ spec because auth wraps every spec route, and it holds nothing secret.
 | `DELETE /v1/accounts/{id}` | Disconnect; queued targets for it fail as "disconnected" |
 | `POST /v1/media` | Reserve an upload, get a presigned PUT |
 | `GET /v1/posts?limit=` | Newest first, with targets and media ids |
-| `POST /v1/posts` | Validate, store and queue; 422 with every issue. `Idempotency-Key` makes retries safe. `assisted: ["whatsapp"]` adds handoff targets. `options` carries, per account id, what the platform's rules list under `options` (OPT-001) |
+| `POST /v1/posts` | Validate, store and queue; 422 with every issue. `Idempotency-Key` makes retries safe. `assisted: ["whatsapp", "reddit"]` adds one handoff target each. `options` carries, per account id, what the platform's rules list under `options` (OPT-001) |
 | `GET /v1/posts/{id}` | One post with per-target status |
 | `PATCH /v1/posts/{id}` | Moves an unsent post: `{scheduled_at}`, a past time meaning now. 409 unless every target is still `pending`. The targets are replaced (new ids) and queued for the new time; the jobs for the old ones find nothing to send and stop |
 | `DELETE /v1/posts/{id}` | Cancels an unsent post and removes it; 409 unless every target is still `pending`. Its queued jobs stop when they find no target, and the sweep removes its uploads. Nothing is deleted from a platform |
@@ -375,9 +375,12 @@ compiles into Debug and Beta only: `SignInView` picks it under `#if DEBUG || BET
 `ios/tools/release-proof.sh` builds Release and fails if any of them got in. The motion driver
 is `MascotMotion` in PostithekaKit, tested with the web's numbers.
 
-WhatsApp: after the server accepts a post with `assisted: ["whatsapp"]`, the app opens the share
-sheet with the text and media and reports the outcome (`completed` on the WhatsApp activity
-means sent) through the handoff route. Still to do: the share extension (start a post from
+WhatsApp and Reddit: after the server accepts a post with `assisted`, the app opens the share
+sheet with the text and media and reports the outcome through the handoff route. Sent means
+`completed` on that platform's own share extension: WhatsApp's by its exact identifier,
+Reddit's by the prefix `com.reddit.Reddit.` (the app's identifier from the App Store,
+2026-11-15; the extension's own name has not been read off a device). With both chosen, the
+sheets open one after the other, each reported alone (`ShareSheet.swift`, `Composer.handoffs`). Still to do: the share extension (start a post from
 Photos) and on-device video conversion (`AVAssetExportSession`, H.264/AAC MP4) so the server
 never needs ffmpeg.
 

@@ -182,10 +182,10 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
-         * @description whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+         * @description whatsapp and reddit are assisted only: the iOS app hands the post to the platform's own app and the user sends it there. WhatsApp has no posting API; Reddit is by hand by choice, and its title and subreddit are set in Reddit's app.
          * @enum {string}
          */
-        Platform: "discord" | "linkedin" | "threads" | "x" | "instagram" | "facebook" | "tiktok" | "whatsapp";
+        Platform: "discord" | "linkedin" | "threads" | "x" | "instagram" | "facebook" | "tiktok" | "whatsapp" | "reddit";
         PlatformInfo: {
             platform: components["schemas"]["Platform"];
             /**
@@ -331,7 +331,7 @@ export interface components {
             /** @description In display order. */
             media_ids?: string[];
             account_ids: string[];
-            /** @description Platforms the client will hand the post to itself (WhatsApp, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device. */
+            /** @description Platforms the client will hand the post to itself (WhatsApp and Reddit, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device. */
             assisted?: components["schemas"]["Platform"][];
             /**
              * Format: date-time

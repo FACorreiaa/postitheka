@@ -196,7 +196,7 @@ When a deployed version exists, remove the last line and check every network nam
 
 ### Brand voice
 
-There is no written voice guide. This is inferred from the UI copy, which is plain, specific and honest about failure: "Press Publish again; it will not post twice.", "The phone never reported back. Check WhatsApp before sending it again.", "Publish unlocks when uploads finish." See `rules/brand.md`.
+There is no written voice guide. This is inferred from the UI copy, which is plain, specific and honest about failure: "Press Publish again; it will not post twice.", "The phone never reported back. Check the app it was handed to before sending it again.", "Publish unlocks when uploads finish." See `rules/brand.md`.
 
 | Do | Don't |
 |---|---|

@@ -17,8 +17,9 @@ import (
 const HandoffTTL = time.Hour
 
 // HandoffExpiredMessage is shown on the target. It cannot say the post was not
-// sent: the user may have tapped Send before the app was killed.
-const HandoffExpiredMessage = "The phone never reported back. Check WhatsApp before sending it again."
+// sent: the user may have tapped Send before the app was killed. One message
+// for every assisted platform, so it names none.
+const HandoffExpiredMessage = "The phone never reported back. Check the app it was handed to before sending it again."
 
 type ExpireHandoffsArgs struct{}
 

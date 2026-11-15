@@ -706,6 +706,34 @@ func TestAssistedHandoff(t *testing.T) {
 		}
 	})
 
+	t.Run("reddit and whatsapp each get a handoff", func(t *testing.T) {
+		v, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "both", Assisted: []string{"reddit", "whatsapp"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(v.Targets) != 2 {
+			t.Fatalf("%d targets, want one for each platform", len(v.Targets))
+		}
+		for _, tg := range v.Targets {
+			if tg.Status != "handing_off" || tg.AccountID.Valid {
+				t.Errorf("%s target %+v, want handing_off with no account", tg.Platform, tg)
+			}
+		}
+		// Each is reported alone: Reddit sent, WhatsApp closed without sending.
+		for _, tg := range v.Targets {
+			if _, err := e.svc.CompleteHandoff(ctx, alice, tg.ID, tg.Platform == "reddit"); err != nil {
+				t.Fatal(err)
+			}
+		}
+		got, _ := e.svc.GetPost(ctx, alice, v.Post.ID)
+		for _, tg := range got.Targets {
+			want := map[string]string{"reddit": "handed_off", "whatsapp": "failed"}[tg.Platform]
+			if tg.Status != want {
+				t.Errorf("%s is %s, want %s", tg.Platform, tg.Status, want)
+			}
+		}
+	})
+
 	t.Run("rejected requests", func(t *testing.T) {
 		later := time.Now().Add(time.Hour)
 		for name, in := range map[string]service.CreatePostInput{
