@@ -35,7 +35,18 @@ struct ComposerView: View {
                         Text("Connect an account under Accounts to choose where this goes.")
                             .foregroundStyle(.secondary)
                     }
-                    ForEach(model.accounts, id: \.id) { account in
+                    let brands = PostithekaKit.brands(of: composer.accounts)
+                    if !brands.isEmpty {
+                        Picker("Brand", selection: Binding(
+                            get: { composer.brand },
+                            set: { composer.brandChoice = $0 }
+                        )) {
+                            Text("All").tag(BrandFilter.all)
+                            ForEach(brands, id: \.self) { Text($0).tag(BrandFilter.brand($0)) }
+                        }
+                        .tint(.accentColor)
+                    }
+                    ForEach(composer.shown, id: \.id) { account in
                         StampRow(account: account, composer: composer)
                     }
                     WhatsAppStamp(composer: composer)

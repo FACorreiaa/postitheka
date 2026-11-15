@@ -1,5 +1,6 @@
 import { type Ref, useState } from "react";
 import { type Account, api, messageOf, type PlatformInfo } from "./api";
+import { brandsOf } from "./brands";
 import { platformNames } from "./rules";
 
 /** What came back from a platform's consent page, read from the URL. */
@@ -58,8 +59,23 @@ export function Accounts({ ref, accounts, platforms, outcome, onChanged }: Props
     await onChanged();
   }
 
+  // Saved when the field is left, like a rename: there is no Save button to
+  // forget. An unchanged value sends nothing.
+  async function setBrand(account: Account, value: string) {
+    const brand = value.trim();
+    if (brand === (account.brand ?? "")) return;
+    const { error: err } = await api.PATCH("/v1/accounts/{accountId}", {
+      params: { path: { accountId: account.id } },
+      body: { brand },
+    });
+    setError(err ? messageOf(err) : "");
+    await onChanged();
+  }
+
   async function disconnect(id: string) {
-    const { error: err } = await api.DELETE("/v1/accounts/{accountId}", { params: { path: { accountId: id } } });
+    const { error: err } = await api.DELETE("/v1/accounts/{accountId}", {
+      params: { path: { accountId: id } },
+    });
     if (err) setError(messageOf(err));
     await onChanged();
   }
@@ -83,12 +99,36 @@ export function Accounts({ ref, accounts, platforms, outcome, onChanged }: Props
                 <strong>{a.display_name}</strong>
                 <span className="help">{platformNames[a.platform] ?? a.platform}</span>
               </span>
-              <button className="quiet danger" onClick={() => void disconnect(a.id)}>
-                Disconnect
-              </button>
+              <span className="account-actions">
+                <input
+                  // Remounts with the saved value, so a refused edit snaps back.
+                  key={a.brand ?? ""}
+                  className="brand-input"
+                  aria-label={`Brand for ${a.display_name}`}
+                  placeholder="Brand"
+                  list="brand-options"
+                  maxLength={40}
+                  defaultValue={a.brand ?? ""}
+                  onBlur={(e) => void setBrand(a, e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                />
+                <button className="quiet danger" onClick={() => void disconnect(a.id)}>
+                  Disconnect
+                </button>
+              </span>
             </li>
           ))}
         </ul>
+      )}
+      <datalist id="brand-options">
+        {brandsOf(accounts).map((b) => (
+          <option key={b} value={b} />
+        ))}
+      </datalist>
+      {accounts.length > 0 && (
+        <p className="help">A brand groups the accounts of one product, so the composer can show them alone.</p>
       )}
 
       {outcome && (

@@ -126,6 +126,7 @@ Strangers who have published a post: **0**.
 | OAUTH-001 | Built, unverified | `internal/service/connect.go`, `internal/httpapi/oauth.go`, `migrations/20261023150000_oauth_connect.sql`; `TestOAuthConnect` (start, callback, replay, cancel, expiry, reconnect, two users); web Accounts checked headless at 1400 and 390 px, light and dark; iOS kit `ConnectTests` | Never run against a real platform; iOS connect screen built, not looked at on a simulator |
 | X-002 | Built, unverified | `publisher.Refresher`, `PublishWorker.refresh` (row lock, re-check, seal, then publish); `TestTokenRefresh` (three concurrent posts refresh once and publish with the new token, revoked grant fails asking for reconnect, transient failure stays pending); mutation-checked; Threads implements it | Never run against a real platform |
 | ACC-001 | Open | | |
+| BRAND-001 | Built, unverified | `migrations/20261114120000_account_brand.sql`, `PATCH /v1/accounts/{id}`; `TestAccountBrand`; web `brands.test.ts`, kit `BrandsTests`; web looked at in a browser at desktop and 375 px against a local server | iOS built and kit-tested, not looked at in a simulator |
 | LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
 | DSC-001 | Open | | |
 | META-001 | Open | | Owner |
@@ -327,6 +328,17 @@ Instagram refresh the long-lived token itself (only once it is 24 hours old), Li
 
 **Done when:** a publish with an expired access token refreshes it and succeeds, and two
 concurrent publishes for one account refresh once (tests).
+
+### BRAND-001 · Brand label on accounts · S
+Decided by the owner 2026-11-14: Postitheka promotes several of the owner's apps from one login.
+An account carries an optional brand ("Aaru", "Norviq"), free text up to 40 characters, set in
+Accounts. The composer shows a brand filter when any account has one, and publishes only to the
+stamps on screen. A label, not a tenant: nothing is scoped by it, and "Teams and shared
+accounts" stays out of scope.
+
+**Done when:** a brand set on an account filters the composer on web and iOS, a stamp hidden by
+the filter is not published to, and another user's account cannot be labelled (tests and a
+browser check).
 
 ### ACC-001 · Accounts that need reconnecting · S
 **Needs:** OAUTH-001. A token that has expired and cannot be refreshed (LinkedIn after 60 days,

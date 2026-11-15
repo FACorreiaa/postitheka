@@ -19,6 +19,7 @@ type Account struct {
 	Credentials []byte
 	CreatedAt   time.Time
 	RemoteID    *string
+	Brand       *string
 }
 
 type ApiToken struct {

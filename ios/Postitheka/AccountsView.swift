@@ -9,6 +9,9 @@ struct AccountsView: View {
     @State private var connecting = false
     @State private var opening: Platform?
     @State private var outcome: ConnectOutcome?
+    @State private var labelling: Account?
+    @State private var brandDraft = ""
+    @State private var brandError: String?
 
     var body: some View {
         @Bindable var prompter = model.reviewPrompter
@@ -28,20 +31,38 @@ struct AccountsView: View {
 
                 Section {
                     ForEach(model.accounts, id: \.id) { account in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(account.display_name)
-                            Text(account.platform.displayName).font(.caption).foregroundStyle(.secondary)
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(account.display_name)
+                                Text(account.platform.displayName).font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if let brand = account.brand {
+                                Text(brand).font(.caption).foregroundStyle(Color.accentColor)
+                            }
                         }
                         .swipeActions {
                             Button("Disconnect", role: .destructive) {
                                 Task { await model.disconnect(account) }
                             }
+                            Button("Brand") {
+                                brandDraft = account.brand ?? ""
+                                brandError = nil
+                                labelling = account
+                            }
+                            .tint(.accentColor)
                         }
                     }
                 } footer: {
-                    if !model.accounts.isEmpty { Text("Swipe to disconnect. Posts already sent stay in Sent.") }
+                    if !model.accounts.isEmpty {
+                        Text("Swipe to disconnect or to set a brand. A brand groups the accounts of one product, so the composer can show them alone. Posts already sent stay in Sent.")
+                    }
                 }
                 .brandRow()
+
+                if let brandError {
+                    Section { Text(brandError).foregroundStyle(.red) }.brandRow()
+                }
 
                 if let outcome {
                     Section {
@@ -95,6 +116,15 @@ struct AccountsView: View {
             .brandBackdrop()
             .navigationTitle("Accounts")
             .sheet(isPresented: $connecting) { ConnectDiscordView() }
+            .alert("Brand", isPresented: Binding(get: { labelling != nil }, set: { if !$0 { labelling = nil } }), presenting: labelling) { account in
+                TextField("Brand", text: $brandDraft)
+                Button("Save") {
+                    Task { brandError = await model.setBrand(account, to: brandDraft) }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: { account in
+                Text("The product \(account.display_name) posts for. Leave it empty for none.")
+            }
         }
     }
 

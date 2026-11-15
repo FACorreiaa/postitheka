@@ -18,17 +18,17 @@ RETURNING user_id;
 -- name: CreateAccount :one
 INSERT INTO accounts (id, user_id, platform, display_name, credentials, remote_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, platform, display_name, created_at;
+RETURNING id, user_id, platform, display_name, created_at, brand;
 
 -- name: GetAccountByRemoteID :one
-SELECT id, user_id, platform, display_name, created_at
+SELECT id, user_id, platform, display_name, created_at, brand
 FROM accounts
 WHERE user_id = $1 AND platform = $2 AND remote_id = $3;
 
 -- name: ReplaceAccountCredentials :one
 UPDATE accounts SET credentials = $3, display_name = $4
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, platform, display_name, created_at;
+RETURNING id, user_id, platform, display_name, created_at, brand;
 
 -- Held while credentials are refreshed, so two jobs for one account do not
 -- both spend a refresh token that rotates.
@@ -53,15 +53,20 @@ RETURNING *;
 DELETE FROM oauth_states WHERE user_id = $1 AND created_at < $2;
 
 -- name: ListAccounts :many
-SELECT id, user_id, platform, display_name, created_at
+SELECT id, user_id, platform, display_name, created_at, brand
 FROM accounts
 WHERE user_id = $1
 ORDER BY created_at;
 
 -- name: GetAccountsByIDs :many
-SELECT id, user_id, platform, display_name, created_at
+SELECT id, user_id, platform, display_name, created_at, brand
 FROM accounts
 WHERE user_id = $1 AND id = ANY(sqlc.arg(ids)::uuid[]);
+
+-- name: SetAccountBrand :one
+UPDATE accounts SET brand = $3
+WHERE id = $1 AND user_id = $2
+RETURNING id, user_id, platform, display_name, created_at, brand;
 
 -- name: DeleteAccount :execrows
 DELETE FROM accounts WHERE id = $1 AND user_id = $2;
