@@ -125,7 +125,7 @@ RETURNING *;
 INSERT INTO post_media (post_id, media_id, position) VALUES ($1, $2, $3);
 
 -- name: CreatePostTarget :one
-INSERT INTO post_targets (post_id, account_id, platform) VALUES ($1, $2, $3)
+INSERT INTO post_targets (post_id, account_id, platform, options) VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: CreateAssistedTarget :one
@@ -204,7 +204,7 @@ ORDER BY pm.post_id, pm.position;
 -- account may have been disconnected since the post was made.
 -- name: GetTargetForPublish :one
 SELECT
-    t.id, t.post_id, t.account_id, t.platform, t.status,
+    t.id, t.post_id, t.account_id, t.platform, t.status, t.options,
     p.user_id, p.text,
     a.credentials, a.needs_reconnect_at
 FROM post_targets t

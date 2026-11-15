@@ -20,6 +20,7 @@ const rules: Rules = {
   min_video_aspect: 0.5,
   max_video_aspect: 2,
   max_video_width: 1920,
+  options: [],
 };
 
 const video = (durationMs?: number, width?: number, height?: number) =>
@@ -70,5 +71,27 @@ describe("factsFrom", () => {
     expect(factsFrom(12.3456, 1080, 1920)).toEqual({ durationMs: 12346, width: 1080, height: 1920 });
     expect(factsFrom(Infinity, 0, 0)).toEqual({});
     expect(factsFrom(NaN, 640, 0)).toEqual({});
+  });
+});
+
+describe("options", () => {
+  const withOptions: Rules = {
+    ...rules,
+    options: [
+      { key: "title", label: "Title", max_length: 5, required: true },
+      { key: "flair", label: "Flair", max_length: 5, required: false },
+    ],
+  };
+  const check = (options?: Record<string, string>) => problems(withOptions, { text: "x", media: [], options });
+
+  it("accepts what fits, counted in characters", () => {
+    expect(check({ title: "Hello", flair: "news" })).toEqual([]);
+    expect(check({ title: " 😀😀😀😀😀 " })).toEqual([]);
+  });
+
+  it("asks for a required option and names one that is too long", () => {
+    expect(check()).toEqual(["Needs a title"]);
+    expect(check({ title: "   " })).toEqual(["Needs a title"]);
+    expect(check({ title: "Hello!", flair: "breaking" })).toEqual(["Title is 1 characters over", "Flair is 3 characters over"]);
   });
 });

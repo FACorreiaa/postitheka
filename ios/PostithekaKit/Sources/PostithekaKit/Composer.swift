@@ -45,6 +45,8 @@ public final class Composer {
     public private(set) var attachments: [Attachment] = []
     public var selected: Set<String> = []
     public var scheduledAt: Date?
+    /// What is set for one destination alone: by account id, then option key.
+    public var options: [String: [String: String]] = [:]
     /// Hand the post to WhatsApp from this device once it is created.
     public var handToWhatsApp = false
     /// Set after publishing when a share sheet should open; the view presents
@@ -91,7 +93,14 @@ public final class Composer {
     /// What would stop `account`'s platform from taking the post as written.
     public func problems(for account: Account) -> [String] {
         guard let rules = rules[account.platform] else { return [] }
+        var draft = draft
+        draft.options = options[account.id] ?? [:]
         return PostithekaKit.problems(rules, draft)
+    }
+
+    /// What `account`'s platform lets a post set for that destination alone.
+    public func fields(for account: Account) -> [PostOption] {
+        rules[account.platform]?.options ?? []
     }
 
     public var isEmpty: Bool {
@@ -145,10 +154,13 @@ public final class Composer {
         let mediaIDs = attachments.compactMap(\.mediaID)
         let accountIDs = chosen.map(\.id)
         let assisted: [Platform] = handToWhatsApp ? [.whatsapp] : []
-        let key = idempotencyKey(mediaIDs: mediaIDs, accountIDs: accountIDs + assisted.map(\.rawValue))
+        // Only for where the post goes: the server refuses options for an
+        // account that is not a destination.
+        let options = options.filter { accountIDs.contains($0.key) }
+        let key = idempotencyKey(mediaIDs: mediaIDs, accountIDs: accountIDs + assisted.map(\.rawValue), options: options)
         do {
             switch try await api.publish(
-                text: text, mediaIDs: mediaIDs, accountIDs: accountIDs, assisted: assisted, scheduledAt: scheduledAt,
+                text: text, mediaIDs: mediaIDs, accountIDs: accountIDs, options: options, assisted: assisted, scheduledAt: scheduledAt,
                 idempotencyKey: key
             ) {
             case .created(let post):
@@ -159,6 +171,7 @@ public final class Composer {
                 handToWhatsApp = false
                 text = ""
                 attachments = []
+                self.options = [:]
                 scheduledAt = nil
                 return post
             case .rejected(let issues):
@@ -195,9 +208,13 @@ public final class Composer {
         serverIssues.filter { $0.account_id == account?.id }
     }
 
-    func idempotencyKey(mediaIDs: [String], accountIDs: [String]) -> String {
+    func idempotencyKey(mediaIDs: [String], accountIDs: [String], options: [String: [String: String]] = [:]) -> String {
+        // Sorted: a dictionary's order changes between runs, and the same
+        // post must give the same signature.
+        let set = options.sorted { $0.key < $1.key }
+            .flatMap { account, values in values.sorted { $0.key < $1.key }.map { "\(account)\u{1}\($0.key)\u{1}\($0.value)" } }
         let signature = [text, mediaIDs.joined(separator: ","), accountIDs.joined(separator: ","),
-                         scheduledAt.map { String($0.timeIntervalSince1970) } ?? ""].joined(separator: "\u{0}")
+                         scheduledAt.map { String($0.timeIntervalSince1970) } ?? "", set.joined(separator: "\u{2}")].joined(separator: "\u{0}")
         if let attempt, attempt.signature == signature { return attempt.key }
         let key = UUID().uuidString
         attempt = (signature, key)

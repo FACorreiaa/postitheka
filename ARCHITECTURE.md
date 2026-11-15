@@ -77,7 +77,8 @@ users ─┬─< api_tokens       token_hash (sha256), last_used_at
        └─< posts            text, scheduled_at, idempotency_key + request_hash
               ├─< post_media    (post_id, position) → media
               └─< post_targets  account_id → accounts (SET NULL), platform, status,
-                                last_error, remote_id, remote_url, published_at
+                                last_error, remote_id, remote_url, published_at,
+                                options (what the author set for this destination)
 ```
 
 - Everything cascades from `users`: deleting a user deletes all of their data.
@@ -260,7 +261,7 @@ Checked dates matter: re-check a platform's docs before building it.
 
 | Platform | Mode | Status | Notes |
 | --- | --- | --- | --- |
-| Discord | Direct (webhook) | **Built** | Checked 2026-10-22: 2,000 chars, 10 files, 20 MiB per file. No review. Forum and media channels get a `thread_name` from the post's first line, sent after Discord refuses the plain message with error 220001; a forum that requires a tag still fails. |
+| Discord | Direct (webhook) | **Built** | Checked 2026-10-22: 2,000 chars, 10 files, 20 MiB per file. No review. Forum and media channels get a `thread_name` from the target's `title` option or else the post's first line, sent after Discord refuses the plain message with error 220001; a forum that requires a tag still fails. |
 | LinkedIn | Direct (OAuth 2.0) | **Built** (stub-tested) | Checked 2026-10-23: 3,000 characters, 20 images of 5 MB, or one MP4 up to 500 MB. Self-serve. Needs the owner's developer app to use. |
 | Threads | Direct (OAuth, threads.com) | **Built** (stub-tested) | Checked 2026-10-23: 500 characters (emoji counted in UTF-8 bytes), 5 links, carousel of 2–20; JPEG/PNG 8 MB, MP4/MOV 1 GB. Testers before App Review; needs the owner's Threads app. |
 | X | Direct (OAuth 2.0 PKCE) | Not started | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23); owner decision. Weighted `CountText`. |
@@ -321,7 +322,7 @@ spec because auth wraps every spec route, and it holds nothing secret.
 | `DELETE /v1/accounts/{id}` | Disconnect; queued targets for it fail as "disconnected" |
 | `POST /v1/media` | Reserve an upload, get a presigned PUT |
 | `GET /v1/posts?limit=` | Newest first, with targets and media ids |
-| `POST /v1/posts` | Validate, store and queue; 422 with every issue. `Idempotency-Key` makes retries safe. `assisted: ["whatsapp"]` adds handoff targets |
+| `POST /v1/posts` | Validate, store and queue; 422 with every issue. `Idempotency-Key` makes retries safe. `assisted: ["whatsapp"]` adds handoff targets. `options` carries, per account id, what the platform's rules list under `options` (OPT-001) |
 | `GET /v1/posts/{id}` | One post with per-target status |
 | `PATCH /v1/posts/{id}` | Moves an unsent post: `{scheduled_at}`, a past time meaning now. 409 unless every target is still `pending`. The targets are replaced (new ids) and queued for the new time; the jobs for the old ones find nothing to send and stop |
 | `DELETE /v1/posts/{id}` | Cancels an unsent post and removes it; 409 unless every target is still `pending`. Its queued jobs stop when they find no target, and the sweep removes its uploads. Nothing is deleted from a platform |

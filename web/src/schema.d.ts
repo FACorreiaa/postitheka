@@ -242,6 +242,8 @@ export interface components {
             max_video_aspect: number;
             /** @description Widest video accepted, in pixels. 0 means no limit. */
             max_video_width: number;
+            /** @description What an author can set for one destination of a post, beyond the post itself. Sent per account in a post's options. */
+            options: components["schemas"]["PostOption"][];
         };
         Account: {
             /** Format: uuid */
@@ -305,8 +307,26 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
         };
+        PostOption: {
+            /** @description The name to send it under. */
+            key: string;
+            /** @description What to call it in a form. */
+            label: string;
+            /** @description In characters (code points). */
+            max_length: number;
+            /** @description A post to this platform is refused without it. */
+            required: boolean;
+        };
+        /** @description Option values by key, as the platform's rules list them. */
+        TargetOptions: {
+            [key: string]: string;
+        };
         /** @description At least one account or one assisted platform. */
         CreatePostRequest: {
+            /** @description Options per destination, keyed by account id. Each account must also be in account_ids, and each key must be one its platform's rules list. An empty value is the same as leaving the key out. */
+            options?: {
+                [key: string]: components["schemas"]["TargetOptions"];
+            };
             text?: string;
             /** @description In display order. */
             media_ids?: string[];
@@ -354,6 +374,7 @@ export interface components {
             remote_url?: string;
             /** Format: date-time */
             published_at?: string;
+            options?: components["schemas"]["TargetOptions"];
         };
         Error: {
             message: string;

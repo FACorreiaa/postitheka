@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -25,6 +26,9 @@ type CreatePostInput struct {
 	Text       string
 	MediaIDs   []uuid.UUID
 	AccountIDs []uuid.UUID
+	// Options are what the author set per destination, by account. Every
+	// account here must also be in AccountIDs.
+	Options map[uuid.UUID]map[string]string
 	// Assisted platforms the client hands the post to itself (WhatsApp).
 	Assisted    []string
 	ScheduledAt *time.Time
@@ -120,9 +124,16 @@ func (s *Service) CreatePost(ctx context.Context, userID uuid.UUID, in CreatePos
 	}
 	issues = append(issues, mediaIssues...)
 
-	post := publisher.Post{Text: in.Text, Media: pubMedia}
+	options := cleanOptions(in.Options)
+	for id := range options {
+		if !slices.Contains(accountIDs, id) {
+			addIssue(Issue{AccountID: &id, Field: "options", Message: "options were sent for an account the post does not go to"})
+		}
+	}
+
 	for _, a := range accounts {
 		accountID := a.ID
+		post := publisher.Post{Text: in.Text, Media: pubMedia, Options: options[a.ID]}
 		if a.NeedsReconnectAt.Valid {
 			addIssue(Issue{AccountID: &accountID, Platform: a.Platform, Field: "account_ids", Message: a.DisplayName + " needs reconnecting before it can be posted to"})
 			continue
@@ -193,6 +204,7 @@ func (s *Service) CreatePost(ctx context.Context, userID uuid.UUID, in CreatePos
 			PostID:    row.ID,
 			AccountID: uuid.NullUUID{UUID: a.ID, Valid: true},
 			Platform:  a.Platform,
+			Options:   encodeOptions(options[a.ID]),
 		})
 		if err != nil {
 			return PostView{}, fmt.Errorf("create target: %w", err)
@@ -240,6 +252,32 @@ func (s *Service) replay(ctx context.Context, userID uuid.UUID, key string, hash
 	return views[0], true, nil
 }
 
+// cleanOptions trims every value and drops the empty ones, and the accounts
+// left with none: a field the author cleared is a field left out.
+func cleanOptions(in map[uuid.UUID]map[string]string) map[uuid.UUID]map[string]string {
+	out := map[uuid.UUID]map[string]string{}
+	for id, values := range in {
+		for k, v := range values {
+			if v = strings.TrimSpace(v); v != "" {
+				if out[id] == nil {
+					out[id] = map[string]string{}
+				}
+				out[id][k] = v
+			}
+		}
+	}
+	return out
+}
+
+// encodeOptions is a target's options as its column stores them.
+func encodeOptions(values map[string]string) []byte {
+	if len(values) == 0 {
+		return []byte("{}")
+	}
+	b, _ := json.Marshal(values)
+	return b
+}
+
 // requestHash is a digest of what the client asked for, used to tell a retry
 // from a different post sent with the same key.
 func requestHash(in CreatePostInput) []byte {
@@ -254,7 +292,10 @@ func requestHash(in CreatePostInput) []byte {
 		AccountIDs  []uuid.UUID `json:"account_ids"`
 		Assisted    []string    `json:"assisted,omitempty"`
 		ScheduledAt *time.Time  `json:"scheduled_at"`
-	}{in.Text, in.MediaIDs, in.AccountIDs, in.Assisted, scheduledAt})
+		// omitempty keeps the digest of a post without options what it was
+		// before options existed, so a retry across that deploy still matches.
+		Options map[uuid.UUID]map[string]string `json:"options,omitempty"`
+	}{in.Text, in.MediaIDs, in.AccountIDs, in.Assisted, scheduledAt, cleanOptions(in.Options)})
 	sum := sha256.Sum256(b)
 	return sum[:]
 }
@@ -495,7 +536,7 @@ func (s *Service) ReschedulePost(ctx context.Context, userID, postID uuid.UUID, 
 		return PostView{}, fmt.Errorf("reschedule: %w", err)
 	}
 	for _, old := range targets {
-		target, err := qtx.CreatePostTarget(ctx, db.CreatePostTargetParams{PostID: postID, AccountID: old.AccountID, Platform: old.Platform})
+		target, err := qtx.CreatePostTarget(ctx, db.CreatePostTargetParams{PostID: postID, AccountID: old.AccountID, Platform: old.Platform, Options: old.Options})
 		if err != nil {
 			return PostView{}, fmt.Errorf("reschedule: create target: %w", err)
 		}

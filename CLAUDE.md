@@ -146,6 +146,7 @@ task build                          # web build, then one binary with the web ap
 | **Target** | One post going to one account. Has its own status: `pending`, `publishing`, `published`, `failed`; an assisted target goes `handing_off` → `handed_off` or `failed`. |
 | **Publisher** | The code that knows one platform: its `Rules`, how to connect, how to publish. |
 | **Rules** | A platform's limits: text length, media count, size and types. |
+| **Option** | A line of text set for one target, listed by the platform's `Rules`: a Discord forum post's title. |
 | **Media** | An uploaded file. Reserved first, uploaded by the client, verified against storage on first use. |
 | **Direct publish** | The server posts through the platform's API. |
 | **Assisted publish** | The iOS app hands the post to the platform's app; the user sends it. WhatsApp only, for now. |

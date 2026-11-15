@@ -3,6 +3,8 @@ import type { Rules } from "./api";
 export interface Draft {
   text: string;
   media: { contentType: string; size: number; durationMs?: number; width?: number; height?: number }[];
+  /** What was set for this destination alone, by the keys in its rules' options. */
+  options?: Record<string, string>;
 }
 
 // An emoji part, as publisher.isEmojiPart in Go defines it: any symbol (So)
@@ -50,6 +52,15 @@ export function problems(rules: Rules, draft: Draft): string[] {
   if (rules.max_links > 0) {
     const links = countLinks(draft.text);
     if (links > rules.max_links) out.push(`At most ${rules.max_links} link${rules.max_links === 1 ? "" : "s"}`);
+  }
+
+  // Mirrors Rules.optionIssues in Go, less the unknown key: a form built from
+  // the rules cannot send one.
+  for (const o of rules.options) {
+    const value = (draft.options?.[o.key] ?? "").trim();
+    const length = countText(value);
+    if (value === "" && o.required) out.push(`Needs a ${o.label.toLowerCase()}`);
+    else if (length > o.max_length) out.push(`${o.label} is ${length - o.max_length} characters over`);
   }
 
   if (rules.requires_media && draft.media.length === 0) out.push("Needs a photo or video");

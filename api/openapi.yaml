@@ -504,6 +504,7 @@ components:
         - min_video_aspect
         - max_video_aspect
         - max_video_width
+        - options
       properties:
         max_text_length:
           type: integer
@@ -566,6 +567,13 @@ components:
         max_video_width:
           type: integer
           description: Widest video accepted, in pixels. 0 means no limit.
+        options:
+          type: array
+          description: >
+            What an author can set for one destination of a post, beyond the
+            post itself. Sent per account in a post's options.
+          items:
+            $ref: "#/components/schemas/PostOption"
 
     Account:
       type: object
@@ -689,11 +697,42 @@ components:
           type: string
           format: date-time
 
+    PostOption:
+      type: object
+      required: [key, label, max_length, required]
+      properties:
+        key:
+          type: string
+          description: The name to send it under.
+        label:
+          type: string
+          description: What to call it in a form.
+        max_length:
+          type: integer
+          description: In characters (code points).
+        required:
+          type: boolean
+          description: A post to this platform is refused without it.
+
+    TargetOptions:
+      type: object
+      description: Option values by key, as the platform's rules list them.
+      additionalProperties:
+        type: string
+
     CreatePostRequest:
       type: object
       required: [account_ids]
       description: At least one account or one assisted platform.
       properties:
+        options:
+          type: object
+          description: >
+            Options per destination, keyed by account id. Each account must
+            also be in account_ids, and each key must be one its platform's
+            rules list. An empty value is the same as leaving the key out.
+          additionalProperties:
+            $ref: "#/components/schemas/TargetOptions"
         text:
           type: string
         media_ids:
@@ -788,6 +827,8 @@ components:
         published_at:
           type: string
           format: date-time
+        options:
+          $ref: "#/components/schemas/TargetOptions"
 
     Error:
       type: object

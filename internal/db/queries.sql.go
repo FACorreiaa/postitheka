@@ -37,7 +37,7 @@ SET status = $1,
 FROM posts p
 WHERE t.id = $3 AND p.id = t.post_id AND p.user_id = $4
   AND t.status = 'handing_off'
-RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries
+RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries, t.options
 `
 
 type CompleteHandoffParams struct {
@@ -70,6 +70,7 @@ func (q *Queries) CompleteHandoff(ctx context.Context, arg CompleteHandoffParams
 		&i.UpdatedAt,
 		&i.Interrupted,
 		&i.Retries,
+		&i.Options,
 	)
 	return i, err
 }
@@ -138,7 +139,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 
 const createAssistedTarget = `-- name: CreateAssistedTarget :one
 INSERT INTO post_targets (post_id, platform, status) VALUES ($1, $2, 'handing_off')
-RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries
+RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options
 `
 
 type CreateAssistedTargetParams struct {
@@ -162,6 +163,7 @@ func (q *Queries) CreateAssistedTarget(ctx context.Context, arg CreateAssistedTa
 		&i.UpdatedAt,
 		&i.Interrupted,
 		&i.Retries,
+		&i.Options,
 	)
 	return i, err
 }
@@ -256,18 +258,24 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 }
 
 const createPostTarget = `-- name: CreatePostTarget :one
-INSERT INTO post_targets (post_id, account_id, platform) VALUES ($1, $2, $3)
-RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries
+INSERT INTO post_targets (post_id, account_id, platform, options) VALUES ($1, $2, $3, $4)
+RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options
 `
 
 type CreatePostTargetParams struct {
 	PostID    uuid.UUID
 	AccountID uuid.NullUUID
 	Platform  string
+	Options   []byte
 }
 
 func (q *Queries) CreatePostTarget(ctx context.Context, arg CreatePostTargetParams) (PostTarget, error) {
-	row := q.db.QueryRow(ctx, createPostTarget, arg.PostID, arg.AccountID, arg.Platform)
+	row := q.db.QueryRow(ctx, createPostTarget,
+		arg.PostID,
+		arg.AccountID,
+		arg.Platform,
+		arg.Options,
+	)
 	var i PostTarget
 	err := row.Scan(
 		&i.ID,
@@ -282,6 +290,7 @@ func (q *Queries) CreatePostTarget(ctx context.Context, arg CreatePostTargetPara
 		&i.UpdatedAt,
 		&i.Interrupted,
 		&i.Retries,
+		&i.Options,
 	)
 	return i, err
 }
@@ -590,7 +599,7 @@ func (q *Queries) GetPostByIdempotencyKey(ctx context.Context, arg GetPostByIdem
 
 const getTargetForPublish = `-- name: GetTargetForPublish :one
 SELECT
-    t.id, t.post_id, t.account_id, t.platform, t.status,
+    t.id, t.post_id, t.account_id, t.platform, t.status, t.options,
     p.user_id, p.text,
     a.credentials, a.needs_reconnect_at
 FROM post_targets t
@@ -605,6 +614,7 @@ type GetTargetForPublishRow struct {
 	AccountID        uuid.NullUUID
 	Platform         string
 	Status           string
+	Options          []byte
 	UserID           uuid.UUID
 	Text             string
 	Credentials      []byte
@@ -622,6 +632,7 @@ func (q *Queries) GetTargetForPublish(ctx context.Context, id uuid.UUID) (GetTar
 		&i.AccountID,
 		&i.Platform,
 		&i.Status,
+		&i.Options,
 		&i.UserID,
 		&i.Text,
 		&i.Credentials,
@@ -631,7 +642,7 @@ func (q *Queries) GetTargetForPublish(ctx context.Context, id uuid.UUID) (GetTar
 }
 
 const getTargetForUser = `-- name: GetTargetForUser :one
-SELECT t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries FROM post_targets t
+SELECT t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries, t.options FROM post_targets t
 JOIN posts p ON p.id = t.post_id
 WHERE t.id = $1 AND p.user_id = $2
 `
@@ -657,6 +668,7 @@ func (q *Queries) GetTargetForUser(ctx context.Context, arg GetTargetForUserPara
 		&i.UpdatedAt,
 		&i.Interrupted,
 		&i.Retries,
+		&i.Options,
 	)
 	return i, err
 }
@@ -772,7 +784,7 @@ func (q *Queries) ListPostMedia(ctx context.Context, postIds []uuid.UUID) ([]Lis
 }
 
 const listPostTargets = `-- name: ListPostTargets :many
-SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries FROM post_targets
+SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options FROM post_targets
 WHERE post_id = ANY($1::uuid[])
 ORDER BY post_id, platform, id
 `
@@ -799,6 +811,7 @@ func (q *Queries) ListPostTargets(ctx context.Context, postIds []uuid.UUID) ([]P
 			&i.UpdatedAt,
 			&i.Interrupted,
 			&i.Retries,
+			&i.Options,
 		); err != nil {
 			return nil, err
 		}
@@ -890,7 +903,7 @@ func (q *Queries) LockPost(ctx context.Context, arg LockPostParams) (Post, error
 }
 
 const lockPostTargets = `-- name: LockPostTargets :many
-SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries FROM post_targets WHERE post_id = $1 ORDER BY platform, id FOR UPDATE
+SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options FROM post_targets WHERE post_id = $1 ORDER BY platform, id FOR UPDATE
 `
 
 // Locked so that a publish job about to claim one of these targets waits for
@@ -917,6 +930,7 @@ func (q *Queries) LockPostTargets(ctx context.Context, postID uuid.UUID) ([]Post
 			&i.UpdatedAt,
 			&i.Interrupted,
 			&i.Retries,
+			&i.Options,
 		); err != nil {
 			return nil, err
 		}
@@ -1109,7 +1123,7 @@ SET status = 'pending', last_error = NULL, interrupted = false, retries = t.retr
 FROM posts p
 WHERE t.id = $1 AND p.id = t.post_id AND p.user_id = $2
   AND t.status = 'failed' AND t.account_id IS NOT NULL
-RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries
+RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries, t.options
 `
 
 type RetryTargetParams struct {
@@ -1137,6 +1151,7 @@ func (q *Queries) RetryTarget(ctx context.Context, arg RetryTargetParams) (PostT
 		&i.UpdatedAt,
 		&i.Interrupted,
 		&i.Retries,
+		&i.Options,
 	)
 	return i, err
 }

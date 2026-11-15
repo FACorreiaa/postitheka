@@ -5,6 +5,7 @@ package jobs
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -185,6 +186,9 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 		return err
 	}
 	post := publisher.Post{Text: row.Text}
+	// Checked when the post was made; a value that cannot be read now is
+	// published without, as the post would be had it never been set.
+	_ = json.Unmarshal(row.Options, &post.Options)
 	for _, m := range mediaRows {
 		length, width, height := media.Declared(m.DurationMs, m.Width, m.Height)
 		post.Media = append(post.Media, publisher.Media{

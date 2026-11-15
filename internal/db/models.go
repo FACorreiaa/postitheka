@@ -83,6 +83,7 @@ type PostTarget struct {
 	UpdatedAt   time.Time
 	Interrupted bool
 	Retries     int32
+	Options     []byte
 }
 
 type User struct {

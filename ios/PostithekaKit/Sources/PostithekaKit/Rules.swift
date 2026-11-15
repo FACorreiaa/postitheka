@@ -9,6 +9,7 @@ public typealias Post = Components.Schemas.Post
 public typealias Target = Components.Schemas.Target
 public typealias Issue = Components.Schemas.Issue
 public typealias Upload = Components.Schemas.Upload
+public typealias PostOption = Components.Schemas.PostOption
 
 /// What the composer holds: enough to check against a platform's rules before
 /// anything is uploaded or published.
@@ -28,10 +29,13 @@ public struct Draft: Sendable, Equatable {
 
     public var text: String
     public var media: [Media]
+    /// What was set for one destination alone, by the keys in its rules' options.
+    public var options: [String: String]
 
-    public init(text: String = "", media: [Media] = []) {
+    public init(text: String = "", media: [Media] = [], options: [String: String] = [:]) {
         self.text = text
         self.media = media
+        self.options = options
     }
 }
 
@@ -79,6 +83,18 @@ public func problems(_ rules: Rules, _ draft: Draft) -> [String] {
     let n = countText(draft.text, rules.text_counting)
     if n > rules.max_text_length { out.append("\(n - rules.max_text_length) characters over") }
     if rules.max_links > 0 && countLinks(draft.text) > rules.max_links { out.append("At most \(rules.max_links) link\(rules.max_links == 1 ? "" : "s")") }
+
+    // Mirrors `Rules.optionIssues` in Go, less the unknown key: a form built
+    // from the rules cannot send one.
+    for o in rules.options {
+        let value = (draft.options[o.key] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let length = countText(value)
+        if value.isEmpty && o.required {
+            out.append("Needs a \(o.label.lowercased())")
+        } else if length > o.max_length {
+            out.append("\(o.label) is \(length - o.max_length) characters over")
+        }
+    }
 
     if rules.requires_media && draft.media.isEmpty { out.append("Needs a photo or video") }
     if rules.max_media == 0 && !draft.media.isEmpty {
