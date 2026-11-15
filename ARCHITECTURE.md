@@ -359,9 +359,15 @@ never needs ffmpeg.
 
 The `maat` cluster through `~/Work/production/platform/infra` (ArgoCD auto-syncs `main`):
 one Deployment running the image with `GO_ENV=production` and `AUTO_MIGRATE=false`, a PreSync
-Job running `server migrate`, a Service on :8095, liveness and readiness on `/healthz`. Secrets
-sealed for the app's namespace: `DATABASE_URL`, `TOKEN_ENCRYPTION_KEY`, S3 keys. R2 bucket with
-the CORS rule and, later, a lifecycle rule for unattached uploads.
+Job running `server migrate`, a Service on :8095. Readiness is `/health/ready` (pings Postgres;
+`/healthz` is the same check), liveness is `/health/live` (no database), so a database outage
+takes the pod out of the Service without restarting it in the middle of a publish. `server
+migrate` loads only `DATABASE_URL`, so the hook does not depend on the app's other secrets.
+`SHUTDOWN_TIMEOUT` (default 30s) bounds how long requests and running publish jobs get after
+SIGTERM; the Deployment's grace period must be longer. Secrets sealed for the `horus` namespace:
+`DATABASE_URL`, `TOKEN_ENCRYPTION_KEY`, S3 keys. R2 bucket with the CORS rule and, later, a
+lifecycle rule for unattached uploads. The Image workflow opens a promote PR on the infra repo
+for each image; merging it is the deploy.
 
 The image is multi-stage: Node builds `web/dist`, Go builds a static binary, Alpine runs it
 (about 40 MB).

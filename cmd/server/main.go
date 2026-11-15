@@ -55,6 +55,25 @@ func dispatch(args []string) error {
 	// the deployment.
 	_ = godotenv.Load()
 
+	if len(args) > 0 && args[0] == "migrate" {
+		// A subcommand rather than a second binary, so the schema applied is
+		// always the one this image was built with. In-cluster it runs as a
+		// PreSync hook with AUTO_MIGRATE=false, and needs only the database:
+		// the hook must not fail because a storage key is not sealed yet.
+		cfg, err := config.LoadForMigrate()
+		if err != nil {
+			return err
+		}
+		slog.SetDefault(newLogger(cfg))
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := database.Migrate(ctx, cfg.DatabaseURL); err != nil {
+			return err
+		}
+		slog.Info("migrations applied")
+		return nil
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -64,17 +83,6 @@ func dispatch(args []string) error {
 	switch {
 	case len(args) == 0:
 		return serve(cfg)
-	case args[0] == "migrate":
-		// A subcommand rather than a second binary, so the schema applied is
-		// always the one this image was built with. In-cluster it runs as a
-		// PreSync hook with AUTO_MIGRATE=false.
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		if err := database.Migrate(ctx, cfg.DatabaseURL); err != nil {
-			return err
-		}
-		slog.Info("migrations applied")
-		return nil
 	case len(args) == 3 && args[0] == "user" && args[1] == "create":
 		return createUser(cfg, args[2])
 	default:
@@ -205,14 +213,22 @@ func routes(cfg config.Config, pool *pgxpool.Pool, svc *service.Service) http.Ha
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer)
 
-	// Outside the API spec and its authentication: the kubelet probes this.
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	// Outside the API spec and its authentication: the kubelet probes these.
+	// Ready pings the database, so a pod that cannot reach it leaves the
+	// Service. Live does not: a database outage must not restart every pod,
+	// which would cut off the publish jobs still running.
+	ready := func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		if err := pool.Ping(ctx); err != nil {
 			http.Error(w, "database unreachable", http.StatusServiceUnavailable)
 			return
 		}
+		_, _ = w.Write([]byte("ok"))
+	}
+	r.Get("/healthz", ready)
+	r.Get("/health/ready", ready)
+	r.Get("/health/live", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
 
