@@ -1,25 +1,28 @@
 """The 3D mascot (BRD-001): turns the supplied robot into the models the clients load.
 
-The source is `Postitheka_Mascot_Web_NoTablet.glb` from the owner's kit: Y-up, +Z front, one
-mesh per material, no textures, no rig. It is untrusted input. Copy only that file into an
+The source is `Postitheka_Mascot_iOS.glb` from the owner's kit, the robot holding its tablet
+(chosen by the owner 2026-11-15; before that the lighter `Postitheka_Mascot_Web_NoTablet.glb`,
+which still builds): Y-up, +Z front, one mesh per material, no textures, no rig. It is untrusted input. Copy only that file into an
 empty directory of its own, never run the kit's scripts, and run this with `python3 -I`, the
 path passed as an argument. Standard library only, except the USDZ step, which calls Apple's
 `usdcat` and `usdzip` (/usr/bin on macOS); without them the .usda is kept and no .usdz made.
 
   1. checks the file: glTF 2 magic and lengths, a size cap, no node transforms, no textures,
      triangles only, every index inside its mesh, every coordinate finite;
-  2. paints each material with a brand token read from `web/src/styles.css`, so the model
+  2. turns right side out every part the kit left inside out, and draws a smile on the visor
+     under the eyes (`--no-smile` leaves it off);
+  3. paints each material with a brand token read from `web/src/styles.css`, so the model
      cannot drift from the palette (the PAINT table below; a material missing from it aborts);
-  3. makes it one unit tall, standing on the origin, centred on X and Z, facing +Z, which is
+  4. makes it one unit tall, standing on the origin, centred on X and Z, facing +Z, which is
      what `scene.ts` and `Mascot3DView.swift` frame;
-  4. writes `mascot.glb` for the web, positions as int16 and normals as int8
+  5. writes `mascot.glb` for the web, positions as int16 and normals as int8
      (`KHR_mesh_quantization`), and `Mascot.usdz` for iOS;
-  5. prints what it made: KB, meshes, draw calls, triangles.
+  6. prints what it made: KB, meshes, draw calls, triangles.
 
 Usage, from the repo root:
 
     python3 -I brand/tools/build_mascot3d.py \\
-        --src ~/Work/production/apps/postitheka-3d-src/Postitheka_Mascot_Web_NoTablet.glb \\
+        --src ~/Work/production/apps/postitheka-3d-src-tablet/Postitheka_Mascot_iOS.glb \\
         --out out/mascot3d --ios ios/Postitheka/Mascot3D
 
 Both outputs are git-ignored; rerun this after any change to the paint or the source.
@@ -46,10 +49,7 @@ MAX_SOURCE_BYTES = 32 << 20
 # it washed out to white under the web's tone mapping. The robot reads as the key art's: a gold body, night-dark visor and joints, the
 # hologram's cyan in the eyes and the stabiliser (the approved postman's eyes are cyan too).
 PAINT = {
-    # `flip`: the mesh is inside out in the source, triangles and normals both facing in (of the
-    # vertices in front of the model, 98% of the shell's and 97% of the eyes' point backwards,
-    # measured 2026-11-13). three drew it anyway as doubleSided; RealityKit culls it.
-    "ceramic": {"token": "--gold", "metallic": 0.85, "roughness": 0.32, "flip": True},
+    "ceramic": {"token": "--gold", "metallic": 0.85, "roughness": 0.32},
     "ceramic_light": {"token": "--gold-bright", "metallic": 0.85, "roughness": 0.28},
     "ceramic_shadow": {"token": "--gold", "metallic": 0.7, "roughness": 0.45},
     "edge_silver": {"token": "--gold-bright", "metallic": 0.9, "roughness": 0.2},
@@ -60,11 +60,24 @@ PAINT = {
     "rubber": {"token": "--paper"},
     "visor": {"token": "--paper", "glow": 0},
     "visor_reflection": {"token": "--sheet", "glow": 0},
-    "blue_dark": {"token": "--postmark", "surface": "--paper", "glow": 0.5, "flip": True},
-    "blue_soft": {"token": "--postmark", "surface": "--paper", "glow": 1.0, "flip": True},
+    "blue_dark": {"token": "--postmark", "surface": "--paper", "glow": 0.5},
+    "blue_soft": {"token": "--postmark", "surface": "--paper", "glow": 1.0},
     "blue": {"token": "--postmark", "surface": "--paper", "glow": 0.8},
     "orange": {"token": "--gold"},
+    # Only in the model with the tablet: the light strips on the ears, the tablet's panel and
+    # glass, and the mark drawn on it. The tablet is the key art's hologram: night, lit cyan.
+    "orange_hot": {"token": "--gold-bright"},
+    "screen": {"token": "--postmark", "surface": "--paper", "glow": 0.12},
+    "screen_glass": {"token": "--postmark", "surface": "--sheet", "glow": 0.2},
+    "accent_lilac": {"token": "--postmark", "surface": "--paper", "glow": 1.0},
+    # Not in the source: the mouth this script draws (see `smile`). Lit like the eyes.
+    "smile": {"token": "--postmark", "surface": "--paper", "glow": 1.0, "metallic": 0.12, "roughness": 0.3},
 }
+
+# The smile, as parts of the visor's own width and height so it follows the visor whichever
+# model is built: where its lowest point sits, how far it reaches to each side, how much its
+# corners rise, and how thick the line is.
+SMILE = {"centre_y": 0.27, "half_width": 0.3, "rise": 0.075, "thickness": 0.03, "depth": 0.017}
 
 # RealityKit's virtual camera has no environment for metal to reflect (the web lights it with
 # three's RoomEnvironment), so at the web's metalness the gold body renders near black on iOS.
@@ -184,6 +197,103 @@ def normalise(meshes):
     return height
 
 
+def right_side_out(mesh):
+    """Turns right side out every part of a mesh that is inside out, and returns how many
+    triangles that was. A part is a set of triangles joined by shared corners; one whose
+    enclosed volume comes out negative has its triangles and its normals both facing in.
+
+    The kit mixes the two within one material (in the tablet model the eyes are inside out
+    and the tablet's glow, the same material, is not), so a mesh cannot be flipped whole.
+    three drew such parts anyway as doubleSided; RealityKit culls them: on iOS the eyes
+    vanished and the body went dark (2026-11-13)."""
+    points, indices = mesh["points"], mesh["indices"]
+    # The kit splits corners where normals differ, so parts are joined by position.
+    welded, where = [], {}
+    for p in points:
+        welded.append(where.setdefault(tuple(round(c, 4) for c in p), len(where)))
+    parent = list(range(len(where)))
+
+    def root(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for t in range(0, len(indices), 3):
+        a = root(welded[indices[t]])
+        parent[root(welded[indices[t + 1]])] = a
+        parent[root(welded[indices[t + 2]])] = a
+    volume = {}
+    for t in range(0, len(indices), 3):
+        a, b, c = (points[i] for i in indices[t : t + 3])
+        signed = (
+            a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0])
+        )
+        part = root(welded[indices[t]])
+        volume[part] = volume.get(part, 0.0) + signed
+    normals, turned = list(mesh["normals"]), 0
+    flipped = set()
+    for t in range(0, len(indices), 3):
+        if volume[root(welded[indices[t]])] < 0:
+            indices[t + 1], indices[t + 2] = indices[t + 2], indices[t + 1]
+            flipped.update(indices[t : t + 3])
+            turned += 1
+    for i in flipped:
+        normals[i] = tuple(-c for c in normals[i])
+    mesh["normals"] = normals
+    return turned
+
+
+def smile(meshes):
+    """A mouth for the visor: a curved line under the eyes, thick in the middle and running to
+    a point at each corner, as the eyes do. It is made here because the model has none, and it
+    sits on the visor's own surface, so it is placed from the visor's size and not by hand."""
+    visor = next((m for m in meshes if m["material"]["name"] == "visor"), None)
+    if visor is None:
+        fail("no visor to draw the smile on")
+    glass = visor["points"]
+    low = [min(p[i] for p in glass) for i in range(3)]
+    high = [max(p[i] for p in glass) for i in range(3)]
+    width, height = high[0] - low[0], high[1] - low[1]
+    middle = (low[0] + high[0]) / 2
+    half, rise = SMILE["half_width"] * width / 2, SMILE["rise"] * height
+    base = low[1] + SMILE["centre_y"] * height
+    thick, deep = SMILE["thickness"] * height / 2, SMILE["depth"] * height
+
+    def surface(x, y):
+        """How far forward the visor's front is at this spot."""
+        near = [p[2] for p in glass if (p[0] - x) ** 2 + (p[1] - y) ** 2 < (0.12 * height) ** 2]
+        if not near:
+            fail("the smile runs off the visor; change SMILE")
+        return max(near)
+
+    along, around = 28, 10
+    points, normals, indices = [], [], []
+    for step in range(along + 1):
+        t = step / along
+        x = middle + half * (2 * t - 1)
+        y = base + rise * (2 * t - 1) ** 2
+        slope = 2 * rise * (2 * t - 1) / half  # dy/dx along the line
+        across = unit((-slope, 1.0, 0.0))  # in the visor's plane, at right angles to the line
+        swell = math.sin(math.pi * t) ** 0.6  # nothing at the corners, full in the middle
+        centre = (x, y, surface(x, y))
+        for turn in range(around):
+            angle = 2 * math.pi * turn / around
+            side, out = math.cos(angle), math.sin(angle)
+            points.append((
+                centre[0] + across[0] * side * thick * swell,
+                centre[1] + across[1] * side * thick * swell,
+                centre[2] + out * deep * swell,
+            ))  # fmt: skip
+            normals.append(unit((across[0] * side / thick, across[1] * side / thick, out / deep)))
+    for step in range(along):
+        for turn in range(around):
+            a = step * around + turn
+            b = step * around + (turn + 1) % around
+            indices += [a, b, a + around, b, b + around, a + around]
+    return {"material": {"name": "smile"}, "points": points, "normals": normals, "indices": indices}
+
+
 def orient(mesh):
     """Turns round every triangle whose winding disagrees with its own vertex normals, and
     returns how many. The source mixes the two, which a renderer drawing both sides (three,
@@ -215,10 +325,6 @@ def paint(meshes, tokens):
         rule = PAINT.get(name)
         if rule is None:
             fail(f"material {name!r} is not in PAINT; give it a token")
-        if rule.get("flip"):
-            i = mesh["indices"]
-            mesh["indices"] = [v for t in range(0, len(i), 3) for v in (i[t], i[t + 2], i[t + 1])]
-            mesh["normals"] = [tuple(-c for c in n) for n in mesh["normals"]]
         for key in ("token", "surface"):
             if key in rule and rule[key] not in tokens:
                 fail(f"{rule[key]} is not a colour on :root in {TOKENS_CSS}")
@@ -281,8 +387,8 @@ def write_glb(path, meshes, looks):
             "pbrMetallicRoughness": {"baseColorFactor": [*look["color"], 1.0], "metallicFactor": look["metallic"],
                                      "roughnessFactor": look["roughness"]},
             "emissiveFactor": look["emissive"],
-            # The source's eye meshes face backwards (their normals point -Z), so drawn
-            # one-sided the eyes vanish; the kit's own renders drew both sides.
+            # Parts that are open sheets have no inside for `right_side_out` to measure, so
+            # both sides are still drawn where the renderer allows it.
             "doubleSided": True,
         })  # fmt: skip
         base = len(accessors) - 3
@@ -381,16 +487,20 @@ def write_usdz(path, meshes, looks):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--src", required=True, help="Postitheka_Mascot_Web_NoTablet.glb, in a directory of its own")
+    parser.add_argument("--src", required=True, help="Postitheka_Mascot_iOS.glb, in a directory of its own")
+    parser.add_argument("--no-smile", action="store_true", help="leave the visor as the kit made it: eyes only")
     parser.add_argument("--out", default="out/mascot3d", help="where mascot.glb and Mascot.usdz go")
     parser.add_argument("--ios", help="also copy Mascot.usdz here (ios/Postitheka/Mascot3D)")
     args = parser.parse_args()
 
     meshes = read_glb(args.src)
     tokens = read_tokens()
+    righted = {m["material"]["name"]: right_side_out(m) for m in meshes}
+    if not args.no_smile:
+        meshes.append(smile(meshes))
     source_height = normalise(meshes)
     looks = paint(meshes, tokens)
-    turned = {m["material"]["name"]: orient(m) for m in meshes}
+    turned = {m["material"]["name"]: orient(m) + righted.get(m["material"]["name"], 0) for m in meshes}
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
