@@ -34,6 +34,7 @@ import (
 	"github.com/FACorreiaa/postitheka/internal/media"
 	"github.com/FACorreiaa/postitheka/internal/publisher"
 	"github.com/FACorreiaa/postitheka/internal/publisher/discord"
+	"github.com/FACorreiaa/postitheka/internal/publisher/instagram"
 	"github.com/FACorreiaa/postitheka/internal/publisher/linkedin"
 	"github.com/FACorreiaa/postitheka/internal/publisher/threads"
 	"github.com/FACorreiaa/postitheka/internal/secretbox"
@@ -143,6 +144,9 @@ func serve(cfg config.Config) error {
 	}
 	if cfg.ThreadsAppID != "" {
 		pubs = append(pubs, threads.New(cfg.ThreadsAppID, cfg.ThreadsAppSecret, nil))
+	}
+	if cfg.InstagramAppID != "" {
+		pubs = append(pubs, instagram.New(cfg.InstagramAppID, cfg.InstagramAppSecret, nil))
 	}
 	registry := publisher.NewRegistry(pubs...)
 
