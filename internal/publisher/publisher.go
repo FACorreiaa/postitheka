@@ -52,6 +52,10 @@ type Media struct {
 type Post struct {
 	Text  string
 	Media []Media
+	// Options are what the author set for this destination alone, by the
+	// keys its platform's Rules list. Never nil-checked: a missing key reads
+	// as "".
+	Options map[string]string
 }
 
 // MediaSource is how a publisher reaches the files of a post.

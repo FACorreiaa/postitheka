@@ -204,6 +204,9 @@ and app purpose.
 3. **IG-001,** then **FB-001,** then **X-001.**
 4. **VID-001:** done 2026-11-15. Length, shape and width limits block only the stamps of the
    platforms that refuse the video. The client reads the values; the server cannot.
+   **OPT-001:** done 2026-11-15. A platform lists the one-line options it takes per destination
+   and the composers show them under the stamp; Discord's forum post title is the first. A choice
+   from a list, which TikTok's privacy level needs, comes with TT-001.
 5. **Different text per platform,** premium only, which needs the tiers from decision 5.
 6. **Cost hint on the X stamp,** once what counts as "with URL" is known: show $0.20 before Publish.
 7. **TT-001,** with the draft outcome.

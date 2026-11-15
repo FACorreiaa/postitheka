@@ -628,6 +628,16 @@ label {
   cursor: pointer;
 }
 
+/* What a post can set for this destination alone: under its stamp, once
+   affixed, in the stamp's own width. */
+.stamp-option {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0 0.25rem;
+  color: var(--muted);
+  font-weight: 400;
+}
+
 .stamp-issues {
   margin: 0;
   padding: 0 0.25rem;

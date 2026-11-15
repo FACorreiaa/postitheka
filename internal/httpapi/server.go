@@ -127,6 +127,7 @@ func (s *Server) ListPlatforms(ctx context.Context, _ ListPlatformsRequestObject
 				MediaTypes:         r.MediaTypes,
 				RequiresText:       r.RequiresText,
 				RequiresMedia:      r.RequiresMedia,
+				Options:            postOptions(r.Options),
 			},
 		})
 	}
@@ -252,6 +253,16 @@ func (s *Server) CreatePost(ctx context.Context, req CreatePostRequestObject) (C
 	}
 	if req.Body.MediaIds != nil {
 		in.MediaIDs = *req.Body.MediaIds
+	}
+	if req.Body.Options != nil {
+		in.Options = map[uuid.UUID]map[string]string{}
+		for raw, values := range *req.Body.Options {
+			id, err := uuid.Parse(raw)
+			if err != nil {
+				return CreatePost400JSONResponse{BadRequestJSONResponse{Message: "options must be keyed by account id"}}, nil
+			}
+			in.Options[id] = values
+		}
 	}
 	if req.Body.Assisted != nil {
 		for _, p := range *req.Body.Assisted {
@@ -394,6 +405,18 @@ func toTarget(t db.PostTarget) Target {
 	}
 	if t.PublishedAt.Valid {
 		out.PublishedAt = &t.PublishedAt.Time
+	}
+	var options TargetOptions
+	if json.Unmarshal(t.Options, &options) == nil && len(options) > 0 {
+		out.Options = &options
+	}
+	return out
+}
+
+func postOptions(in []publisher.Option) []PostOption {
+	out := make([]PostOption, 0, len(in))
+	for _, o := range in {
+		out = append(out, PostOption{Key: o.Key, Label: o.Label, MaxLength: o.MaxLength, Required: o.Required})
 	}
 	return out
 }

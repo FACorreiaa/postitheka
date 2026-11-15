@@ -263,6 +263,33 @@ func TestPublishToAForumChannelNamesTheThread(t *testing.T) {
 	}
 }
 
+func TestAForumPostTakesTheTitleTheAuthorGaveIt(t *testing.T) {
+	var got []payload
+	p, _ := stub(t, forumStub(t, &got))
+
+	post := publisher.Post{Text: "first line\nthe rest", Options: map[string]string{"title": " Release notes "}}
+	if _, err := p.Publish(context.Background(), testCreds(), post, memMedia{}); err != nil {
+		t.Fatal(err)
+	}
+	// Still plain first: a title sent to a channel that is not a forum is
+	// not something Discord's reference promises to ignore.
+	if len(got) != 2 || got[0].ThreadName != "" || got[1].ThreadName != "Release notes" {
+		t.Fatalf("requests %+v, want a plain message, then one named by the title", got)
+	}
+}
+
+func TestTheTitleOptionHasDiscordsLimit(t *testing.T) {
+	rules := New(nil).Rules()
+	ok := publisher.Post{Text: "x", Options: map[string]string{"title": strings.Repeat("é", 100)}}
+	if issues := publisher.Validate(rules, ok); len(issues) != 0 {
+		t.Fatalf("a 100-character title was refused: %+v", issues)
+	}
+	long := publisher.Post{Text: "x", Options: map[string]string{"title": strings.Repeat("é", 101)}}
+	if issues := publisher.Validate(rules, long); len(issues) != 1 || issues[0].Field != "options.title" {
+		t.Fatalf("issues %+v, want one on the title", issues)
+	}
+}
+
 func TestPublishMediaToAForumChannelSendsTheFilesAgain(t *testing.T) {
 	var got []payload
 	p, _ := stub(t, forumStub(t, &got))

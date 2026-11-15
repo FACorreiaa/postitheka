@@ -48,6 +48,11 @@ struct ComposerView: View {
                     }
                     ForEach(composer.shown, id: \.id) { account in
                         StampRow(account: account, composer: composer)
+                        if composer.chosen.contains(where: { $0.id == account.id }) {
+                            ForEach(composer.fields(for: account), id: \.key) { field in
+                                OptionRow(field: field, accountID: account.id, composer: composer)
+                            }
+                        }
                     }
                     WhatsAppStamp(composer: composer)
                 }
@@ -113,6 +118,22 @@ struct ComposerView: View {
                 }
             }
         }
+    }
+}
+
+/// One thing a post can set for a single destination, under its stamp.
+private struct OptionRow: View {
+    let field: PostOption
+    let accountID: String
+    @Bindable var composer: Composer
+
+    var body: some View {
+        TextField(field.required ? field.label : "\(field.label) (optional)", text: Binding(
+            get: { composer.options[accountID]?[field.key] ?? "" },
+            set: { composer.options[accountID, default: [:]][field.key] = $0 }
+        ))
+        .font(.callout)
+        .padding(.leading, 36) // under the stamp's name, past its checkmark
     }
 }
 

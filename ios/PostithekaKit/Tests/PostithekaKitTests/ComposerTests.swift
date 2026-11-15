@@ -103,4 +103,42 @@ struct ComposerTests {
         c.scheduledAt = .now.addingTimeInterval(3600)
         #expect(!c.canPublish)
     }
+
+    @Test func optionsGoOutOnlyForChosenDestinations() async {
+        let stub = StubTransport([(201, postJSON)])
+        let c = composer(stub)
+        var rules = discordRules
+        rules.options = [.init(key: "title", label: "Forum post title", max_length: 100, required: false)]
+        c.rules = [.discord: rules]
+        c.text = "hi"
+        c.options = ["a1": ["title": "Release notes"], "gone": ["title": "not a destination"]]
+
+        #expect(c.fields(for: account).map(\.key) == ["title"])
+        #expect(await c.publish() != nil)
+        // The body is pretty-printed; spacing is not what is being checked.
+        let body = stub.sent[0].body.filter { !$0.isWhitespace }
+        #expect(body.contains("\"options\":{\"a1\":{\"title\":\"Releasenotes\"}}"))
+        #expect(!body.contains("gone"))
+        #expect(c.options.isEmpty)
+    }
+
+    @Test func anOptionOverItsLimitHoldsPublish() {
+        let c = composer(StubTransport([]))
+        var rules = discordRules
+        rules.options = [.init(key: "title", label: "Forum post title", max_length: 5, required: false)]
+        c.rules = [.discord: rules]
+        c.text = "hi"
+        c.options = ["a1": ["title": "too long"]]
+        #expect(c.problems(for: account) == ["Forum post title is 3 characters over"])
+        #expect(!c.canPublish)
+    }
+
+    @Test func changingAnOptionMakesItANewPost() {
+        let c = composer(StubTransport([]))
+        c.text = "hi"
+        let plain = c.idempotencyKey(mediaIDs: [], accountIDs: ["a1"])
+        let titled = c.idempotencyKey(mediaIDs: [], accountIDs: ["a1"], options: ["a1": ["title": "A"]])
+        #expect(plain != titled)
+        #expect(titled == c.idempotencyKey(mediaIDs: [], accountIDs: ["a1"], options: ["a1": ["title": "A"]]))
+    }
 }

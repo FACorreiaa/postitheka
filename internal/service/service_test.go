@@ -3,6 +3,7 @@ package service_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -120,6 +122,10 @@ type discordStub struct {
 	posts      atomic.Int32
 	mu         sync.Mutex
 	files      []string
+	// forum makes the stub a forum channel: a message without a thread
+	// name is refused, and the names that arrive are recorded.
+	forum       atomic.Bool
+	threadNames []string
 }
 
 func (d *discordStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +148,19 @@ func (d *discordStub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				d.mu.Unlock()
 			}
 		}
+	} else if d.forum.Load() {
+		var pl struct {
+			ThreadName string `json:"thread_name"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&pl)
+		if pl.ThreadName == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"message":"Webhooks posted to forum channels must have a thread_name or thread_id","code":220001}`)
+			return
+		}
+		d.mu.Lock()
+		d.threadNames = append(d.threadNames, pl.ThreadName)
+		d.mu.Unlock()
 	}
 	status := int(d.postStatus.Load())
 	w.WriteHeader(status)
@@ -1429,5 +1448,110 @@ func TestReserveUploadKeepsWhatTheClientReadFromAVideo(t *testing.T) {
 		if _, err := e.svc.ReserveUpload(ctx, alice, "video/mp4", 10, facts); !errors.As(err, &bad) {
 			t.Errorf("%s: got %v, want a bad request", name, err)
 		}
+	}
+}
+
+// An option set for one destination is stored with its target, reaches the
+// publisher, comes back on the post, and survives a reschedule, which
+// replaces the targets.
+func TestTargetOptionsReachThePublisher(t *testing.T) {
+	e := setup(t)
+	e.discord.forum.Store(true)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	acct := e.account(t, alice)
+	at := time.Now().Add(time.Hour)
+
+	view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{
+		Text: "the body", AccountIDs: []uuid.UUID{acct}, ScheduledAt: &at,
+		Options: map[uuid.UUID]map[string]string{acct: {"title": "  Release notes  "}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(view.Targets[0].Options); got != `{"title": "Release notes"}` && got != `{"title":"Release notes"}` {
+		t.Fatalf("stored options %s, want the trimmed title", got)
+	}
+
+	moved, err := e.svc.ReschedulePost(ctx, alice, view.Post.ID, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.runJob(t, moved.Targets[0].ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if tgt := e.target(t, alice, view.Post.ID); tgt.Status != "published" {
+		t.Fatalf("target is %q (%v)", tgt.Status, deref(tgt.LastError))
+	}
+	e.discord.mu.Lock()
+	defer e.discord.mu.Unlock()
+	if len(e.discord.threadNames) != 1 || e.discord.threadNames[0] != "Release notes" {
+		t.Errorf("thread names %q, want the title the author set", e.discord.threadNames)
+	}
+}
+
+func TestCreatePostRefusesOptionsItCannotUse(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	acct := e.account(t, alice)
+	other := e.account(t, alice)
+
+	_, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{
+		Text: "hello", AccountIDs: []uuid.UUID{acct},
+		Options: map[uuid.UUID]map[string]string{
+			acct:  {"title": strings.Repeat("a", 101), "subreddit": "golang"},
+			other: {"title": "not a destination"},
+		},
+	})
+	var ve *service.ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("got %v, want a ValidationError", err)
+	}
+	var got []string
+	for _, i := range ve.Issues {
+		got = append(got, i.Field)
+	}
+	slices.Sort(got)
+	if strings.Join(got, ",") != "options,options.subreddit,options.title" {
+		t.Errorf("issues on %v, want the stray account, the unknown key and the long title", got)
+	}
+
+	// A value of only spaces is a field left empty, not an option.
+	view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{
+		Text: "hello", AccountIDs: []uuid.UUID{acct},
+		Options: map[uuid.UUID]map[string]string{other: {"title": "   "}},
+	})
+	if err != nil {
+		t.Fatalf("blank options were refused: %v", err)
+	}
+	if got := string(view.Targets[0].Options); got != "{}" {
+		t.Errorf("stored options %s, want none", got)
+	}
+}
+
+// The digest of a post without options must not change now that options are
+// part of it: a client retrying across the deploy would be told its key was
+// reused for a different post.
+func TestOptionsChangeTheIdempotencyDigestOnlyWhenSet(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	acct := e.account(t, alice)
+	key := "k1"
+	in := service.CreatePostInput{Text: "hello", AccountIDs: []uuid.UUID{acct}, IdempotencyKey: &key}
+
+	first, err := e.svc.CreatePost(ctx, alice, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Options = map[uuid.UUID]map[string]string{acct: {"title": " "}}
+	again, err := e.svc.CreatePost(ctx, alice, in)
+	if err != nil || again.Post.ID != first.Post.ID {
+		t.Fatalf("a blank option made it a different request: %v", err)
+	}
+	in.Options = map[uuid.UUID]map[string]string{acct: {"title": "Named"}}
+	if _, err := e.svc.CreatePost(ctx, alice, in); err == nil {
+		t.Fatal("the same key was accepted for a post with different options")
 	}
 }

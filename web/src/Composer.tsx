@@ -48,6 +48,8 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
   const [files, setFiles] = useState<Attachment[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scheduleAt, setScheduleAt] = useState("");
+  // What is set for one destination alone, by account id, then option key.
+  const [options, setOptions] = useState<Record<string, Record<string, string>>>({});
   const [serverIssues, setServerIssues] = useState<Issue[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -82,7 +84,7 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
   }
   const blocked = chosen.some((a) => {
     const rules = rulesFor.get(a.platform);
-    return rules && problems(rules, draft).length > 0;
+    return rules && problems(rules, { ...draft, options: options[a.id] }).length > 0;
   });
   const uploading = files.some((f) => !f.mediaId && !f.error);
   const failedUpload = files.some((f) => f.error);
@@ -151,6 +153,9 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
       text,
       media_ids: files.map((f) => f.mediaId!),
       account_ids: chosen.map((a) => a.id),
+      // Only for where the post goes: the server refuses options for an
+      // account that is not a destination.
+      options: Object.fromEntries(chosen.map((a) => [a.id, options[a.id] ?? {}])),
       scheduled_at: scheduleAt ? new Date(scheduleAt).toISOString() : undefined,
     };
     const signature = JSON.stringify(body);
@@ -178,6 +183,7 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
       files.forEach((f) => URL.revokeObjectURL(f.preview));
       setText("");
       setFiles([]);
+      setOptions({});
       setScheduleAt("");
       return;
     }
@@ -280,10 +286,18 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
                       account={a}
                       used={countText(text, rules?.text_counting)}
                       limit={rules?.max_text_length}
-                      problems={selected.has(a.id) ? [...(rules ? problems(rules, draft) : []), ...own] : []}
+                      problems={
+                        selected.has(a.id) ? [...(rules ? problems(rules, { ...draft, options: options[a.id] }) : []), ...own] : []
+                      }
                       on={selected.has(a.id) && !a.needs_reconnect}
                       onToggle={() => toggle(a.id)}
                       onReconnect={onConnect}
+                      fields={rules?.options ?? []}
+                      values={options[a.id] ?? {}}
+                      onField={(key, value) => {
+                        setServerIssues([]);
+                        setOptions((prev) => ({ ...prev, [a.id]: { ...prev[a.id], [key]: value } }));
+                      }}
                     />
                   </li>
                 );
@@ -325,9 +339,13 @@ interface StampProps {
   onToggle: () => void;
   /** Opens Accounts, where an account that needs it is connected again. */
   onReconnect: () => void;
+  /** What this platform lets a post set for one destination; shown once affixed. */
+  fields: PlatformInfo["rules"]["options"];
+  values: Record<string, string>;
+  onField: (key: string, value: string) => void;
 }
 
-function Stamp({ account, used, limit, problems: issues, on, onToggle, onReconnect }: StampProps) {
+function Stamp({ account, used, limit, problems: issues, on, onToggle, onReconnect, fields, values, onField }: StampProps) {
   const over = limit !== undefined && used > limit;
   if (account.needs_reconnect) {
     return (
@@ -360,6 +378,14 @@ function Stamp({ account, used, limit, problems: issues, on, onToggle, onReconne
           </span>
         )}
       </button>
+      {on &&
+        fields.map((f) => (
+          <label key={f.key} className="stamp-option">
+            {f.label}
+            {!f.required && " (optional)"}
+            <input value={values[f.key] ?? ""} onChange={(e) => onField(f.key, e.target.value)} />
+          </label>
+        ))}
       {issues.length > 0 && (
         <ul className="stamp-issues">
           {issues.map((p) => (

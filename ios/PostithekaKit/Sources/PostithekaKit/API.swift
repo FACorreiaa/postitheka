@@ -159,13 +159,15 @@ public struct API: Sendable {
     /// Creates the post. `idempotencyKey` makes a retry safe: the same key
     /// with the same post returns the post the first call created.
     public func publish(
-        text: String, mediaIDs: [String], accountIDs: [String], assisted: [Platform] = [], scheduledAt: Date?,
+        text: String, mediaIDs: [String], accountIDs: [String], options: [String: [String: String]] = [:],
+        assisted: [Platform] = [], scheduledAt: Date?,
         idempotencyKey: String
     ) async throws(APIError) -> PublishOutcome {
         let out = try await call {
             try await client.createPost(
                 headers: .init(Idempotency_hyphen_Key: idempotencyKey),
                 body: .json(.init(
+                    options: options.isEmpty ? nil : .init(additionalProperties: options.mapValues { .init(additionalProperties: $0) }),
                     text: text, media_ids: mediaIDs, account_ids: accountIDs,
                     assisted: assisted.isEmpty ? nil : assisted, scheduled_at: scheduledAt
                 ))

@@ -131,6 +131,11 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Rules/max_video_width`.
             public var max_video_width: Swift.Int
+            /// What an author can set for one destination of a post, beyond the post itself. Sent per account in a post's options.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/options`.
+            public var options: [Components.Schemas.PostOption]
             /// Creates a new `Rules`.
             ///
             /// - Parameters:
@@ -150,6 +155,7 @@ extension Components {
             ///   - min_video_aspect: Smallest width divided by height a video may have. 0 means no limit.
             ///   - max_video_aspect: Largest width divided by height a video may have. 0 means no limit.
             ///   - max_video_width: Widest video accepted, in pixels. 0 means no limit.
+            ///   - options: What an author can set for one destination of a post, beyond the post itself. Sent per account in a post's options.
             public init(
                 max_text_length: Swift.Int,
                 text_counting: Components.Schemas.Rules.text_countingPayload,
@@ -166,7 +172,8 @@ extension Components {
                 max_video_ms: Swift.Int,
                 min_video_aspect: Swift.Double,
                 max_video_aspect: Swift.Double,
-                max_video_width: Swift.Int
+                max_video_width: Swift.Int,
+                options: [Components.Schemas.PostOption]
             ) {
                 self.max_text_length = max_text_length
                 self.text_counting = text_counting
@@ -184,6 +191,7 @@ extension Components {
                 self.min_video_aspect = min_video_aspect
                 self.max_video_aspect = max_video_aspect
                 self.max_video_width = max_video_width
+                self.options = options
             }
             public enum CodingKeys: String, CodingKey {
                 case max_text_length
@@ -202,6 +210,7 @@ extension Components {
                 case min_video_aspect
                 case max_video_aspect
                 case max_video_width
+                case options
             }
         }
         /// - Remark: Generated from `#/components/schemas/Account`.
@@ -468,10 +477,99 @@ extension Components {
                 case expires_at
             }
         }
+        /// - Remark: Generated from `#/components/schemas/PostOption`.
+        public struct PostOption: Codable, Hashable, Sendable {
+            /// The name to send it under.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PostOption/key`.
+            public var key: Swift.String
+            /// What to call it in a form.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PostOption/label`.
+            public var label: Swift.String
+            /// In characters (code points).
+            ///
+            /// - Remark: Generated from `#/components/schemas/PostOption/max_length`.
+            public var max_length: Swift.Int
+            /// A post to this platform is refused without it.
+            ///
+            /// - Remark: Generated from `#/components/schemas/PostOption/required`.
+            public var required: Swift.Bool
+            /// Creates a new `PostOption`.
+            ///
+            /// - Parameters:
+            ///   - key: The name to send it under.
+            ///   - label: What to call it in a form.
+            ///   - max_length: In characters (code points).
+            ///   - required: A post to this platform is refused without it.
+            public init(
+                key: Swift.String,
+                label: Swift.String,
+                max_length: Swift.Int,
+                required: Swift.Bool
+            ) {
+                self.key = key
+                self.label = label
+                self.max_length = max_length
+                self.required = required
+            }
+            public enum CodingKeys: String, CodingKey {
+                case key
+                case label
+                case max_length
+                case required
+            }
+        }
+        /// Option values by key, as the platform's rules list them.
+        ///
+        /// - Remark: Generated from `#/components/schemas/TargetOptions`.
+        public struct TargetOptions: Codable, Hashable, Sendable {
+            /// A container of undocumented properties.
+            public var additionalProperties: [String: Swift.String]
+            /// Creates a new `TargetOptions`.
+            ///
+            /// - Parameters:
+            ///   - additionalProperties: A container of undocumented properties.
+            public init(additionalProperties: [String: Swift.String] = .init()) {
+                self.additionalProperties = additionalProperties
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeAdditionalProperties(additionalProperties)
+            }
+        }
         /// At least one account or one assisted platform.
         ///
         /// - Remark: Generated from `#/components/schemas/CreatePostRequest`.
         public struct CreatePostRequest: Codable, Hashable, Sendable {
+            /// Options per destination, keyed by account id. Each account must also be in account_ids, and each key must be one its platform's rules list. An empty value is the same as leaving the key out.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreatePostRequest/options`.
+            public struct optionsPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: [String: Components.Schemas.TargetOptions]
+                /// Creates a new `optionsPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: [String: Components.Schemas.TargetOptions] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// Options per destination, keyed by account id. Each account must also be in account_ids, and each key must be one its platform's rules list. An empty value is the same as leaving the key out.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreatePostRequest/options`.
+            public var options: Components.Schemas.CreatePostRequest.optionsPayload?
             /// - Remark: Generated from `#/components/schemas/CreatePostRequest/text`.
             public var text: Swift.String?
             /// In display order.
@@ -492,18 +590,21 @@ extension Components {
             /// Creates a new `CreatePostRequest`.
             ///
             /// - Parameters:
+            ///   - options: Options per destination, keyed by account id. Each account must also be in account_ids, and each key must be one its platform's rules list. An empty value is the same as leaving the key out.
             ///   - text:
             ///   - media_ids: In display order.
             ///   - account_ids:
             ///   - assisted: Platforms the client will hand the post to itself (WhatsApp, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
             ///   - scheduled_at: Omit to publish now.
             public init(
+                options: Components.Schemas.CreatePostRequest.optionsPayload? = nil,
                 text: Swift.String? = nil,
                 media_ids: [Swift.String]? = nil,
                 account_ids: [Swift.String],
                 assisted: [Components.Schemas.Platform]? = nil,
                 scheduled_at: Foundation.Date? = nil
             ) {
+                self.options = options
                 self.text = text
                 self.media_ids = media_ids
                 self.account_ids = account_ids
@@ -511,6 +612,7 @@ extension Components {
                 self.scheduled_at = scheduled_at
             }
             public enum CodingKeys: String, CodingKey {
+                case options
                 case text
                 case media_ids
                 case account_ids
@@ -620,6 +722,8 @@ extension Components {
             public var remote_url: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Target/published_at`.
             public var published_at: Foundation.Date?
+            /// - Remark: Generated from `#/components/schemas/Target/options`.
+            public var options: Components.Schemas.TargetOptions?
             /// Creates a new `Target`.
             ///
             /// - Parameters:
@@ -631,6 +735,7 @@ extension Components {
             ///   - interrupted: Present and true when the target failed because an attempt died mid-request, so the post may already be live on the platform. Check there before retrying.
             ///   - remote_url:
             ///   - published_at:
+            ///   - options:
             public init(
                 id: Swift.String,
                 account_id: Swift.String? = nil,
@@ -639,7 +744,8 @@ extension Components {
                 last_error: Swift.String? = nil,
                 interrupted: Swift.Bool? = nil,
                 remote_url: Swift.String? = nil,
-                published_at: Foundation.Date? = nil
+                published_at: Foundation.Date? = nil,
+                options: Components.Schemas.TargetOptions? = nil
             ) {
                 self.id = id
                 self.account_id = account_id
@@ -649,6 +755,7 @@ extension Components {
                 self.interrupted = interrupted
                 self.remote_url = remote_url
                 self.published_at = published_at
+                self.options = options
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -659,6 +766,7 @@ extension Components {
                 case interrupted
                 case remote_url
                 case published_at
+                case options
             }
         }
         /// - Remark: Generated from `#/components/schemas/Error`.

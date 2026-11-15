@@ -35,11 +35,25 @@ type Rules struct {
 	MinVideoAspect, MaxVideoAspect float64
 	MaxVideoWidth                  int
 
+	// Options are what an author can set for one destination beyond the
+	// post itself. A platform lists only what its Publish reads.
+	Options []Option
+
 	// TextCounting is how the platform measures MaxTextLength. It is a
 	// named mode rather than a function because the clients count too, and
 	// each mode is written three times: here, web/src/rules.ts and the iOS
 	// kit's Rules.swift.
 	TextCounting TextCounting
+}
+
+// Option is one value an author can set per destination: the title of a
+// forum post, a subreddit. Every option is a line of text; the clients build
+// their form from this, so adding one needs no client change.
+type Option struct {
+	Key       string
+	Label     string
+	MaxLength int // in code points
+	Required  bool
 }
 
 type TextCounting string
@@ -148,6 +162,8 @@ func Validate(rules Rules, post Post) []Issue {
 		}
 	}
 
+	issues = append(issues, rules.optionIssues(post.Options)...)
+
 	switch {
 	case rules.RequiresMedia && len(post.Media) == 0:
 		add("media", "at least one file is required")
@@ -188,6 +204,35 @@ func Validate(rules Rules, post Post) []Issue {
 	}
 
 	return issues
+}
+
+// optionIssues checks what the author set for this destination against what
+// the platform takes. A key the platform does not list is refused rather
+// than dropped: the author meant something by it, and it would not happen.
+func (r Rules) optionIssues(values map[string]string) []Issue {
+	var out []Issue
+	known := map[string]bool{}
+	for _, o := range r.Options {
+		known[o.Key] = true
+		v := strings.TrimSpace(values[o.Key])
+		switch n := utf8.RuneCountInString(v); {
+		case v == "" && o.Required:
+			out = append(out, Issue{Field: "options." + o.Key, Message: o.Label + " is required"})
+		case n > o.MaxLength:
+			out = append(out, Issue{Field: "options." + o.Key, Message: fmt.Sprintf("%s is %d characters, limit is %d", o.Label, n, o.MaxLength)})
+		}
+	}
+	unknown := make([]string, 0, len(values))
+	for k := range values {
+		if !known[k] {
+			unknown = append(unknown, k)
+		}
+	}
+	slices.Sort(unknown)
+	for _, k := range unknown {
+		out = append(out, Issue{Field: "options." + k, Message: k + " is not an option of this platform"})
+	}
+	return out
 }
 
 // videoIssues checks one video against the length and shape limits, using

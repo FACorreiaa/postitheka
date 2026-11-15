@@ -76,8 +76,15 @@ func (p *Publisher) Rules() publisher.Rules {
 			"image/jpeg", "image/png", "image/gif", "image/webp",
 			"video/mp4", "video/quicktime",
 		},
+		// A webhook cannot tell what kind of channel it posts to, so the
+		// title is offered for every Discord account and used only where
+		// the channel turns out to be a forum.
+		Options: []publisher.Option{{Key: optionTitle, Label: "Forum post title", MaxLength: maxThreadName}},
 	}
 }
+
+// optionTitle names a forum post. Without it the post's first line does.
+const optionTitle = "title"
 
 // credentials is what a Discord account stores. The guild and channel are
 // kept so a published message can be linked to.
@@ -175,10 +182,14 @@ const codeForumNeedsThread = 220001
 // maxThreadName is Discord's limit for a thread's name.
 const maxThreadName = 100
 
-// threadName is what a post is called in a forum channel: its first line,
-// as a forum post's title is the first thing its author writes. A post with
+// threadName is what a post is called in a forum channel: the title its
+// author gave it for this channel, or else its first line, as a forum post's
+// title is the first thing its author writes. A post with
 // no text is named for what it carries.
 func threadName(post publisher.Post) string {
+	if title := strings.TrimSpace(post.Options[optionTitle]); title != "" {
+		return title
+	}
 	for line := range strings.SplitSeq(post.Text, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			if r := []rune(line); len(r) > maxThreadName {
