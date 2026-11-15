@@ -142,4 +142,17 @@ struct RulesTests {
         #expect(problems(rules, Draft(text: "x", options: ["title": "Hello!", "flair": "breaking"]))
             == ["Title is 1 characters over", "Flair is 3 characters over"])
     }
+
+    /// The same cases as `TestCountXWeighted` in Go and the web app's rules.test.ts.
+    @Test func xWeightedCounting() {
+        let cases: [(String, Int)] = [
+            ("", 0), ("Hello, world!", 13), ("café", 4), ("cafe\u{301}", 4), ("日本語", 6), ("👋", 2),
+            ("“quoted” – dash", 15), ("https://example.com", 23),
+            ("https://example.com/a/very/long/path?with=query", 23), ("see https://example.com.", 28),
+            ("www.example.com and http://a.test", 51), ("🙋🏽", 4),
+        ]
+        for (text, want) in cases {
+            #expect(countText(text, .x_weighted) == want, "\(text)")
+        }
+    }
 }

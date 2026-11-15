@@ -44,6 +44,7 @@ public struct Draft: Sendable, Equatable {
 /// clusters and would call a family emoji one character where the server
 /// sees several. `.emoji_bytes` counts an emoji as its UTF-8 length (Threads).
 public func countText(_ text: String, _ mode: Rules.text_countingPayload = .code_points) -> Int {
+    if mode == .x_weighted { return countXWeighted(text) }
     guard mode == .emoji_bytes else { return text.unicodeScalars.count }
     return text.unicodeScalars.reduce(0) { n, s in n + (isEmojiPart(s) ? s.utf8.count : 1) }
 }
@@ -55,6 +56,32 @@ func isEmojiPart(_ s: Unicode.Scalar) -> Bool {
     switch s.value {
     case 0x200D, 0x20E3, 0xFE00...0xFE0F, 0x1F3FB...0x1F3FF, 0xE0020...0xE007F: return true
     default: return false
+    }
+}
+
+/// Mirrors `countXWeighted` in Go: NFC, a link is 23, a code point in X's
+/// short list of ranges is 1 and any other is 2. Like the server it counts an
+/// emoji by its code points, where X counts the whole emoji as 2.
+func countXWeighted(_ text: String) -> Int {
+    let s = text.precomposedStringWithCanonicalMapping
+    let pattern = /(?i)\b(?:https?:\/\/|www\.)[^\s<>"]+/
+    var n = 0
+    var last = s.startIndex
+    for match in s.matches(of: pattern) {
+        var link = Substring(match.output)
+        while let end = link.last, ".,;:!?)]}'\"".contains(end) { link = link.dropLast() }
+        n += xWeight(s[last..<match.range.lowerBound]) + 23
+        last = link.endIndex
+    }
+    return n + xWeight(s[last...])
+}
+
+func xWeight(_ s: Substring) -> Int {
+    s.unicodeScalars.reduce(0) { n, c in
+        switch c.value {
+        case 0...0x10FF, 0x2000...0x200D, 0x2010...0x201F, 0x2032...0x2037: n + 1
+        default: n + 2
+        }
     }
 }
 

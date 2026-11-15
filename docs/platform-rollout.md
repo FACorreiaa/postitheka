@@ -202,6 +202,7 @@ and app purpose.
    files, at most 30 minutes. Not measured: the rate is our own allowance, so time the first real
    large upload on each platform and adjust.
 3. **IG-001,** then **FB-001,** then **X-001.**
+   All three built against stubs (X-001 on 2026-11-15); none has posted to a real account.
 4. **VID-001:** done 2026-11-15. Length, shape and width limits block only the stamps of the
    platforms that refuse the video. The client reads the values; the server cannot.
    **OPT-001:** done 2026-11-15. A platform lists the one-line options it takes per destination

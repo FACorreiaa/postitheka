@@ -133,7 +133,7 @@ Strangers who have published a post: **0**.
 | DSC-001 | Built, unverified | `internal/publisher/discord`: a refusal with Discord's error 220001 is answered by sending the message again with `thread_name`; `TestPublishToAForumChannelNamesTheThread`, `TestPublishMediaToAForumChannelSendsTheFilesAgain`, `TestANormalChannelGetsNoThreadName`, `TestOtherRefusalsAreNotSentAgain`, `TestThreadName` | Never posted to a real forum channel: the error code and the 100-character name limit are from Discord's docs. A forum that requires a tag still fails (40067), with Discord's message |
 | META-001 | Open | | Owner |
 | THR-001 | Built, unverified | `internal/publisher/threads`; `threads_test.go` (connect with the long-lived exchange, text, image, video processing, carousel order, `ERROR`/`EXPIRED`/timeout, publish without a clear answer incl. a cancelled request, error classes, refresh, no secrets in errors); mutation-checked; `max_links` and `text_counting` in the spec, mirrored and tested in web and iOS | Needs the owner's Threads app and tester account to post for real |
-| X-001 | Open | | Credits bought once on TestFlight (decided 2026-11-05); public use needs the tier decision |
+| X-001 | Built, unverified | `internal/publisher/x`; `x_test.go` (connect with PKCE and Basic client auth, refresh keeps the rotated token, a revoked grant is permanent, text, photos, a video in segments with the processing wait, error classes, no secrets in errors); `TestCountXWeighted` and the same cases in `web/src/rules.test.ts` and the kit's `RulesTests.swift` | Never run against X: needs the owner's developer app and credits. The post link's form is not in X's reference |
 | TT-001 | Open | | |
 | TT-002 | Open | | Owner |
 | FB-001 | Built, unverified | `internal/publisher/facebook`, `publisher.MultiConnector`; `facebook_test.go` (connect: long-lived exchange, Pages across result pages, only Pages the person can post to; text, photo, several photos as one post, video; a publish without a clear answer is never retried; error classes; no secrets in errors; rules), `TestOAuthConnectStoresEveryAccountGranted` | Needs the owner's Meta app with Facebook Login and a Page to post for real. Never run against Facebook. Text length, photo count and video limits are our own caps: Meta's reference states none. META-001 for strangers |
@@ -443,6 +443,28 @@ against stubs; only real use waits on the decision.
 
 **Done when:** tests against a stub cover connect, token refresh, text, media and error classes,
 and the owner posts to a real X account.
+
+**Built 2026-11-15** against a stub; the real post waits on the owner's app and credits.
+
+- OAuth 2.0 with PKCE as a confidential client (`X_CLIENT_ID`, `X_CLIENT_SECRET`). A token is
+  refreshed when it has under 40 minutes left, since a publish may run for 30; X issues a new
+  refresh token each time and the new one is kept (X-002 stores it before publishing).
+- Media goes through the chunked upload in 4 MB segments, then waits while X processes it. Every
+  upload step is retried on X's own errors. Creating the post is not: X has no idempotency key,
+  so a failure X did not answer with a refusal ends as "check the account before posting again".
+- Rules (X's pages, 2026-11-15): 280 weighted characters; 4 photos or 1 video; JPG, PNG, WEBP up
+  to 5 MB; a video 0.5 seconds to 20 minutes and between 1:3 and 3:1. Those are the limits of an
+  account without Premium.
+- **Counting differs from X in two known ways.** An emoji made of several code points (a flag, a
+  skin tone, a family) is counted per code point, so it counts more than X's 2: a post near the
+  limit may be refused here that X would take. A bare domain (`example.com`) is not counted as
+  a link, as X does: such a post may pass here and be refused by X.
+- **Left out:** GIF (X takes one, alone, up to 15 MB, which `Rules` cannot say); a limit on a
+  video's width and height (X's page contradicts itself); the cost hint on the stamp.
+- **Our own cap, not X's:** a video of 1 GiB, because every byte passes through the server.
+- **Not from X's reference:** the link to a published post (`x.com/{username}/status/{id}`).
+  Confirm it with the first real post.
+- Unconfirmed, as before: whether an upload is billed, and whether a failed request is.
 
 ### TT-001 · TikTok upload to inbox · M
 **Needs:** OAUTH-001, X-002, VID-001. Upload a video to the user's TikTok drafts

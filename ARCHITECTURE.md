@@ -178,7 +178,7 @@ type Publisher interface {
 - `Rules` gives per-file limits (`MaxMediaBytes`, and `MaxVideoBytes` for video when it
   differs), `VideoAlone` for platforms that take a video only on its own, `MaxLinks` for
   platforms that cap distinct links, and `TextCounting` for platforms that count characters
-  their own way. `TextCounting` is a named mode (`code_points`, `emoji_bytes`), not a function,
+  their own way. `TextCounting` is a named mode (`code_points`, `emoji_bytes`, `x_weighted`), not a function,
   because the web and iOS clients count too: each mode exists three times (Go `rules.go`,
   `web/src/rules.ts`, the kit's `Rules.swift`), tested against the same cases.
 - Video limits (`MinVideoLength`, `MaxVideoLength`, `MinVideoAspect`, `MaxVideoAspect`,
@@ -264,7 +264,7 @@ Checked dates matter: re-check a platform's docs before building it.
 | Discord | Direct (webhook) | **Built** | Checked 2026-10-22: 2,000 chars, 10 files, 20 MiB per file. No review. Forum and media channels get a `thread_name` from the target's `title` option or else the post's first line, sent after Discord refuses the plain message with error 220001; a forum that requires a tag still fails. |
 | LinkedIn | Direct (OAuth 2.0) | **Built** (stub-tested) | Checked 2026-10-23: 3,000 characters, 20 images of 5 MB, or one MP4 up to 500 MB. Self-serve. Needs the owner's developer app to use. |
 | Threads | Direct (OAuth, threads.com) | **Built** (stub-tested) | Checked 2026-10-23: 500 characters (emoji counted in UTF-8 bytes), 5 links, carousel of 2–20; JPEG/PNG 8 MB, MP4/MOV 1 GB. Testers before App Review; needs the owner's Threads app. |
-| X | Direct (OAuth 2.0 PKCE) | Not started | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23); owner decision. Weighted `CountText`. |
+| X | Direct (OAuth 2.0 PKCE) | **Built** (stub-tested) | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23), billed to the developer app. Checked 2026-11-15: 280 weighted characters (`x_weighted`), 4 photos (JPG/PNG/WEBP, 5 MB) or 1 video (0.5 s to 20 min, 1:3 to 3:1; 1 GiB is our cap). Chunked upload in 4 MB segments. Tokens last 2 hours and the refresh token rotates. No idempotency key: an unanswered create is not retried. No GIF. |
 | Reddit | Direct (OAuth 2.0) | Not started | Needs Reddit's approval first; text and links only. |
 | Facebook | Direct (Facebook Login) | **Built** (stub-tested) | Pages only; one account per Page shared at login. Checked 2026-11-15: text, photos (JPEG/PNG/GIF, 10 MB) singly or several in one post, or one MP4 by URL. Meta states no text, photo-count or video limit, so those are our caps (5,000 characters, 10 photos, 300 MB). Role holders before App Review; needs the owner's Meta app. |
 | Instagram | Direct (Instagram Login) | **Built** (stub-tested) | Checked 2026-11-14: caption of 2,200 characters, no post without media, carousel of 2–20; JPEG only, 8 MB; a single video is a reel, MP4/MOV 300 MB; all media by URL (`PublicURL`). Business/Creator accounts, no Page needed. 100 posts in 24 hours. Role holders before App Review; needs the owner's Instagram app. |

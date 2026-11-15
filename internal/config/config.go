@@ -72,6 +72,12 @@ type Config struct {
 	FacebookAppID     string
 	FacebookAppSecret string
 
+	// X developer app, OAuth 2.0 as a confidential client ("Web App,
+	// Automated App or Bot"). Both empty: X is not offered. Every post is
+	// billed to this app.
+	XClientID     string
+	XClientSecret string
+
 	// PostHog product analytics. An empty key disables capture entirely:
 	// nothing is sent, and no credential is needed to develop.
 	PostHogAPIKey string
@@ -124,6 +130,8 @@ func load(serving bool) (Config, error) {
 		InstagramAppSecret:   env("INSTAGRAM_APP_SECRET", ""),
 		FacebookAppID:        env("FACEBOOK_APP_ID", ""),
 		FacebookAppSecret:    env("FACEBOOK_APP_SECRET", ""),
+		XClientID:            env("X_CLIENT_ID", ""),
+		XClientSecret:        env("X_CLIENT_SECRET", ""),
 		PostHogAPIKey:        env("POSTHOG_API_KEY", ""),
 		PostHogHost:          strings.TrimSuffix(env("POSTHOG_HOST", "https://eu.i.posthog.com"), "/"),
 		Mascot3DModelURL:     env("MASCOT_3D_MODEL_URL", ""),
@@ -162,6 +170,9 @@ func load(serving bool) (Config, error) {
 	}
 	if (c.FacebookAppID == "") != (c.FacebookAppSecret == "") {
 		return Config{}, fmt.Errorf("config: set both FACEBOOK_APP_ID and FACEBOOK_APP_SECRET, or neither")
+	}
+	if (c.XClientID == "") != (c.XClientSecret == "") {
+		return Config{}, fmt.Errorf("config: set both X_CLIENT_ID and X_CLIENT_SECRET, or neither")
 	}
 
 	if c.PublicURL == "" && !c.IsProduction() {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Rules } from "./api";
-import { formatLength, problems } from "./rules";
+import { countText, formatLength, problems } from "./rules";
 import { factsFrom } from "./lib/video-facts";
 
 const rules: Rules = {
@@ -93,5 +93,25 @@ describe("options", () => {
     expect(check()).toEqual(["Needs a title"]);
     expect(check({ title: "   " })).toEqual(["Needs a title"]);
     expect(check({ title: "Hello!", flair: "breaking" })).toEqual(["Title is 1 characters over", "Flair is 3 characters over"]);
+  });
+});
+
+// The same cases as TestCountXWeighted in Go and the kit's RulesTests.swift.
+describe("x_weighted counting", () => {
+  it.each([
+    ["", 0],
+    ["Hello, world!", 13],
+    ["café", 4],
+    ["cafe\u0301", 4],
+    ["日本語", 6],
+    ["👋", 2],
+    ["“quoted” – dash", 15],
+    ["https://example.com", 23],
+    ["https://example.com/a/very/long/path?with=query", 23],
+    ["see https://example.com.", 28],
+    ["www.example.com and http://a.test", 51],
+    ["🙋🏽", 4],
+  ])("%j counts %i", (text, want) => {
+    expect(countText(text, "x_weighted")).toBe(want);
   });
 });

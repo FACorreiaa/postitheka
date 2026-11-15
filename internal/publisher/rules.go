@@ -8,6 +8,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Rules are the limits a platform puts on a post. Clients receive them through
@@ -63,12 +65,18 @@ const (
 	// CountEmojiBytes counts a character as one and an emoji as its UTF-8
 	// length (Threads).
 	CountEmojiBytes TextCounting = "emoji_bytes"
+	// CountXWeighted is X's count: a link is 23 whatever its length, and a
+	// character outside X's short list of ranges (CJK, emoji) is 2.
+	CountXWeighted TextCounting = "x_weighted"
 )
 
 // CountText measures s the way mode does. An unset mode counts code points.
 func CountText(mode TextCounting, s string) int {
-	if mode == CountEmojiBytes {
+	switch mode {
+	case CountEmojiBytes:
 		return countEmojiBytes(s)
+	case CountXWeighted:
+		return countXWeighted(s)
 	}
 	return utf8.RuneCountInString(s)
 }
@@ -103,6 +111,47 @@ func isEmojiPart(r rune) bool {
 	return false
 }
 
+// xLinkLength is what any link counts as on X, which wraps every one in its
+// own shortener.
+const xLinkLength = 23
+
+// countXWeighted follows twitter-text's configuration (version 3, read
+// 2026-11-15): text is normalised to NFC, a link counts 23, a code point in
+// U+0000-10FF, U+2000-200D, U+2010-201F or U+2032-2037 counts 1, and any
+// other counts 2.
+//
+// Two places it differs from X, both known:
+//   - X counts a whole emoji as 2, however many code points it is made of.
+//     Each code point is counted here, so a flag or an emoji with a skin
+//     tone counts 4 and a family 11. A post near the limit may be refused
+//     that X would take, never the reverse.
+//   - X also treats a bare domain (example.com) as a link. Only what
+//     linkPattern finds is a link here, so a bare domain shorter than 23
+//     characters is under-counted, and X then refuses the post itself.
+func countXWeighted(s string) int {
+	s = norm.NFC.String(s)
+	n, last := 0, 0
+	for _, loc := range linkPattern.FindAllStringIndex(s, -1) {
+		end := loc[0] + len(strings.TrimRight(s[loc[0]:loc[1]], linkTrailing))
+		n += xWeight(s[last:loc[0]]) + xLinkLength
+		last = end
+	}
+	return n + xWeight(s[last:])
+}
+
+func xWeight(s string) int {
+	n := 0
+	for _, r := range s {
+		switch {
+		case r <= 0x10FF, r >= 0x2000 && r <= 0x200D, r >= 0x2010 && r <= 0x201F, r >= 0x2032 && r <= 0x2037:
+			n++
+		default:
+			n += 2
+		}
+	}
+	return n
+}
+
 // MaxBytes is the per-file limit for a file of this type.
 func (r Rules) MaxBytes(contentType string) int64 {
 	if r.MaxVideoBytes > 0 && IsVideo(contentType) {
@@ -118,12 +167,15 @@ func IsVideo(contentType string) bool { return strings.HasPrefix(contentType, "v
 // are not counted, since guessing at them would refuse ordinary sentences.
 var linkPattern = regexp.MustCompile(`(?i)\b(?:https?://|www\.)[^\s<>"]+`)
 
+// linkTrailing is punctuation that ends a sentence, not a link.
+const linkTrailing = ".,;:!?)]}'"
+
 // CountLinks counts the distinct links in s, the way Threads counts toward
 // its limit: the same URL twice is one link.
 func CountLinks(s string) int {
 	seen := map[string]bool{}
 	for _, l := range linkPattern.FindAllString(s, -1) {
-		seen[strings.ToLower(strings.TrimRight(l, ".,;:!?)]}'"))] = true
+		seen[strings.ToLower(strings.TrimRight(l, linkTrailing))] = true
 	}
 	return len(seen)
 }

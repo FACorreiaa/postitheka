@@ -199,10 +199,10 @@ export interface components {
             /** @description Measured as text_counting says. */
             max_text_length: number;
             /**
-             * @description How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F).
+             * @description How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F). x_weighted is X's count, on the text normalised to NFC: a link (as max_links defines one, without its trailing punctuation) counts 23, a code point in U+0000-10FF, U+2000-200D, U+2010-201F or U+2032-2037 counts 1, and any other code point counts 2.
              * @enum {string}
              */
-            text_counting: "code_points" | "emoji_bytes";
+            text_counting: "code_points" | "emoji_bytes" | "x_weighted";
             /** @description Distinct links in the text, where a link starts with http://, https:// or www. and runs to whitespace, compared without case and without trailing punctuation. 0 means no limit. */
             max_links: number;
             max_media: number;
