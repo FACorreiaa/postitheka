@@ -212,7 +212,8 @@ vocabulary: "Publish" produces "Published"; "Not sent" means failed.
 - **The 3D mascot's source has inside-out meshes** (the shell and the eyes: triangles and
   normals facing in). three drew them because the materials are double-sided; RealityKit
   ignores `doubleSided` and culled them, so on iOS the eyes vanished and the body went dark.
-  `build_mascot3d.py` flips them (`flip` in `PAINT`); check a new source on iOS, not only
+  `build_mascot3d.py` turns them round part by part (`right_side_out`: a part whose enclosed
+  volume is negative; one material can hold both kinds); check a new source on iOS, not only
   the web. RealityKit's virtual camera also has no environment light, so the USD caps
   metalness at 0.3 and `Mascot3DView` adds a front fill light.
 - **Platform research agents can be wrong.** Limits that came back unconfirmed from research

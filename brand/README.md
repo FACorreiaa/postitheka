@@ -80,7 +80,13 @@ replace any file above.
   beta or local environment sets it. The iOS app compiles it into Debug and Beta builds only;
   `Release.xcconfig` excludes the view, the model and the motion file, and
   `ios/tools/release-proof.sh` fails if a Release build contains any of them.
-- **The tablet is removed.** Its mark is not the stamp, and a recolour cannot change a shape.
+- **The tablet is back, by the owner's choice on 2026-11-15** (source `Postitheka_Mascot_iOS.glb`).
+  It was removed on 2026-11-13 because the mark on it is the kit's P-arrow, not the stamp, and
+  a recolour cannot change a shape. That is still true: the mark is on the tablet, in cyan.
+  Whether it stays is the owner's call on the device check.
+- **A smile is drawn on the visor,** under the eyes. The kit's model has eyes only; the build
+  script makes the mouth (`smile`, sized from the visor by the `SMILE` table) and lights it
+  like the eyes. `--no-smile` builds without it.
 - **Colours are tokens.** The build script paints each material with a token read from
   `web/src/styles.css`, and the scene's lights are tokens too (gold key light, glow rim). No
   hex literal in the 3D code; `scripts/brand-guard.sh` checks.
@@ -95,7 +101,7 @@ Rebuild, from the repo root, after any change to the paint or the source:
 
 ```sh
 python3 -I brand/tools/build_mascot3d.py \
-    --src ~/Work/production/apps/postitheka-3d-src/Postitheka_Mascot_Web_NoTablet.glb \
+    --src ~/Work/production/apps/postitheka-3d-src-tablet/Postitheka_Mascot_iOS.glb \
     --out out/mascot3d --ios ios/Postitheka/Mascot3D
 ```
 
@@ -104,6 +110,7 @@ Locally, set `MASCOT_3D_MODEL_URL=/mascot3d/mascot.glb` in `.env` and run `task 
 `Mascot.usdz`.
 
 The source kit stays outside the repo and is treated as untrusted: only its
-`Postitheka_Mascot_Web_NoTablet.glb` is copied, into an empty directory of its own, and none of
-its scripts or its USDZ are used. The build output (`out/mascot3d/`, and the copy in
+`Postitheka_Mascot_iOS.glb` is copied, into an empty directory of its own, and none of its
+scripts or its USDZ are used. The earlier source, `Postitheka_Mascot_Web_NoTablet.glb` in
+`postitheka-3d-src/`, still builds with the same script and gives the robot without the tablet. The build output (`out/mascot3d/`, and the copy in
 `ios/Postitheka/Mascot3D/`) is git-ignored.
