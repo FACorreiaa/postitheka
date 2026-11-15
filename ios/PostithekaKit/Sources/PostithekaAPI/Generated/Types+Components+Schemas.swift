@@ -72,14 +72,15 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Rules/max_text_length`.
             public var max_text_length: Swift.Int
-            /// How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F).
+            /// How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F). x_weighted is X's count, on the text normalised to NFC: a link (as max_links defines one, without its trailing punctuation) counts 23, a code point in U+0000-10FF, U+2000-200D, U+2010-201F or U+2032-2037 counts 1, and any other code point counts 2.
             ///
             /// - Remark: Generated from `#/components/schemas/Rules/text_counting`.
             @frozen public enum text_countingPayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case code_points = "code_points"
                 case emoji_bytes = "emoji_bytes"
+                case x_weighted = "x_weighted"
             }
-            /// How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F).
+            /// How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F). x_weighted is X's count, on the text normalised to NFC: a link (as max_links defines one, without its trailing punctuation) counts 23, a code point in U+0000-10FF, U+2000-200D, U+2010-201F or U+2032-2037 counts 1, and any other code point counts 2.
             ///
             /// - Remark: Generated from `#/components/schemas/Rules/text_counting`.
             public var text_counting: Components.Schemas.Rules.text_countingPayload
@@ -140,7 +141,7 @@ extension Components {
             ///
             /// - Parameters:
             ///   - max_text_length: Measured as text_counting says.
-            ///   - text_counting: How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F).
+            ///   - text_counting: How max_text_length is measured. code_points counts Unicode code points. emoji_bytes counts a character as one and an emoji as its UTF-8 bytes, where an emoji is any symbol (general category So) or emoji component (U+200D, U+20E3, U+FE00-FE0F, U+1F3FB-1F3FF, U+E0020-E007F). x_weighted is X's count, on the text normalised to NFC: a link (as max_links defines one, without its trailing punctuation) counts 23, a code point in U+0000-10FF, U+2000-200D, U+2010-201F or U+2032-2037 counts 1, and any other code point counts 2.
             ///   - max_links: Distinct links in the text, where a link starts with http://, https:// or www. and runs to whitespace, compared without case and without trailing punctuation. 0 means no limit.
             ///   - max_media:
             ///   - max_media_bytes: Per file. For video files, max_video_bytes applies instead when it is not 0.

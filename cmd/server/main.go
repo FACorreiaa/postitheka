@@ -38,6 +38,7 @@ import (
 	"github.com/FACorreiaa/postitheka/internal/publisher/instagram"
 	"github.com/FACorreiaa/postitheka/internal/publisher/linkedin"
 	"github.com/FACorreiaa/postitheka/internal/publisher/threads"
+	"github.com/FACorreiaa/postitheka/internal/publisher/x"
 	"github.com/FACorreiaa/postitheka/internal/secretbox"
 	"github.com/FACorreiaa/postitheka/internal/service"
 	"github.com/FACorreiaa/postitheka/web"
@@ -151,6 +152,9 @@ func serve(cfg config.Config) error {
 	}
 	if cfg.FacebookAppID != "" {
 		pubs = append(pubs, facebook.New(cfg.FacebookAppID, cfg.FacebookAppSecret, nil))
+	}
+	if cfg.XClientID != "" {
+		pubs = append(pubs, x.New(cfg.XClientID, cfg.XClientSecret, nil))
 	}
 	registry := publisher.NewRegistry(pubs...)
 

@@ -168,3 +168,30 @@ func TestAcceptsUpload(t *testing.T) {
 		t.Fatal("accepted a zero-byte upload")
 	}
 }
+
+// The same cases are in web/src/rules.test.ts and the kit's RulesTests.swift:
+// the three counters must agree.
+func TestCountXWeighted(t *testing.T) {
+	cases := []struct {
+		text string
+		want int
+	}{
+		{"", 0},
+		{"Hello, world!", 13},
+		{"café", 4},
+		{"café", 4}, // decomposed: normalised to NFC first
+		{"日本語", 6},
+		{"👋", 2},
+		{"“quoted” – dash", 15}, // U+2010-201F counts 1
+		{"https://example.com", 23},
+		{"https://example.com/a/very/long/path?with=query", 23},
+		{"see https://example.com.", 28},          // 4 + 23 + the full stop
+		{"www.example.com and http://a.test", 51}, // 23 + 5 + 23
+		{"🙋🏽", 4}, // X says 2: counted per code point
+	}
+	for _, c := range cases {
+		if got := CountText(CountXWeighted, c.text); got != c.want {
+			t.Errorf("%q counts %d, want %d", c.text, got, c.want)
+		}
+	}
+}

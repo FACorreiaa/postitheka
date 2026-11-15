@@ -95,7 +95,11 @@ Tests stub the platform's HTTP API; see `discord_test.go`. Never a real token.
   Facebook Login to the Meta app and set `FACEBOOK_APP_ID` and
   `FACEBOOK_APP_SECRET` (the Meta app's own). Every Page you share in
   Facebook's dialog becomes an account.
-- **X, TikTok, Reddit.** Order and blockers are in
+- **X** is built and tested against a stub; to use it, create an app with
+  OAuth 2.0 as a confidential client and set `X_CLIENT_ID` and
+  `X_CLIENT_SECRET`. Every post is billed to that app: set a spending limit
+  in X's console first.
+- **TikTok, Reddit.** Order and blockers are in
   `BACKLOG.md` (P2). Start Meta Business Verification and the TikTok audit
   early; both take weeks.
 - **Discord forum channels** need `thread_name`; they fail permanently today.

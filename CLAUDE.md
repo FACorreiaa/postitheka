@@ -80,6 +80,7 @@ postitheka/
       instagram/
       linkedin/
       threads/
+      x/
     secretbox/              # credential encryption
     analytics/              # product events (PostHog); empty key sends nothing
     service/                # application behaviour: accounts, uploads, posts, tokens
@@ -218,6 +219,12 @@ vocabulary: "Publish" produces "Published"; "Not sent" means failed.
   volume is negative; one material can hold both kinds); check a new source on iOS, not only
   the web. RealityKit's virtual camera also has no environment light, so the USD caps
   metalness at 0.3 and `Mascot3DView` adds a front fill light.
+- **X spends a refresh token when it is used.** Each refresh answers with a new one; storing the
+  old one again locks the account out at the next refresh. `x.Refresh` keeps the new one, and
+  the worker seals it before publishing.
+- **X's character count is not ours exactly.** `x_weighted` counts an emoji per code point (X
+  counts any emoji as 2) and does not see a bare domain as a link (X does). The first refuses
+  early, the second lets X refuse; both are written down in `countXWeighted`.
 - **Platform research agents can be wrong.** Limits that came back unconfirmed from research
   (LinkedIn's text length, image size) were checked against the platform's own pages before
   going into `Rules()`.

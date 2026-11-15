@@ -422,8 +422,11 @@ func postOptions(in []publisher.Option) []PostOption {
 }
 
 func textCounting(m publisher.TextCounting) RulesTextCounting {
-	if m == publisher.CountEmojiBytes {
+	switch m {
+	case publisher.CountEmojiBytes:
 		return EmojiBytes
+	case publisher.CountXWeighted:
+		return XWeighted
 	}
 	return CodePoints
 }

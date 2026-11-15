@@ -16,9 +16,10 @@ const utf8 = new TextEncoder();
  * Counts text the way the server does for this platform's text_counting.
  * code_points counts Unicode code points: `text.length` counts UTF-16 units
  * and would call an emoji two characters. emoji_bytes counts an emoji as its
- * UTF-8 length (Threads).
+ * UTF-8 length (Threads). x_weighted is X's count (countXWeighted).
  */
 export function countText(text: string, mode: Rules["text_counting"] = "code_points"): number {
+  if (mode === "x_weighted") return countXWeighted(text);
   let n = 0;
   for (const ch of text) {
     n += mode === "emoji_bytes" && emojiPart.test(ch) ? utf8.encode(ch).length : 1;
@@ -29,11 +30,36 @@ export function countText(text: string, mode: Rules["text_counting"] = "code_poi
 // The links publisher.CountLinks counts: a scheme or www., up to whitespace,
 // compared without case or trailing punctuation.
 const linkPattern = /\b(?:https?:\/\/|www\.)[^\s<>"]+/gi;
+// Punctuation that ends a sentence, not a link.
+const linkTrailing = /[.,;:!?)\]}'"]+$/;
 
 export function countLinks(text: string): number {
   const seen = new Set<string>();
-  for (const m of text.match(linkPattern) ?? []) seen.add(m.replace(/[.,;:!?)\]}'"]+$/, "").toLowerCase());
+  for (const m of text.match(linkPattern) ?? []) seen.add(m.replace(linkTrailing, "").toLowerCase());
   return seen.size;
+}
+
+// Mirrors countXWeighted in Go: NFC, a link is 23, a code point in X's short
+// list of ranges is 1 and any other is 2. Like the server it counts an emoji
+// by its code points, where X counts the whole emoji as 2.
+function countXWeighted(text: string): number {
+  const s = text.normalize("NFC");
+  let n = 0;
+  let last = 0;
+  for (const m of s.matchAll(linkPattern)) {
+    n += xWeight(s.slice(last, m.index)) + 23;
+    last = m.index + m[0].replace(linkTrailing, "").length;
+  }
+  return n + xWeight(s.slice(last));
+}
+
+function xWeight(s: string): number {
+  let n = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0)!;
+    n += c <= 0x10ff || (c >= 0x2000 && c <= 0x200d) || (c >= 0x2010 && c <= 0x201f) || (c >= 0x2032 && c <= 0x2037) ? 1 : 2;
+  }
+  return n;
 }
 
 /**
