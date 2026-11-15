@@ -163,15 +163,46 @@ type payload struct {
 		Parse []string `json:"parse"`
 	} `json:"allowed_mentions"`
 	Attachments []attachment `json:"attachments,omitempty"`
+	// ThreadName is sent only to a forum or media channel, where every
+	// message starts a thread and Discord refuses one without a name.
+	ThreadName string `json:"thread_name,omitempty"`
+}
+
+// codeForumNeedsThread is Discord's JSON error 220001: "Webhooks posted to
+// forum channels must have a thread_name or thread_id".
+const codeForumNeedsThread = 220001
+
+// maxThreadName is Discord's limit for a thread's name.
+const maxThreadName = 100
+
+// threadName is what a post is called in a forum channel: its first line,
+// as a forum post's title is the first thing its author writes. A post with
+// no text is named for what it carries.
+func threadName(post publisher.Post) string {
+	for line := range strings.SplitSeq(post.Text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			if r := []rune(line); len(r) > maxThreadName {
+				return strings.TrimSpace(string(r[:maxThreadName-1])) + "…"
+			}
+			return line
+		}
+	}
+	if len(post.Media) == 1 {
+		return "1 file"
+	}
+	return fmt.Sprintf("%d files", len(post.Media))
 }
 
 // Publish executes the webhook with ?wait=true, which makes Discord return the
 // created message, or an error if it was not saved. Without it a rejected
 // message still answers 204 and the failure is invisible.
 //
-// Forum and media channels are not supported yet: they need a thread_name,
-// and Discord rejects the request with a 400, which surfaces as a permanent
-// failure on the target.
+// A forum or media channel needs a thread_name. A webhook cannot be asked
+// what kind of channel it posts to (the webhook object has no channel type,
+// and reading the channel needs a bot), so the channel says so itself:
+// Discord refuses the plain message with error 220001, and the message is
+// sent once more with a thread name. The refusal saved nothing, so this
+// cannot post twice. It does send a forum post's files twice.
 func (p *Publisher) Publish(ctx context.Context, raw []byte, post publisher.Post, media publisher.MediaSource) (publisher.Result, error) {
 	var creds credentials
 	if err := json.Unmarshal(raw, &creds); err != nil || creds.WebhookID == "" || creds.Token == "" {
@@ -183,6 +214,17 @@ func (p *Publisher) Publish(ctx context.Context, raw []byte, post publisher.Post
 	for i, m := range post.Media {
 		pl.Attachments = append(pl.Attachments, attachment{ID: i, Filename: m.Filename})
 	}
+
+	res, err := p.execute(ctx, creds, pl, post, media)
+	if code := (*codeError)(nil); errors.As(err, &code) && code.code == codeForumNeedsThread {
+		pl.ThreadName = threadName(post)
+		res, err = p.execute(ctx, creds, pl, post, media)
+	}
+	return res, err
+}
+
+// execute sends one webhook message and reads Discord's answer.
+func (p *Publisher) execute(ctx context.Context, creds credentials, pl payload, post publisher.Post, media publisher.MediaSource) (publisher.Result, error) {
 	plJSON, err := json.Marshal(pl)
 	if err != nil {
 		return publisher.Result{}, err
@@ -319,6 +361,16 @@ func (f *lazyFile) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// codeError carries Discord's JSON error code under the classification, for
+// the one refusal Publish answers by trying again differently.
+type codeError struct {
+	code int
+	err  error
+}
+
+func (e *codeError) Error() string { return e.err.Error() }
+func (e *codeError) Unwrap() error { return e.err }
+
 // apiError turns a non-success response into a classified error.
 func apiError(resp *http.Response) error {
 	var body struct {
@@ -333,7 +385,7 @@ func apiError(resp *http.Response) error {
 	if msg == "" {
 		msg = http.StatusText(resp.StatusCode)
 	}
-	err := fmt.Errorf("discord: %d: %s", resp.StatusCode, msg)
+	var err error = &codeError{code: body.Code, err: fmt.Errorf("discord: %d: %s", resp.StatusCode, msg)}
 
 	switch {
 	case resp.StatusCode == http.StatusTooManyRequests:
