@@ -111,6 +111,26 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Rules/video_alone`.
             public var video_alone: Swift.Bool
+            /// Shortest video accepted, in milliseconds. 0 means no limit. This and the other video limits apply only to a video whose upload declared the value they check.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/min_video_ms`.
+            public var min_video_ms: Swift.Int
+            /// Longest video accepted, in milliseconds. 0 means no limit.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/max_video_ms`.
+            public var max_video_ms: Swift.Int
+            /// Smallest width divided by height a video may have. 0 means no limit.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/min_video_aspect`.
+            public var min_video_aspect: Swift.Double
+            /// Largest width divided by height a video may have. 0 means no limit.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/max_video_aspect`.
+            public var max_video_aspect: Swift.Double
+            /// Widest video accepted, in pixels. 0 means no limit.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/max_video_width`.
+            public var max_video_width: Swift.Int
             /// Creates a new `Rules`.
             ///
             /// - Parameters:
@@ -125,6 +145,11 @@ extension Components {
             ///   - requires_text:
             ///   - requires_media:
             ///   - video_alone: A video must be the only file in the post.
+            ///   - min_video_ms: Shortest video accepted, in milliseconds. 0 means no limit. This and the other video limits apply only to a video whose upload declared the value they check.
+            ///   - max_video_ms: Longest video accepted, in milliseconds. 0 means no limit.
+            ///   - min_video_aspect: Smallest width divided by height a video may have. 0 means no limit.
+            ///   - max_video_aspect: Largest width divided by height a video may have. 0 means no limit.
+            ///   - max_video_width: Widest video accepted, in pixels. 0 means no limit.
             public init(
                 max_text_length: Swift.Int,
                 text_counting: Components.Schemas.Rules.text_countingPayload,
@@ -136,7 +161,12 @@ extension Components {
                 media_types: [Swift.String],
                 requires_text: Swift.Bool,
                 requires_media: Swift.Bool,
-                video_alone: Swift.Bool
+                video_alone: Swift.Bool,
+                min_video_ms: Swift.Int,
+                max_video_ms: Swift.Int,
+                min_video_aspect: Swift.Double,
+                max_video_aspect: Swift.Double,
+                max_video_width: Swift.Int
             ) {
                 self.max_text_length = max_text_length
                 self.text_counting = text_counting
@@ -149,6 +179,11 @@ extension Components {
                 self.requires_text = requires_text
                 self.requires_media = requires_media
                 self.video_alone = video_alone
+                self.min_video_ms = min_video_ms
+                self.max_video_ms = max_video_ms
+                self.min_video_aspect = min_video_aspect
+                self.max_video_aspect = max_video_aspect
+                self.max_video_width = max_video_width
             }
             public enum CodingKeys: String, CodingKey {
                 case max_text_length
@@ -162,6 +197,11 @@ extension Components {
                 case requires_text
                 case requires_media
                 case video_alone
+                case min_video_ms
+                case max_video_ms
+                case min_video_aspect
+                case max_video_aspect
+                case max_video_width
             }
         }
         /// - Remark: Generated from `#/components/schemas/Account`.
@@ -320,21 +360,45 @@ extension Components {
             public var content_type: Swift.String
             /// - Remark: Generated from `#/components/schemas/CreateUploadRequest/size_bytes`.
             public var size_bytes: Swift.Int64
+            /// For a video: how long it plays, in milliseconds, as the client read it from the file. The server cannot measure it. Leave it out when unknown; the platforms' length limits are then not checked before publishing.
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreateUploadRequest/duration_ms`.
+            public var duration_ms: Swift.Int?
+            /// For a video, its displayed width in pixels (after rotation). Send it with height.
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreateUploadRequest/width`.
+            public var width: Swift.Int?
+            /// For a video, its displayed height in pixels (after rotation). Send it with width.
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreateUploadRequest/height`.
+            public var height: Swift.Int?
             /// Creates a new `CreateUploadRequest`.
             ///
             /// - Parameters:
             ///   - content_type:
             ///   - size_bytes:
+            ///   - duration_ms: For a video: how long it plays, in milliseconds, as the client read it from the file. The server cannot measure it. Leave it out when unknown; the platforms' length limits are then not checked before publishing.
+            ///   - width: For a video, its displayed width in pixels (after rotation). Send it with height.
+            ///   - height: For a video, its displayed height in pixels (after rotation). Send it with width.
             public init(
                 content_type: Swift.String,
-                size_bytes: Swift.Int64
+                size_bytes: Swift.Int64,
+                duration_ms: Swift.Int? = nil,
+                width: Swift.Int? = nil,
+                height: Swift.Int? = nil
             ) {
                 self.content_type = content_type
                 self.size_bytes = size_bytes
+                self.duration_ms = duration_ms
+                self.width = width
+                self.height = height
             }
             public enum CodingKeys: String, CodingKey {
                 case content_type
                 case size_bytes
+                case duration_ms
+                case width
+                case height
             }
         }
         /// - Remark: Generated from `#/components/schemas/Upload`.

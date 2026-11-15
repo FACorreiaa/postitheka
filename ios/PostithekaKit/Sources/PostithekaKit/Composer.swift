@@ -10,12 +10,15 @@ public struct Attachment: Identifiable, Sendable, Equatable {
     public var progress: Double = 0
     public var mediaID: String?
     public var error: String?
+    /// Read from a video file before uploading; nil for anything else.
+    public let video: VideoFacts?
 
-    public init(id: UUID = UUID(), file: URL, contentType: String, size: Int64) {
+    public init(id: UUID = UUID(), file: URL, contentType: String, size: Int64, video: VideoFacts? = nil) {
         self.id = id
         self.file = file
         self.contentType = contentType
         self.size = size
+        self.video = video
     }
 
     public var isUploading: Bool { mediaID == nil && error == nil }
@@ -67,7 +70,7 @@ public final class Composer {
     }
 
     public var draft: Draft {
-        Draft(text: text, media: attachments.map { .init(contentType: $0.contentType, size: $0.size) })
+        Draft(text: text, media: attachments.map { .init(contentType: $0.contentType, size: $0.size, video: $0.video) })
     }
 
     /// The brand last picked. Read `brand` for the one in effect.
@@ -108,11 +111,11 @@ public final class Composer {
     }
 
     /// Attaches a file and uploads it at once, so Publish is quick.
-    public func attach(file: URL, contentType: String, size: Int64) async {
-        let item = Attachment(file: file, contentType: contentType, size: size)
+    public func attach(file: URL, contentType: String, size: Int64, video: VideoFacts? = nil) async {
+        let item = Attachment(file: file, contentType: contentType, size: size, video: video)
         attachments.append(item)
         do {
-            let upload = try await api.reserveUpload(contentType: contentType, size: size)
+            let upload = try await api.reserveUpload(contentType: contentType, size: size, video: video)
             try await uploader.upload(file: file, to: upload) { [weak self] fraction in
                 Task { @MainActor in self?.patch(item.id) { $0.progress = fraction } }
             }

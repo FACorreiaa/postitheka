@@ -40,6 +40,9 @@ type Medium struct {
 	SizeBytes   int64
 	VerifiedAt  pgtype.Timestamptz
 	CreatedAt   time.Time
+	DurationMs  *int32
+	Width       *int32
+	Height      *int32
 }
 
 type OauthState struct {

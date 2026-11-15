@@ -226,6 +226,22 @@ export interface components {
             requires_media: boolean;
             /** @description A video must be the only file in the post. */
             video_alone: boolean;
+            /** @description Shortest video accepted, in milliseconds. 0 means no limit. This and the other video limits apply only to a video whose upload declared the value they check. */
+            min_video_ms: number;
+            /** @description Longest video accepted, in milliseconds. 0 means no limit. */
+            max_video_ms: number;
+            /**
+             * Format: double
+             * @description Smallest width divided by height a video may have. 0 means no limit.
+             */
+            min_video_aspect: number;
+            /**
+             * Format: double
+             * @description Largest width divided by height a video may have. 0 means no limit.
+             */
+            max_video_aspect: number;
+            /** @description Widest video accepted, in pixels. 0 means no limit. */
+            max_video_width: number;
         };
         Account: {
             /** Format: uuid */
@@ -269,6 +285,12 @@ export interface components {
             content_type: string;
             /** Format: int64 */
             size_bytes: number;
+            /** @description For a video: how long it plays, in milliseconds, as the client read it from the file. The server cannot measure it. Leave it out when unknown; the platforms' length limits are then not checked before publishing. */
+            duration_ms?: number;
+            /** @description For a video, its displayed width in pixels (after rotation). Send it with height. */
+            width?: number;
+            /** @description For a video, its displayed height in pixels (after rotation). Send it with width. */
+            height?: number;
         };
         Upload: {
             /** Format: uuid */

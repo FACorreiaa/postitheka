@@ -41,6 +41,12 @@ type Media struct {
 	// Filename is what the platform shows, with an extension matching
 	// ContentType; Discord decides whether to render a preview from it.
 	Filename string
+
+	// What the uploading client read from a video file, zero when it could
+	// not tell. Nothing here is measured by the server, so a rule that needs
+	// one of these is skipped when it is zero (VID-001).
+	Duration      time.Duration
+	Width, Height int
 }
 
 type Post struct {

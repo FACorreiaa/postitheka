@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/FACorreiaa/postitheka/internal/db"
 	"github.com/FACorreiaa/postitheka/internal/media"
+	"github.com/FACorreiaa/postitheka/internal/publisher"
 )
 
 // uploadTTL is how long a presigned upload URL stays valid. Long enough for a
@@ -23,10 +25,42 @@ type Upload struct {
 	ExpiresAt   time.Time
 }
 
+// VideoFacts is what a client read from a video before uploading it: the
+// server has no way to measure a file (VID-001). Zero means not known.
+type VideoFacts struct {
+	DurationMS    int
+	Width, Height int
+}
+
+// Bounds on what a client may declare. They are sanity limits of our own, far
+// outside anything a platform accepts, so a nonsense value is refused here.
+const (
+	maxDeclaredMS     = 24 * 60 * 60 * 1000
+	maxDeclaredPixels = 100_000
+)
+
+func (f VideoFacts) check() error {
+	switch {
+	case f.DurationMS < 0 || f.DurationMS > maxDeclaredMS:
+		return errors.New("duration_ms is out of range")
+	case f.Width < 0 || f.Width > maxDeclaredPixels || f.Height < 0 || f.Height > maxDeclaredPixels:
+		return errors.New("width or height is out of range")
+	case (f.Width == 0) != (f.Height == 0):
+		return errors.New("width and height go together")
+	}
+	return nil
+}
+
 // ReserveUpload records a pending upload and returns where to PUT it.
-func (s *Service) ReserveUpload(ctx context.Context, userID uuid.UUID, contentType string, size int64) (Upload, error) {
+func (s *Service) ReserveUpload(ctx context.Context, userID uuid.UUID, contentType string, size int64, facts VideoFacts) (Upload, error) {
 	if err := s.registry.AcceptsUpload(contentType, size); err != nil {
 		return Upload{}, &BadRequest{Message: err.Error()}
+	}
+	if err := facts.check(); err != nil {
+		return Upload{}, &BadRequest{Message: err.Error()}
+	}
+	if !publisher.IsVideo(contentType) {
+		facts = VideoFacts{} // only video rules read them
 	}
 
 	id := uuid.New()
@@ -40,6 +74,9 @@ func (s *Service) ReserveUpload(ctx context.Context, userID uuid.UUID, contentTy
 		ObjectKey:   key,
 		ContentType: contentType,
 		SizeBytes:   size,
+		DurationMs:  positive(facts.DurationMS),
+		Width:       positive(facts.Width),
+		Height:      positive(facts.Height),
 	}); err != nil {
 		return Upload{}, fmt.Errorf("reserve upload: %w", err)
 	}
@@ -55,4 +92,13 @@ func (s *Service) ReserveUpload(ctx context.Context, userID uuid.UUID, contentTy
 // user owns is under it, which is what lets DeleteUser remove them all.
 func uploadPrefix(userID uuid.UUID) string {
 	return "uploads/" + userID.String() + "/"
+}
+
+// positive stores zero, "not known", as NULL.
+func positive(n int) *int32 {
+	if n <= 0 {
+		return nil
+	}
+	v := int32(n)
+	return &v
 }

@@ -180,6 +180,10 @@ type Publisher interface {
   their own way. `TextCounting` is a named mode (`code_points`, `emoji_bytes`), not a function,
   because the web and iOS clients count too: each mode exists three times (Go `rules.go`,
   `web/src/rules.ts`, the kit's `Rules.swift`), tested against the same cases.
+- Video limits (`MinVideoLength`, `MaxVideoLength`, `MinVideoAspect`, `MaxVideoAspect`,
+  `MaxVideoWidth`; zero means none) are checked against what the client declared with the
+  upload, because the server cannot measure a file. An undeclared value skips its check, and a
+  declared one is not verified: the platform has the last word. These too exist three times.
 - Registration is one line in `cmd/server/main.go`; `GET /v1/platforms` lists exactly the
   registered set with its rules.
 
@@ -271,6 +275,8 @@ Checked dates matter: re-check a platform's docs before building it.
 1. `POST /v1/media {content_type, size_bytes}`: the server checks that at least one registered
    platform accepts that type and size, writes a `media` row, and returns a 30-minute presigned
    PUT URL plus the headers to send (`Content-Type`). Key: `uploads/{user}/{media}.{ext}`.
+   For a video the client also sends `duration_ms`, `width` and `height` as it read them from
+   the file; they are kept on the row for the video limits.
 2. The client PUTs the file straight to the bucket. The browser needs the bucket's CORS rule.
 3. On first use in a post, the server `Stat`s the object: it must exist and its stored
    `Content-Type` must equal the declared one (a presigned PUT pins neither). The real size is

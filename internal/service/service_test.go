@@ -273,7 +273,7 @@ func (e *env) account(t *testing.T, userID uuid.UUID) uuid.UUID {
 // upload reserves an upload and completes it the way a client would.
 func (e *env) upload(t *testing.T, userID uuid.UUID, contentType string, data []byte) uuid.UUID {
 	t.Helper()
-	up, err := e.svc.ReserveUpload(context.Background(), userID, contentType, int64(len(data)))
+	up, err := e.svc.ReserveUpload(context.Background(), userID, contentType, int64(len(data)), service.VideoFacts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,13 +392,13 @@ func TestCreatePostChecksUploadsAgainstStorage(t *testing.T) {
 	alice := e.user(t, "alice@example.com")
 	acct := e.account(t, alice)
 
-	notUploaded, err := e.svc.ReserveUpload(ctx, alice, "image/png", 10)
+	notUploaded, err := e.svc.ReserveUpload(ctx, alice, "image/png", 10, service.VideoFacts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// Reserved as an image, uploaded as something else.
-	disguised, err := e.svc.ReserveUpload(ctx, alice, "image/png", 10)
+	disguised, err := e.svc.ReserveUpload(ctx, alice, "image/png", 10, service.VideoFacts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1383,6 +1383,51 @@ func TestAPostThatStartedSendingCannotBeCancelledOrMoved(t *testing.T) {
 		}
 		if tgt := e.target(t, alice, view.Post.ID); tgt.ID != view.Targets[0].ID || tgt.Status != status {
 			t.Fatalf("%s: target changed to %+v", status, tgt)
+		}
+	}
+}
+
+// VID-001: what a client read from a video is stored with the upload, since
+// the server cannot measure a file, and nonsense is refused.
+func TestReserveUploadKeepsWhatTheClientReadFromAVideo(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+
+	stored := func(facts service.VideoFacts, contentType string) db.Medium {
+		t.Helper()
+		up, err := e.svc.ReserveUpload(ctx, alice, contentType, 10, facts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := e.q.GetMediaByIDs(ctx, db.GetMediaByIDsParams{UserID: alice, Ids: []uuid.UUID{up.MediaID}})
+		if err != nil || len(rows) != 1 {
+			t.Fatalf("media row: %v, %d rows", err, len(rows))
+		}
+		return rows[0]
+	}
+
+	m := stored(service.VideoFacts{DurationMS: 12_345, Width: 1080, Height: 1920}, "video/mp4")
+	if m.DurationMs == nil || *m.DurationMs != 12_345 || m.Width == nil || *m.Width != 1080 || m.Height == nil || *m.Height != 1920 {
+		t.Errorf("video facts not stored: %+v", m)
+	}
+	if m := stored(service.VideoFacts{}, "video/mp4"); m.DurationMs != nil || m.Width != nil || m.Height != nil {
+		t.Errorf("an unknown value must be stored as NULL: %+v", m)
+	}
+	if m := stored(service.VideoFacts{DurationMS: 5000, Width: 10, Height: 10}, "image/png"); m.DurationMs != nil || m.Width != nil {
+		t.Errorf("an image must not carry video facts: %+v", m)
+	}
+
+	for name, facts := range map[string]service.VideoFacts{
+		"negative length":      {DurationMS: -1},
+		"longer than a day":    {DurationMS: 24*60*60*1000 + 1},
+		"width without height": {Width: 1080},
+		"absurd width":         {Width: 100_001, Height: 10},
+		"negative height":      {Width: 10, Height: -10},
+	} {
+		var bad *service.BadRequest
+		if _, err := e.svc.ReserveUpload(ctx, alice, "video/mp4", 10, facts); !errors.As(err, &bad) {
+			t.Errorf("%s: got %v, want a bad request", name, err)
 		}
 	}
 }

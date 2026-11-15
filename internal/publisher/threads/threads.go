@@ -89,8 +89,11 @@ func (p *Publisher) Platform() publisher.Platform { return publisher.Threads }
 // characters with emoji counted as their UTF-8 bytes, at most 5 links, a
 // carousel of 2 to 20 images and videos in any mix. Images JPEG or PNG up to
 // 8 MB; video MP4 or MOV up to 1 GB and 5 minutes. Meta writes MB and GB, so
-// the decimal reading, the smaller one, is used. Duration and pixel sizes are
-// not checked until Rules can express them (VID-001).
+// the decimal reading, the smaller one, is used.
+//
+// Video shape, checked 2026-11-15 on the same page: at most 1920 pixels wide,
+// width to height between 0.01:1 and 10:1. The page asks only that a video be
+// longer than 0 seconds, so there is no shortest length.
 func (p *Publisher) Rules() publisher.Rules {
 	return publisher.Rules{
 		MaxTextLength: 500,
@@ -100,6 +103,11 @@ func (p *Publisher) Rules() publisher.Rules {
 		MaxVideoBytes: 1_000_000_000,
 		MediaTypes:    []string{"image/jpeg", "image/png", "video/mp4", "video/quicktime"},
 		TextCounting:  publisher.CountEmojiBytes,
+
+		MaxVideoLength: 5 * time.Minute,
+		MinVideoAspect: 0.01,
+		MaxVideoAspect: 10,
+		MaxVideoWidth:  1920,
 	}
 }
 

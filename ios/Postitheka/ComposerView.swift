@@ -107,7 +107,7 @@ struct ComposerView: View {
                 Task {
                     for item in items {
                         if let media = try? await MediaImport.load(item) {
-                            await composer.attach(file: media.file, contentType: media.contentType, size: media.size)
+                            await composer.attach(file: media.file, contentType: media.contentType, size: media.size, video: media.video)
                         }
                     }
                 }

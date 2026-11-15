@@ -1,5 +1,6 @@
 import CoreTransferable
 import PhotosUI
+import PostithekaKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -9,6 +10,8 @@ nonisolated struct ImportedMedia: Sendable {
     let file: URL
     let contentType: String
     let size: Int64
+    /// Length and shown size of a video, read from the file (VID-001).
+    var video: VideoFacts?
 }
 
 nonisolated enum MediaImport {
@@ -19,7 +22,7 @@ nonisolated enum MediaImport {
         if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }) {
             guard let movie = try await item.loadTransferable(type: PickedMovie.self) else { return nil }
             let type = UTType(filenameExtension: movie.url.pathExtension)?.preferredMIMEType ?? "video/mp4"
-            return ImportedMedia(file: movie.url, contentType: type, size: fileSize(movie.url))
+            return ImportedMedia(file: movie.url, contentType: type, size: fileSize(movie.url), video: await VideoFacts.read(from: movie.url))
         }
         guard let data = try await item.loadTransferable(type: Data.self),
               let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.9)

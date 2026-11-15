@@ -84,8 +84,8 @@ RETURNING id, user_id, platform, display_name, created_at, brand, needs_reconnec
 DELETE FROM accounts WHERE id = $1 AND user_id = $2;
 
 -- name: CreateMedia :exec
-INSERT INTO media (id, user_id, object_key, content_type, size_bytes)
-VALUES ($1, $2, $3, $4, $5);
+INSERT INTO media (id, user_id, object_key, content_type, size_bytes, duration_ms, width, height)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
 
 -- name: GetMediaByIDs :many
 SELECT * FROM media

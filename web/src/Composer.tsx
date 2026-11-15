@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { type Account, api, type Issue, messageOf, type PlatformInfo, type Post, putFile } from "./api";
 import { ALL_BRANDS, type BrandFilter, brandsOf, matchesBrand, resolveFilter } from "./brands";
+import { readVideoFacts, type VideoFacts } from "./lib/video-facts";
 import { countText, type Draft, platformNames, problems } from "./rules";
 
 const BRAND_KEY = "postitheka.brand";
@@ -31,6 +32,8 @@ interface Attachment {
   progress: number;
   mediaId?: string;
   error?: string;
+  /** Length and size read from a video, once known (VID-001). */
+  video?: VideoFacts;
 }
 
 interface Props {
@@ -57,7 +60,7 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
   const rulesFor = useMemo(() => new Map(platforms.map((p) => [p.platform as string, p.rules])), [platforms]);
   const draft: Draft = {
     text,
-    media: files.map((f) => ({ contentType: f.file.type, size: f.file.size })),
+    media: files.map((f) => ({ contentType: f.file.type, size: f.file.size, ...f.video })),
   };
 
   const [brandChoice, setBrandChoice] = useState<BrandFilter>(readBrand);
@@ -100,8 +103,13 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
       };
       setFiles((prev) => [...prev, item]);
 
+      // Read before reserving: the server takes these with the upload and
+      // cannot measure the file itself.
+      const video = file.type.startsWith("video/") ? await readVideoFacts(item.preview) : {};
+      patch(item.localId, { video });
+
       const { data, error: err } = await api.POST("/v1/media", {
-        body: { content_type: file.type, size_bytes: file.size },
+        body: { content_type: file.type, size_bytes: file.size, duration_ms: video.durationMs, width: video.width, height: video.height },
       });
       if (!data) {
         patch(item.localId, { error: messageOf(err) });

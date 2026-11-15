@@ -100,10 +100,12 @@ func (p *Publisher) Platform() publisher.Platform { return publisher.Instagram }
 // one place and MiB in another, so the decimal reading, the smaller one, is
 // used.
 //
+// Video, checked 2026-11-15 on the IG User Media reference (Reel
+// specifications): 3 seconds to 15 minutes, at most 1920 pixels wide, width
+// to height between 0.01:1 and 10:1.
+//
 // Not checked here, and refused by Instagram when the container is made: more
-// than 30 hashtags or 20 @-tags, an image outside 4:5 to 1.91:1, a video
-// under 3 seconds or over 15 minutes. Ratio and duration wait for Rules to
-// express them (VID-001).
+// than 30 hashtags or 20 @-tags, an image outside 4:5 to 1.91:1.
 func (p *Publisher) Rules() publisher.Rules {
 	return publisher.Rules{
 		MaxTextLength: 2200,
@@ -112,6 +114,12 @@ func (p *Publisher) Rules() publisher.Rules {
 		MaxVideoBytes: 300_000_000,
 		MediaTypes:    []string{"image/jpeg", "video/mp4", "video/quicktime"},
 		RequiresMedia: true,
+
+		MinVideoLength: 3 * time.Second,
+		MaxVideoLength: 15 * time.Minute,
+		MinVideoAspect: 0.01,
+		MaxVideoAspect: 10,
+		MaxVideoWidth:  1920,
 	}
 }
 
