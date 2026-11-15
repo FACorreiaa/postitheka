@@ -172,31 +172,67 @@ extension Components {
             public var platform: Components.Schemas.Platform
             /// - Remark: Generated from `#/components/schemas/Account/display_name`.
             public var display_name: Swift.String
+            /// The product this account posts for, as the user named it. Absent when the account has no brand.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Account/brand`.
+            public var brand: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Account/created_at`.
             public var created_at: Foundation.Date
+            /// True when the platform has refused this account's credentials (expired past refreshing, revoked, a deleted webhook). Posts to it are refused until it is connected again. Absent otherwise.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Account/needs_reconnect`.
+            public var needs_reconnect: Swift.Bool?
             /// Creates a new `Account`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - platform:
             ///   - display_name:
+            ///   - brand: The product this account posts for, as the user named it. Absent when the account has no brand.
             ///   - created_at:
+            ///   - needs_reconnect: True when the platform has refused this account's credentials (expired past refreshing, revoked, a deleted webhook). Posts to it are refused until it is connected again. Absent otherwise.
             public init(
                 id: Swift.String,
                 platform: Components.Schemas.Platform,
                 display_name: Swift.String,
-                created_at: Foundation.Date
+                brand: Swift.String? = nil,
+                created_at: Foundation.Date,
+                needs_reconnect: Swift.Bool? = nil
             ) {
                 self.id = id
                 self.platform = platform
                 self.display_name = display_name
+                self.brand = brand
                 self.created_at = created_at
+                self.needs_reconnect = needs_reconnect
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case platform
                 case display_name
+                case brand
                 case created_at
+                case needs_reconnect
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/UpdateAccountRequest`.
+        public struct UpdateAccountRequest: Codable, Hashable, Sendable {
+            /// Surrounding space is trimmed. An empty string clears the brand.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/UpdateAccountRequest/brand`.
+            public var brand: Swift.String
+            /// Creates a new `UpdateAccountRequest`.
+            ///
+            /// - Parameters:
+            ///   - brand: Surrounding space is trimmed. An empty string clears the brand.
+            public init(brand: Swift.String) {
+                self.brand = brand
+            }
+            public enum CodingKeys: String, CodingKey {
+                case brand
             }
         }
         /// - Remark: Generated from `#/components/schemas/ConnectDiscordRequest`.

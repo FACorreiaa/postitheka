@@ -86,7 +86,7 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | X developer app + credits | X-001 used for real | Pay-per-use: $0.015 a post, $0.20 with a URL (2026-10-23) |
 | TikTok developer app | TT-001 used for real, TT-002 | Photos also need a domain verified with TikTok |
 | Reddit API access request | RDT-001 | Approval required since Nov 2025; commercial use needs an agreement |
-| Meta app with the Threads API use case, owner as Threads Tester | THR-001 used before review | `THREADS_APP_ID` / `THREADS_APP_SECRET` (the Threads ones, not the main app's) in `.env`; redirect `PUBLIC_URL/oauth/threads/callback`. Meta may refuse a plain-http redirect (not checked); then `PUBLIC_URL` must be an https tunnel to the local server |
+| Meta app with the Threads API use case, owner as Threads Tester | THR-001 used before review | `THREADS_APP_ID` / `THREADS_APP_SECRET` (the Threads ones, not the main app's) in `.env`; redirect `PUBLIC_URL/oauth/threads/callback`. Instagram is the same app with the Instagram use case: `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` from "API setup with Instagram login", redirect `PUBLIC_URL/oauth/instagram/callback`, and a professional account with a role on the app. Meta may refuse a plain-http redirect (not checked); then `PUBLIC_URL` must be an https tunnel to the local server |
 | Meta app, Business Verification, App Review | THR-001, IG-001, FB-001 for strangers | Weeks; needs PRV-001 live. Not needed for accounts with a role on the app (Standard Access, checked 2026-11-05) |
 | Approve privacy policy and terms text | PRV-001 | Agent drafts |
 
@@ -114,9 +114,10 @@ Strangers who have published a post: **0**.
 | REL-001 | Done | PR #1: CI green, `internal/service` tests ran (3.6 s, none skipped), image built | |
 | REL-002 | Done | Image workflow run 39870125984 on `main` (38a1c3a) after PR #1 merged, 2026-10-22 | Package visibility not checked |
 | REL-003 | Open | | Owner: Cloudflare account |
-| REL-004 | Open | | Hostname deferred by the owner |
+| REL-004 | In progress | App side on branch `rel-004-deploy-prep` (2026-11-14): `/health/ready`, `/health/live`, `server migrate` needs only `DATABASE_URL`, `SHUTDOWN_TIMEOUT`, promote job in the Image workflow; `task check` green. Infra manifests on `platform/infra` branch `postitheka-onboard`, unmerged | Hostname chosen 2026-11-14: subdomain of facorreia.com (`postitheka.facorreia.com` in the manifests, label to confirm). Waits on the owner: DNS record, R2 (REL-003), sealed secrets, node directory, `INFRA_TOKEN`, merge |
 | AUTH-001 | Open | App ID `com.fernandocorreia.postitheka` registered | Needs hostname and the key (Owner) |
 | API-001 | Done | `migrations/20261022190000_post_idempotency.sql`; `TestCreatePostIsIdempotent` (incl. 8 concurrent requests, one post) | Web retry path checked by typecheck only, not in a browser |
+| MED-002 | Built, unverified | `Service.DeleteUser`, `media.Store.DeletePrefix`, `server user delete EMAIL` (`task user:delete`); `TestDeleteUserRemovesTheirUploadsFromStorage` (objects with and without a row, another user's untouched, storage down leaves the user in place, queued job posts nothing); live run against RustFS removed two objects and left another prefix alone | Not run against R2. No route or button yet: a signed-in user cannot delete their own account until AUTH-001. An upload URL issued before the deletion still works for its 30 minutes |
 | MED-001 | Done | `internal/jobs/sweep.go`; `TestSweepDeletesOnlyOldUnattachedUploads` in CI; live run against RustFS removed row and object | |
 | WEB-001 | Built, unverified | `POST /v1/targets/{id}/retry`, `migrations/20261113190000_target_retry.sql` (`interrupted`, `retries`), Send again in Sent with a may-be-live warning; `TestRetryTargetPublishesAgain` (real River client, first job completed), `TestRetryTargetRefusesWhatCannotBeSentAgain` (pending, published, assisted, disconnected, another user's) | Checked in a browser against a local server with seeded targets; never against a real platform |
 | WEB-002 | Done | Dark only since 2026-11-05, so there is one theme to check: every screen looked at in a browser at 1280 and 390 px, no sideways scroll; palette contrast passes WCAG AA for text (lowest 6.5:1) | |
@@ -125,16 +126,17 @@ Strangers who have published a post: **0**.
 | OPS-002 | Built, unverified | `internal/ratelimit`, `internal/httpapi/limits.go`; `TestCreatingPostsPastTheLimitIsRefused`, `TestReservingUploadsPastTheLimitIsRefused`, `TestFailedAuthenticationIsLimitedByAddress`, `TestAddressLimitOnPublicRoutes`; every limit hit over HTTP against a local server | Not run behind the cluster's ingress: whether Traefik passes the real client address in `X-Forwarded-For` is unchecked, and if it does not, the per-address limits are shared by everyone |
 | OAUTH-001 | Built, unverified | `internal/service/connect.go`, `internal/httpapi/oauth.go`, `migrations/20261023150000_oauth_connect.sql`; `TestOAuthConnect` (start, callback, replay, cancel, expiry, reconnect, two users); web Accounts checked headless at 1400 and 390 px, light and dark; iOS kit `ConnectTests` | Never run against a real platform; iOS connect screen built, not looked at on a simulator |
 | X-002 | Built, unverified | `publisher.Refresher`, `PublishWorker.refresh` (row lock, re-check, seal, then publish); `TestTokenRefresh` (three concurrent posts refresh once and publish with the new token, revoked grant fails asking for reconnect, transient failure stays pending); mutation-checked; Threads implements it | Never run against a real platform |
-| ACC-001 | Open | | |
+| ACC-001 | Built, unverified | `migrations/20261114150000_account_needs_reconnect.sql`, `publisher.Reconnect`, `needs_reconnect` on Account; `TestRefusedCredentialsMarkTheAccount` (a 401 marks only that account, a rejected post does not, queued targets fail without a request, a new post is refused at the door), revoked refresh in `TestTokenRefresh`, reconnect clears it in `TestOAuthConnect`; web stamp and Accounts looked at in a browser at desktop and 375 px with seeded accounts; iOS kit test | Never against a real platform: which answers mean dead credentials is read from each platform's docs. Marks after the first refusal; nothing warns before a token expires. iOS views built, not looked at on a simulator. Web Reconnect button seen, not pressed (it leaves for the platform) |
+| BRAND-001 | Built, unverified | `migrations/20261114120000_account_brand.sql`, `PATCH /v1/accounts/{id}`; `TestAccountBrand`; web `brands.test.ts`, kit `BrandsTests`; web looked at in a browser at desktop and 375 px against a local server | iOS built and kit-tested, not looked at in a simulator |
 | LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
-| DSC-001 | Open | | |
+| DSC-001 | Built, unverified | `internal/publisher/discord`: a refusal with Discord's error 220001 is answered by sending the message again with `thread_name`; `TestPublishToAForumChannelNamesTheThread`, `TestPublishMediaToAForumChannelSendsTheFilesAgain`, `TestANormalChannelGetsNoThreadName`, `TestOtherRefusalsAreNotSentAgain`, `TestThreadName` | Never posted to a real forum channel: the error code and the 100-character name limit are from Discord's docs. A forum that requires a tag still fails (40067), with Discord's message |
 | META-001 | Open | | Owner |
 | THR-001 | Built, unverified | `internal/publisher/threads`; `threads_test.go` (connect with the long-lived exchange, text, image, video processing, carousel order, `ERROR`/`EXPIRED`/timeout, publish without a clear answer incl. a cancelled request, error classes, refresh, no secrets in errors); mutation-checked; `max_links` and `text_counting` in the spec, mirrored and tested in web and iOS | Needs the owner's Threads app and tester account to post for real |
 | X-001 | Open | | Credits bought once on TestFlight (decided 2026-11-05); public use needs the tier decision |
 | TT-001 | Open | | |
 | TT-002 | Open | | Owner |
 | FB-001 | Open | | META-001 for strangers; role holders can use it before |
-| IG-001 | Open | | META-001 for strangers; role holders can use it before |
+| IG-001 | Built, unverified | `internal/publisher/instagram`; `instagram_test.go` (connect with the long-lived exchange and the account id from the profile, both answer shapes; image, reel, carousel order; `ERROR`/`EXPIRED`/timeout; publish without a clear answer incl. a cancelled request; error classes by code and subcode; refresh; no secrets in errors; rules) | Needs the owner's Meta app with the Instagram use case and a professional account with a role on it to post for real. Never run against Instagram. META-001 for strangers |
 | RDT-001 | Open | | Owner |
 | RDT-002 | Open | | OPEN: title and subreddit |
 | VID-001 | Open | | |
@@ -222,7 +224,8 @@ rule (`PUT`, header `Content-Type`, the production origin) and documents it in t
 ### REL-004 · Deploy on maat · M
 **Needs:** REL-002, REL-003. **OPEN:** the public hostname, and how public apps are exposed from
 `maat` (read `platform/infra/docs` first). In `platform/infra`: namespace, Deployment
-(`AUTO_MIGRATE=false`), PreSync Job running `server migrate`, Service, probes on `/healthz`,
+(`AUTO_MIGRATE=false`), PreSync Job running `server migrate`, Service, probes on `/health/ready`
+and `/health/live` (the shared chart's defaults; `/healthz` stays for people and scripts),
 sealed secrets for `DATABASE_URL`, `TOKEN_ENCRYPTION_KEY` and the S3 keys, sealed for this
 namespace. Ask the owner before merging to the infra repo: merging deploys.
 
@@ -254,6 +257,16 @@ rule if the key layout allows it.
 
 **Done when:** an unattached upload older than the cutoff is gone from the bucket and the
 database, and an attached one is untouched (test).
+
+### MED-002 · Deleting a user removes their uploads · S
+Deleting a user cascades through the database (FND-005) but left their files in the bucket.
+`DeleteUser` removes everything under the user's key prefix, then the user, then the prefix
+again for anything that landed in between. By prefix rather than by media row, so a file with no
+row goes too. The operator runs it as `server user delete EMAIL`; the in-app route comes with
+sign-in (AUTH-001), which the App Store requires for account deletion.
+
+**Done when:** deleting a user leaves none of their objects in the bucket and another user's
+untouched (test, and a run against local storage).
 
 ### WEB-001 · Retry a failed target · S
 A failed target can only be re-sent by writing the post again. Add a retry route that re-queues
@@ -327,6 +340,17 @@ Instagram refresh the long-lived token itself (only once it is 24 hours old), Li
 **Done when:** a publish with an expired access token refreshes it and succeeds, and two
 concurrent publishes for one account refresh once (tests).
 
+### BRAND-001 · Brand label on accounts · S
+Decided by the owner 2026-11-14: Postitheka promotes several of the owner's apps from one login.
+An account carries an optional brand ("Aaru", "Norviq"), free text up to 40 characters, set in
+Accounts. The composer shows a brand filter when any account has one, and publishes only to the
+stamps on screen. A label, not a tenant: nothing is scoped by it, and "Teams and shared
+accounts" stays out of scope.
+
+**Done when:** a brand set on an account filters the composer on web and iOS, a stamp hidden by
+the filter is not published to, and another user's account cannot be labelled (tests and a
+browser check).
+
 ### ACC-001 · Accounts that need reconnecting · S
 **Needs:** OAUTH-001. A token that has expired and cannot be refreshed (LinkedIn after 60 days,
 Threads and Instagram after 60 days unused, any revoked grant) fails every target until the user
@@ -347,9 +371,12 @@ reconnecting (ACC-001). Company Pages need the Community Management API: not in 
 error classes; the owner posts to their own profile from a local server once the app exists.
 
 ### DSC-001 · Discord forum channels · S
-Forum and media channels need `thread_name`; today they fail permanently with a 400. Detect the
-channel type when connecting (from the webhook's channel) and send a thread name taken from the
-post's first line.
+Forum and media channels need `thread_name`; without it they fail permanently with a 400. The
+channel type cannot be read when connecting: the webhook object does not carry it, and reading
+the channel needs a bot. So the channel says so itself. Discord refuses the plain message with
+error 220001, and the message is sent once more with a thread name taken from the post's first
+line (100 characters at most; "1 file" or "3 files" when there is no text). The refusal saved
+nothing, so this cannot post twice; it does upload a forum post's files twice.
 
 **Done when:** a stubbed forum webhook receives `thread_name`, and a normal channel does not.
 
@@ -382,6 +409,16 @@ URL; video can be uploaded (resumable). The docs give both 50 and 100 posts a da
 connect before review.
 
 **Done when:** tests against a stub pass, and a photo post lands on the owner's account.
+
+**Built 2026-11-14, against a stub only.** What the docs said on that day, where it differs from
+the above: video also goes by URL (the resumable upload is for apps on Facebook Login only); a
+single video is a reel (`media_type=REELS`) and a video inside a carousel is `VIDEO`; the code
+exchange is on `api.instagram.com` and everything else on `graph.instagram.com`; the id
+containers are created under is `user_id` from `/me`, not the one the code exchange returns.
+The daily limit is not read ahead of time: Instagram's refusal (subcode 2207042) is retried
+hourly. Left for later: aspect ratio and duration checks (VID-001), the 30 hashtag and 20
+@-tag limits, alt text, and marking the account for reconnect on error 190 once ACC-001 has
+merged (`publisher.Reconnect`).
 
 ### X-001 · X publisher · M
 **Owner:** buys X API credits once the app is on TestFlight and ready to test (decided 2026-11-05).

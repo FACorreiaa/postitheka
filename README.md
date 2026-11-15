@@ -87,7 +87,11 @@ Tests stub the platform's HTTP API; see `discord_test.go`. Never a real token.
 - **Threads** is built and tested against a stub; to use it, add the Threads API
   use case to a Meta app, add yourself as a Threads Tester, and set
   `THREADS_APP_ID` and `THREADS_APP_SECRET`.
-- **X, Instagram, TikTok, Reddit, Facebook.** Order and blockers are in
+- **Instagram** is built and tested against a stub; to use it, add the Instagram
+  use case to a Meta app, give a professional (Business or Creator) account a
+  role on it, and set `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET`. Meta
+  downloads the media itself, so it cannot post from local storage.
+- **X, TikTok, Reddit, Facebook.** Order and blockers are in
   `BACKLOG.md` (P2). Start Meta Business Verification and the TikTok audit
   early; both take weeks.
 - **Discord forum channels** need `thread_name`; they fail permanently today.

@@ -76,6 +76,7 @@ postitheka/
     media/                  # object storage, presigned URLs, filenames
     publisher/              # Publisher interface, Rules, Validate, error classes
       discord/              # one package per platform
+      instagram/
       linkedin/
       threads/
     secretbox/              # credential encryption
@@ -182,7 +183,9 @@ vocabulary: "Publish" produces "Published"; "Not sent" means failed.
   and Task refuses the whole file. `task check` was broken this way, unnoticed, until CI ran it.
 - **Task ignores `platforms` on a `task:` call.** Put it on the task or on a `cmd:`. Guarding the
   call to `ios:gen` did nothing, so Linux CI ran Swift and failed only on runner images without it.
-- **Discord forum and media channels** need `thread_name`; without it the webhook answers 400.
+- **Discord forum and media channels** need `thread_name`; without it the webhook answers 400
+  with error 220001. The publisher answers that by sending again with one (DSC-001). A webhook
+  cannot tell what kind of channel it posts to, so there is nothing to detect when connecting.
 - **LinkedIn post text is markup** ("little" format): `| { } @ [ ] ( ) < > # \ * _ ~` must be
   backslash-escaped or the post fails or renders as something else. `escapeText` does it.
 - **OAuth redirect URLs must match exactly.** Each platform's developer app lists

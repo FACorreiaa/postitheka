@@ -12,13 +12,15 @@ import (
 )
 
 type Account struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	Platform    string
-	DisplayName string
-	Credentials []byte
-	CreatedAt   time.Time
-	RemoteID    *string
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	Platform         string
+	DisplayName      string
+	Credentials      []byte
+	CreatedAt        time.Time
+	RemoteID         *string
+	Brand            *string
+	NeedsReconnectAt pgtype.Timestamptz
 }
 
 type ApiToken struct {

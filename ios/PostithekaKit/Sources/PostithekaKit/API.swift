@@ -22,6 +22,13 @@ public enum APIError: LocalizedError, Equatable {
     }
 }
 
+extension Account {
+    /// The platform refused this account's credentials: expired past
+    /// refreshing, withdrawn, or a deleted webhook. Nothing can be posted to
+    /// it until it is connected again.
+    public var needsReconnect: Bool { needs_reconnect ?? false }
+}
+
 /// What publishing a post came to.
 public enum PublishOutcome: Sendable {
     case created(Post)
@@ -92,6 +99,21 @@ public struct API: Sendable {
                 throw .message("The server sent a sign-in address that cannot be opened.")
             }
             return url
+        case .badRequest(let r): throw .message(try body { try r.body.json.message })
+        case .notFound(let r): throw .message(try body { try r.body.json.message })
+        case .unauthorized: throw .unauthorized
+        case .undocumented(let code, _): throw Self.unexpected(code)
+        }
+    }
+
+    /// Labels an account with the product it posts for. An empty brand clears
+    /// the label. Returns the account as the server now has it.
+    public func setBrand(accountID: String, brand: String) async throws(APIError) -> Account {
+        let out = try await call {
+            try await client.updateAccount(path: .init(accountId: accountID), body: .json(.init(brand: brand)))
+        }
+        switch out {
+        case .ok(let r): return try body { try r.body.json }
         case .badRequest(let r): throw .message(try body { try r.body.json.message })
         case .notFound(let r): throw .message(try body { try r.body.json.message })
         case .unauthorized: throw .unauthorized

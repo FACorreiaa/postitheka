@@ -51,7 +51,7 @@ write a different text per platform. Still open: whether X is premium too, and h
 | LinkedIn | Yes, 3,000 | 1 to 20, 5 MB | One MP4, 3 s to 30 min, 500 MB | No | Free | Built |
 | Threads | Yes, 500 | Up to 20, JPEG/PNG, 8 MB | MP4/MOV, 5 min, 1 GB | Carousel: not checked | Free | Built, not on `main` |
 | X | Yes, 280 weighted | Up to 4, 5 MB | 20 min, 8 GB | Unconfirmed | $0.015 a post, $0.20 with a URL | Not built |
-| Instagram | **No** | Up to 20, **JPEG only**, 8 MB, 4:5 to 1.91:1 | Reels, MP4/MOV, 3 s to 15 min, 300 MB | Carousel, cropped to the first item's ratio | Free | Not built |
+| Instagram | **No** | Up to 20, **JPEG only**, 8 MB, 4:5 to 1.91:1 | Reels, MP4/MOV, 3 s to 15 min, 300 MB | Carousel, cropped to the first item's ratio | Free | Built, stub-tested |
 | Facebook | Yes, limit unconfirmed | One by URL; several unconfirmed | Resumable upload; limits unconfirmed | Unconfirmed | Free | Not built |
 | TikTok | **No** | By URL from a verified domain, JPEG/WebP | MP4/WebM/MOV, 10 min, 4 GB | Not checked | Free | Not built |
 | Reddit | Yes, plus a required title | **None through the official API** | **None through the official API** | n/a | Unpublished if commercial | Not built |
@@ -77,7 +77,7 @@ HEIC is on no platform's list, so reserving an upload for one is refused.
 
 ### Discord: ready to use
 - **Owner:** create a server channel and a webhook, then paste the URL into Accounts.
-- **Code:** nothing. Forum and media channels still fail until DSC-001.
+- **Code:** nothing. Forum and media channels are named for the post's first line (DSC-001); one that requires a tag still fails.
 
 ### LinkedIn: ready to use from a local server
 - **Owner:** create a developer app with "Share on LinkedIn" and "Sign In with LinkedIn using OpenID
@@ -86,10 +86,13 @@ HEIC is on no platform's list, so reserving an upload for one is refused.
 - **Watch:** tokens last 60 days with no refresh, so reconnect every two months (ACC-001 shows this).
   A Company Page needs a separate application.
 
-### Instagram: needs step 2, then code
+### Instagram: needs step 2
 - **Owner:** a Professional (Business or Creator) account; no Facebook Page is needed. Create the
   Meta app and give the Instagram account a role on it.
-- **Code:** IG-001. Same container model as Threads, so that package is the template.
+  Set `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET`, the values under "API setup with Instagram
+  login" rather than the main app's, and list `PUBLIC_URL/oauth/instagram/callback`.
+- **Code:** IG-001, built 2026-11-14 and tested against a stub only. Meta fetches media from a
+  URL, so a real post needs storage Meta can reach: not a local server.
 - **Watch:** images must be JPEG. Links in captions are commonly reported as not clickable (not
   re-checked), so plan on a link in the profile. The limit is 100 API posts in 24 hours and a
   carousel counts as one; read `content_publishing_limit` rather than hard-coding it.

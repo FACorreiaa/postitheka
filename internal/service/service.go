@@ -40,6 +40,7 @@ func (e *BadRequest) Error() string { return e.Message }
 type Storage interface {
 	PresignUpload(ctx context.Context, key string, ttl time.Duration) (string, error)
 	Stat(ctx context.Context, key string) (media.Object, error)
+	DeletePrefix(ctx context.Context, prefix string) (int, error)
 }
 
 // DiscordConnector checks a webhook URL with Discord. The Discord publisher

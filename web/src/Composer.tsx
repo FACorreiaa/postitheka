@@ -1,6 +1,28 @@
 import { useId, useMemo, useRef, useState } from "react";
 import { type Account, api, type Issue, messageOf, type PlatformInfo, type Post, putFile } from "./api";
+import { ALL_BRANDS, type BrandFilter, brandsOf, matchesBrand, resolveFilter } from "./brands";
 import { countText, type Draft, platformNames, problems } from "./rules";
+
+const BRAND_KEY = "postitheka.brand";
+
+// A convenience, not state: which brand was showing last, on this browser.
+function readBrand(): BrandFilter {
+  try {
+    const brand = localStorage.getItem(BRAND_KEY);
+    return brand ? { kind: "brand", brand } : ALL_BRANDS;
+  } catch {
+    return ALL_BRANDS;
+  }
+}
+
+function writeBrand(filter: BrandFilter) {
+  try {
+    if (filter.kind === "brand") localStorage.setItem(BRAND_KEY, filter.brand);
+    else localStorage.removeItem(BRAND_KEY);
+  } catch {
+    // No storage: the choice lasts for this page only.
+  }
+}
 
 interface Attachment {
   localId: string;
@@ -33,9 +55,28 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
   const textId = useId();
 
   const rulesFor = useMemo(() => new Map(platforms.map((p) => [p.platform as string, p.rules])), [platforms]);
-  const draft: Draft = { text, media: files.map((f) => ({ contentType: f.file.type, size: f.file.size })) };
+  const draft: Draft = {
+    text,
+    media: files.map((f) => ({ contentType: f.file.type, size: f.file.size })),
+  };
 
-  const chosen = (accounts ?? []).filter((a) => selected.has(a.id));
+  const [brandChoice, setBrandChoice] = useState<BrandFilter>(readBrand);
+  const brands = useMemo(() => brandsOf(accounts ?? []), [accounts]);
+  const brand = resolveFilter(accounts ?? [], brandChoice);
+  const shown = (accounts ?? []).filter((a) => matchesBrand(a, brand));
+
+  // Only what is on screen can be published to. A stamp affixed under one
+  // brand and then hidden by another would send a post somewhere the person
+  // can no longer see.
+  // Nor can an account whose credentials the platform refused (ACC-001): the
+  // server would reject the post, so its stamp cannot be affixed.
+  const chosen = shown.filter((a) => selected.has(a.id) && !a.needs_reconnect);
+
+  function showBrand(next: BrandFilter) {
+    setBrandChoice(next);
+    writeBrand(next);
+    setServerIssues([]);
+  }
   const blocked = chosen.some((a) => {
     const rules = rulesFor.get(a.platform);
     return rules && problems(rules, draft).length > 0;
@@ -51,7 +92,12 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
 
   async function attach(list: FileList | null) {
     for (const file of Array.from(list ?? [])) {
-      const item: Attachment = { localId: crypto.randomUUID(), file, preview: URL.createObjectURL(file), progress: 0 };
+      const item: Attachment = {
+        localId: crypto.randomUUID(),
+        file,
+        preview: URL.createObjectURL(file),
+        progress: 0,
+      };
       setFiles((prev) => [...prev, item]);
 
       const { data, error: err } = await api.POST("/v1/media", {
@@ -106,7 +152,10 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
 
     let result;
     try {
-      result = await api.POST("/v1/posts", { body, params: { header: { "Idempotency-Key": attempt.current.key } } });
+      result = await api.POST("/v1/posts", {
+        body,
+        params: { header: { "Idempotency-Key": attempt.current.key } },
+      });
     } catch {
       setBusy(false);
       setError("The connection dropped before the server answered. Press Publish again; it will not post twice.");
@@ -162,9 +211,7 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
             ) : (
               <img src={f.preview} alt={f.file.name} />
             )}
-            {!f.mediaId && !f.error && (
-              <progress value={f.progress} max={1} aria-label={`Uploading ${f.file.name}`} />
-            )}
+            {!f.mediaId && !f.error && <progress value={f.progress} max={1} aria-label={`Uploading ${f.file.name}`} />}
             {f.error && <figcaption role="alert">{f.error}</figcaption>}
             <button className="remove" onClick={() => detach(f.localId)} aria-label={`Remove ${f.file.name}`}>
               ×
@@ -197,24 +244,44 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
             </button>
           </div>
         ) : (
-          <ul className="stamps">
-            {accounts.map((a) => {
-              const rules = rulesFor.get(a.platform);
-              const own = serverIssues.filter((i) => i.account_id === a.id).map((i) => i.message);
-              return (
-                <li key={a.id}>
-                  <Stamp
-                    account={a}
-                    used={countText(text, rules?.text_counting)}
-                    limit={rules?.max_text_length}
-                    problems={selected.has(a.id) ? [...(rules ? problems(rules, draft) : []), ...own] : []}
-                    on={selected.has(a.id)}
-                    onToggle={() => toggle(a.id)}
-                  />
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            {brands.length > 0 && (
+              <div className="brands" role="group" aria-label="Brand">
+                <button type="button" aria-pressed={brand.kind === "all"} onClick={() => showBrand(ALL_BRANDS)}>
+                  All
+                </button>
+                {brands.map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    aria-pressed={brand.kind === "brand" && brand.brand === b}
+                    onClick={() => showBrand({ kind: "brand", brand: b })}
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+            )}
+            <ul className="stamps">
+              {shown.map((a) => {
+                const rules = rulesFor.get(a.platform);
+                const own = serverIssues.filter((i) => i.account_id === a.id).map((i) => i.message);
+                return (
+                  <li key={a.id}>
+                    <Stamp
+                      account={a}
+                      used={countText(text, rules?.text_counting)}
+                      limit={rules?.max_text_length}
+                      problems={selected.has(a.id) ? [...(rules ? problems(rules, draft) : []), ...own] : []}
+                      on={selected.has(a.id) && !a.needs_reconnect}
+                      onToggle={() => toggle(a.id)}
+                      onReconnect={onConnect}
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </fieldset>
 
@@ -248,10 +315,28 @@ interface StampProps {
   problems: string[];
   on: boolean;
   onToggle: () => void;
+  /** Opens Accounts, where an account that needs it is connected again. */
+  onReconnect: () => void;
 }
 
-function Stamp({ account, used, limit, problems: issues, on, onToggle }: StampProps) {
+function Stamp({ account, used, limit, problems: issues, on, onToggle, onReconnect }: StampProps) {
   const over = limit !== undefined && used > limit;
+  if (account.needs_reconnect) {
+    return (
+      <div className="stamp-wrap">
+        <button className="stamp stale" aria-pressed={false} disabled>
+          <span className="platform">{platformNames[account.platform] ?? account.platform}</span>
+          <span className="name">{account.display_name}</span>
+        </button>
+        <p className="stamp-issues">
+          Needs reconnecting.{" "}
+          <button className="link" onClick={onReconnect}>
+            Open Accounts
+          </button>
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="stamp-wrap">
       <button

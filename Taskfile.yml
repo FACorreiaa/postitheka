@@ -41,6 +41,11 @@ tasks:
     cmds:
       - go run ./cmd/server user create {{.CLI_ARGS}}
 
+  user:delete:
+    desc: "Delete a user with their accounts, posts and uploads. No undo. Usage: task user:delete -- you@example.com"
+    cmds:
+      - go run ./cmd/server user delete {{.CLI_ARGS}}
+
   # ---------------------------------------------------------------------------
   # Infrastructure
   # ---------------------------------------------------------------------------

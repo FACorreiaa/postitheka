@@ -159,6 +159,9 @@ func TestTokenRefresh(t *testing.T) {
 		if len(stub.usedToken) != 0 {
 			t.Error("published despite the failed refresh")
 		}
+		if accts, _ := e.svc.ListAccounts(ctx, alice); len(accts) != 1 || !accts[0].NeedsReconnectAt.Valid {
+			t.Errorf("accounts %+v, want the one marked as needing reconnection", accts)
+		}
 	})
 
 	t.Run("a refresh that fails for now leaves the target pending", func(t *testing.T) {
