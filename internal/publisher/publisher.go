@@ -178,12 +178,28 @@ func (r *Registry) AcceptsUpload(contentType string, size int64) error {
 
 // permanentError marks an error that retrying cannot fix: a deleted webhook, a
 // rejected post, revoked credentials.
-type permanentError struct{ err error }
+type permanentError struct {
+	err error
+	// reconnect: the account's credentials are dead (expired past refreshing,
+	// revoked, a deleted webhook). Every post to it will fail the same way
+	// until the user connects it again.
+	reconnect bool
+}
 
 func (e permanentError) Error() string { return e.err.Error() }
 func (e permanentError) Unwrap() error { return e.err }
 
-func Permanent(err error) error { return permanentError{err} }
+func Permanent(err error) error { return permanentError{err: err} }
+
+// Reconnect is a permanent failure caused by the account's credentials, not
+// by the post: only the user connecting the account again fixes it. The
+// worker marks the account, so it is shown as needing reconnection (ACC-001).
+func Reconnect(err error) error { return permanentError{err: err, reconnect: true} }
+
+func NeedsReconnect(err error) bool {
+	var p permanentError
+	return errors.As(err, &p) && p.reconnect
+}
 
 func IsPermanent(err error) bool {
 	var p permanentError

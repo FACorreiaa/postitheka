@@ -232,7 +232,7 @@ func (p *Publisher) Publish(ctx context.Context, raw []byte, post publisher.Post
 		return publisher.Result{}, publisher.Permanent(errors.New("threads: stored credentials are unreadable"))
 	}
 	if !creds.ExpiresAt.IsZero() && p.now().After(creds.ExpiresAt) {
-		return publisher.Result{}, publisher.Permanent(ErrExpired)
+		return publisher.Result{}, publisher.Reconnect(ErrExpired)
 	}
 
 	var container string
@@ -481,7 +481,7 @@ func apiError(op string, resp *http.Response) error {
 		classified = publisher.RetryAfter(time.Hour, err)
 	case resp.StatusCode == http.StatusUnauthorized, code == 190:
 		// Expired or revoked token: only the user reconnecting fixes it.
-		classified = publisher.Permanent(fmt.Errorf("%w (reconnect the account)", err))
+		classified = publisher.Reconnect(fmt.Errorf("%w (reconnect the account)", err))
 	case resp.StatusCode >= 500, code == 1, code == 2:
 		classified = err
 	default:

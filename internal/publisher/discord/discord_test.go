@@ -213,6 +213,116 @@ func TestPublishMedia(t *testing.T) {
 	}
 }
 
+// forumStub answers as a forum channel does: a message without a thread name
+// is refused with Discord's error 220001.
+func forumStub(t *testing.T, got *[]payload) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var pl payload
+		if mt, params, _ := mime.ParseMediaType(r.Header.Get("Content-Type")); mt == "multipart/form-data" {
+			mr := multipart.NewReader(r.Body, params["boundary"])
+			for {
+				part, err := mr.NextPart()
+				if err != nil {
+					break
+				}
+				data, _ := io.ReadAll(part)
+				if part.FormName() == "payload_json" {
+					_ = json.Unmarshal(data, &pl)
+				}
+			}
+		} else {
+			_ = json.NewDecoder(r.Body).Decode(&pl)
+		}
+		*got = append(*got, pl)
+		if pl.ThreadName == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"message":"Webhooks posted to forum channels must have a thread_name or thread_id","code":220001}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"id":"m9","channel_id":"thread1"}`)
+	}
+}
+
+func TestPublishToAForumChannelNamesTheThread(t *testing.T) {
+	var got []payload
+	p, _ := stub(t, forumStub(t, &got))
+
+	res, err := p.Publish(context.Background(), testCreds(), publisher.Post{Text: "\n  Launch day  \nthe rest"}, memMedia{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].ThreadName != "" || got[1].ThreadName != "Launch day" {
+		t.Fatalf("requests %+v, want a plain message, then one named for the first line", got)
+	}
+	if got[1].Content != "\n  Launch day  \nthe rest" {
+		t.Errorf("content changed to %q", got[1].Content)
+	}
+	// The message is in the thread it started, and the link goes there.
+	if res.RemoteID != "m9" || res.URL != "https://discord.com/channels/g1/thread1/m9" {
+		t.Errorf("result %+v", res)
+	}
+}
+
+func TestPublishMediaToAForumChannelSendsTheFilesAgain(t *testing.T) {
+	var got []payload
+	p, _ := stub(t, forumStub(t, &got))
+	post := publisher.Post{Media: []publisher.Media{{Key: "k/a", ContentType: "image/png", Size: 7, Filename: "a.png"}}}
+
+	if _, err := p.Publish(context.Background(), testCreds(), post, memMedia{"k/a": "PNGDATA"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[1].ThreadName != "1 file" || len(got[1].Attachments) != 1 {
+		t.Fatalf("requests %+v, want the second named and carrying the file", got)
+	}
+}
+
+func TestANormalChannelGetsNoThreadName(t *testing.T) {
+	var raw []byte
+	p, seen := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		raw, _ = io.ReadAll(r.Body)
+		_, _ = io.WriteString(w, `{"id":"m1","channel_id":"c1"}`)
+	})
+	if _, err := p.Publish(context.Background(), testCreds(), publisher.Post{Text: "hello"}, memMedia{}); err != nil {
+		t.Fatal(err)
+	}
+	if len(*seen) != 1 || strings.Contains(string(raw), "thread_name") {
+		t.Errorf("%d requests, body %s; want one without thread_name", len(*seen), raw)
+	}
+}
+
+func TestOtherRefusalsAreNotSentAgain(t *testing.T) {
+	p, seen := stub(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"message":"A tag is required to create a forum post in this channel","code":40067}`)
+	})
+	_, err := p.Publish(context.Background(), testCreds(), publisher.Post{Text: "hello"}, memMedia{})
+	if !publisher.IsPermanent(err) || !strings.Contains(err.Error(), "A tag is required") {
+		t.Fatalf("got %v, want Discord's refusal as a permanent failure", err)
+	}
+	if len(*seen) != 1 {
+		t.Errorf("%d requests, want 1", len(*seen))
+	}
+}
+
+func TestThreadName(t *testing.T) {
+	long := strings.Repeat("é", 150)
+	for _, c := range []struct {
+		post publisher.Post
+		want string
+	}{
+		{publisher.Post{Text: "Title\nbody"}, "Title"},
+		{publisher.Post{Text: "  \n\n  Spaced  "}, "Spaced"},
+		{publisher.Post{Text: long}, strings.Repeat("é", 99) + "…"},
+		{publisher.Post{Media: make([]publisher.Media, 1)}, "1 file"},
+		{publisher.Post{Text: " \n ", Media: make([]publisher.Media, 3)}, "3 files"},
+	} {
+		got := threadName(c.post)
+		if got != c.want || len([]rune(got)) > maxThreadName {
+			t.Errorf("threadName(%q) = %q, want %q", c.post.Text, got, c.want)
+		}
+	}
+}
+
 func TestPublishFailsWhenStoredFileIsShort(t *testing.T) {
 	p, _ := stub(t, func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.ReadAll(r.Body)

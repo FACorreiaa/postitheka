@@ -66,19 +66,19 @@ These appear in old docs, in brand copy or in the code, but a user cannot use th
 |---|---|---|
 | **Anything as "available"** | Not deployed, no hostname, no sign-up, no TestFlight | `platform/infra/argocd/apps` has no Postitheka app; `ios/Config/Release.xcconfig` is empty |
 | **X** | Not built. Pay-per-use, billed to the owner | `BACKLOG.md` X-001; no `internal/publisher/x` |
-| **Instagram** | Not built | IG-001 |
+| **Instagram** | Built 2026-11-14, tested against a stub only. Never posted for real; no Meta app exists. Photos, reels and carousels; no text-only posts, JPEG only | IG-001; `internal/publisher/instagram` |
 | **Facebook Pages** | Not built | FB-001 |
 | **TikTok** | Not built. Drafts first, then an audit | TT-001, TT-002 |
 | **Reddit** | Not built; rollout recommends by hand | RDT-001, RDT-002 |
 | **Bluesky, Mastodon** | Deferred | `BACKLOG.md`, Deferred |
 | **"Publish everywhere"** as a literal claim | Three networks and a hand-off, none live | `cmd/server/main.go` |
 | **LinkedIn Company Pages** | Personal profile only | `internal/publisher/linkedin/linkedin.go` |
-| **Discord forum and media channels** | Fail permanently without `thread_name` | DSC-001 |
+| **Discord forum channels that require a tag** | The post fails with Discord's own message. Forum and media channels without that rule work: the thread is named for the post's first line (DSC-001, built, never run against a real forum) | DSC-001 |
 | **Different text per network** | Decided as premium, not built | `docs/platform-rollout.md` |
 | **Free / premium / any price** | No tiers or billing exist | No billing code |
 | **Retry a failed post** | No route or button | WEB-001 |
 | **Edit a post, or delete a sent one** | A scheduled post can be cancelled or moved to another time until it starts sending (POST-001, built, not yet in production). Its text and media cannot be changed, and nothing is ever deleted from a network | `PATCH` and `DELETE /v1/posts/{id}` take a time only |
-| **Reconnect warning** | An expired LinkedIn token is not shown until posts fail | ACC-001 |
+| **Warning before access expires** | An account is marked "needs reconnecting" only after the platform refuses it once (ACC-001, built, not yet in production). Nothing warns ahead of a LinkedIn token's 60 days | ACC-001 |
 | **Video length and shape checks** | Only type and size are checked | VID-001 |
 | **Video conversion on the phone** | Not built; videos keep their container | IOS-004, `ios/Postitheka/MediaImport.swift` |
 | **Share extension** ("share from Photos") | Not built | IOS-005 |
@@ -225,7 +225,7 @@ These appear in old docs, in brand copy or in the code, but a user cannot use th
 - **Workflow.** 1) In Discord: channel settings, Integrations, Webhooks, New Webhook, Copy Webhook URL. 2) In Postitheka: Accounts, paste it, optionally name it, Connect. 3) The channel appears as a stamp.
 - **Location.** Web: Accounts > "Connect a Discord channel". iOS: Accounts > "Connect a Discord channel".
 - **Code.** `internal/publisher/discord/discord.go`, `internal/service/accounts.go`; tests `discord_test.go`, `TestConnectDiscordRejectsForeignURLs`.
-- **Status.** `experimental` by this document's definition: **never posted to a real channel** (FND-002 caveat). It is the most complete destination and needs no developer app, so one test post would make it `verified`. Forum and media channels fail (DSC-001).
+- **Status.** `experimental` by this document's definition: **never posted to a real channel** (FND-002 caveat). It is the most complete destination and needs no developer app, so one test post would make it `verified`. Forum and media channels start a thread named for the post's first line (DSC-001, stub-tested only); one that requires a tag fails.
 - **Priority.** High. The only destination that can be filmed end to end without the owner creating developer apps.
 - **Headline.** "Every channel is a stamp."
 - **Recording.** Tier B with a private Discord server created for filming, with no members besides the owner. Never use the community server or any real community. Blur or crop the webhook URL: it is a credential.
@@ -240,7 +240,7 @@ These appear in old docs, in brand copy or in the code, but a user cannot use th
 - **Workflow.** 1) Accounts > Connect LinkedIn. 2) Sign in on LinkedIn and allow. 3) Back in Postitheka: "LinkedIn connected." 4) The profile is a stamp.
 - **Location.** Accounts > "Connect LinkedIn" (appears only when `LINKEDIN_CLIENT_ID` is set).
 - **Code.** `internal/publisher/linkedin/linkedin.go`, `internal/service/connect.go`, `internal/httpapi/oauth.go`; tests `linkedin_test.go`, `TestOAuthConnect`.
-- **Status.** `experimental`. Stub-tested only. **No LinkedIn developer app exists**, so the button does not appear in any environment. Posts go to the main feed as **PUBLIC**. Personal profile only. Tokens last 60 days with no refresh and nothing warns before they expire (ACC-001).
+- **Status.** `experimental`. Stub-tested only. **No LinkedIn developer app exists**, so the button does not appear in any environment. Posts go to the main feed as **PUBLIC**. Personal profile only. Tokens last 60 days with no refresh and nothing warns before they expire; after the first refused post the account is marked as needing reconnection (ACC-001).
 - **Priority.** Medium, once it has posted for real.
 - **Headline.** "Your LinkedIn, one more stamp."
 - **Recording.** Stamp and rules only, Tier A (seeded account plus a placeholder client id). A real publish is **blocked under the capture rules**: there is no LinkedIn sandbox, posts are public, and fake profiles are understood to break LinkedIn's terms. Owner decision.

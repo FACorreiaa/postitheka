@@ -71,7 +71,7 @@ a job cut off mid-request leaves its target `publishing`, and the next attempt f
 
 ```text
 users ─┬─< api_tokens       token_hash (sha256), last_used_at
-       ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id
+       ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id, brand, needs_reconnect_at
        ├─< oauth_states     state_hash (sha256), platform, verifier (sealed, AAD = hash), client
        ├─< media            object_key, content_type, size_bytes, verified_at
        └─< posts            text, scheduled_at, idempotency_key + request_hash
@@ -86,6 +86,9 @@ users ─┬─< api_tokens       token_hash (sha256), last_used_at
 - Disconnecting an account sets `post_targets.account_id` to NULL and keeps the history;
   `platform` is copied onto the target for the same reason. An assisted target (WhatsApp) has
   no account from the start: there is nothing to connect.
+- `accounts.brand` is a label for the product an account posts for (BRAND-001). Clients filter
+  the composer by it. It is not a tenant: every query is still scoped by `user_id` alone, and
+  reconnecting an account keeps its brand.
 - `accounts.remote_id` is the platform's id for what was connected (a LinkedIn member), unique
   per user and platform. Connecting it again replaces the credentials of the same row, so its
   post history stays attached; that is how an expired OAuth token is renewed. NULL for Discord.
@@ -246,13 +249,13 @@ Checked dates matter: re-check a platform's docs before building it.
 
 | Platform | Mode | Status | Notes |
 | --- | --- | --- | --- |
-| Discord | Direct (webhook) | **Built** | Checked 2026-10-22: 2,000 chars, 10 files, 20 MiB per file. No review. Forum channels need `thread_name` (not yet). |
+| Discord | Direct (webhook) | **Built** | Checked 2026-10-22: 2,000 chars, 10 files, 20 MiB per file. No review. Forum and media channels get a `thread_name` from the post's first line, sent after Discord refuses the plain message with error 220001; a forum that requires a tag still fails. |
 | LinkedIn | Direct (OAuth 2.0) | **Built** (stub-tested) | Checked 2026-10-23: 3,000 characters, 20 images of 5 MB, or one MP4 up to 500 MB. Self-serve. Needs the owner's developer app to use. |
 | Threads | Direct (OAuth, threads.com) | **Built** (stub-tested) | Checked 2026-10-23: 500 characters (emoji counted in UTF-8 bytes), 5 links, carousel of 2–20; JPEG/PNG 8 MB, MP4/MOV 1 GB. Testers before App Review; needs the owner's Threads app. |
 | X | Direct (OAuth 2.0 PKCE) | Not started | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23); owner decision. Weighted `CountText`. |
 | Reddit | Direct (OAuth 2.0) | Not started | Needs Reddit's approval first; text and links only. |
 | Facebook | Direct (Meta OAuth) | Not started | Pages only. Role holders on the app need no review; anyone else needs Business Verification + App Review (checked 2026-11-05). |
-| Instagram | Direct (Instagram Login) | Not started | Business/Creator accounts, no Page needed. JPEG only, by URL (`PublicURL`). 50–100 posts a day. App Review. |
+| Instagram | Direct (Instagram Login) | **Built** (stub-tested) | Checked 2026-11-14: caption of 2,200 characters, no post without media, carousel of 2–20; JPEG only, 8 MB; a single video is a reel, MP4/MOV 300 MB; all media by URL (`PublicURL`). Business/Creator accounts, no Page needed. 100 posts in 24 hours. Role holders before App Review; needs the owner's Instagram app. |
 | TikTok | Direct (Content Posting API) | Not started | Until the app passes TikTok's audit, posts are private-only. Upload-to-inbox (drafts) is the low-friction first step. Verify current rules. |
 | WhatsApp | Assisted (iOS share sheet) | **Built** | No posting API exists. The server sends nothing; it records the handoff the phone reports. |
 
@@ -275,7 +278,12 @@ Checked dates matter: re-check a platform's docs before building it.
    before the rows commit, so a failure leaves rows without objects for the next sweep, never
    objects no row points to.
 
-Not yet handled: a deleted user's objects stay in the bucket (no route deletes users yet).
+A deleted user's objects go with the user (MED-002): `Service.DeleteUser` empties
+`uploads/{user id}/` before deleting the row, so a failure leaves the user in place to try
+again, and once more after it, for an upload that landed in between. It works by key prefix, so
+an object with no media row is removed too. Only the operator can run it for now
+(`server user delete EMAIL`); there is no route. Not handled: an upload URL issued before the
+deletion stays valid for its 30 minutes, and a file sent to it afterwards has no owner.
 
 ## Auth
 
@@ -293,9 +301,10 @@ spec because auth wraps every spec route, and it holds nothing secret.
 | Route | Does |
 | --- | --- |
 | `GET /v1/platforms` | Registered platforms and their rules |
-| `GET /v1/accounts` | Connected accounts (never credentials) |
+| `GET /v1/accounts` | Connected accounts (never credentials). `needs_reconnect` is true once the platform has refused the account's credentials: the worker marks the account, fails what is queued for it without asking again, and `POST /v1/posts` refuses it. Connecting the account again clears it |
 | `POST /v1/accounts/discord` | Connect a webhook; 400 if Discord does not recognise it |
 | `POST /v1/accounts/{platform}/connect` | Start an OAuth connect: `{client}` → `{authorize_url}`; 404 if the platform does not connect by OAuth here |
+| `PATCH /v1/accounts/{id}` | Set or clear the account's brand: `{brand}`, trimmed, at most 40 characters, empty clears it |
 | `DELETE /v1/accounts/{id}` | Disconnect; queued targets for it fail as "disconnected" |
 | `POST /v1/media` | Reserve an upload, get a presigned PUT |
 | `GET /v1/posts?limit=` | Newest first, with targets and media ids |
@@ -361,9 +370,15 @@ never needs ffmpeg.
 
 The `maat` cluster through `~/Work/production/platform/infra` (ArgoCD auto-syncs `main`):
 one Deployment running the image with `GO_ENV=production` and `AUTO_MIGRATE=false`, a PreSync
-Job running `server migrate`, a Service on :8095, liveness and readiness on `/healthz`. Secrets
-sealed for the app's namespace: `DATABASE_URL`, `TOKEN_ENCRYPTION_KEY`, S3 keys. R2 bucket with
-the CORS rule and, later, a lifecycle rule for unattached uploads.
+Job running `server migrate`, a Service on :8095. Readiness is `/health/ready` (pings Postgres;
+`/healthz` is the same check), liveness is `/health/live` (no database), so a database outage
+takes the pod out of the Service without restarting it in the middle of a publish. `server
+migrate` loads only `DATABASE_URL`, so the hook does not depend on the app's other secrets.
+`SHUTDOWN_TIMEOUT` (default 30s) bounds how long requests and running publish jobs get after
+SIGTERM; the Deployment's grace period must be longer. Secrets sealed for the `horus` namespace:
+`DATABASE_URL`, `TOKEN_ENCRYPTION_KEY`, S3 keys. R2 bucket with the CORS rule and, later, a
+lifecycle rule for unattached uploads. The Image workflow opens a promote PR on the infra repo
+for each image; merging it is the deploy.
 
 The image is multi-stage: Node builds `web/dist`, Go builds a static binary, Alpine runs it
 (about 40 MB).

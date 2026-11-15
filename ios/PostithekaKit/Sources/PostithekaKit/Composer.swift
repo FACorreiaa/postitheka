@@ -70,7 +70,20 @@ public final class Composer {
         Draft(text: text, media: attachments.map { .init(contentType: $0.contentType, size: $0.size) })
     }
 
-    public var chosen: [Account] { accounts.filter { selected.contains($0.id) } }
+    /// The brand last picked. Read `brand` for the one in effect.
+    public var brandChoice: BrandFilter = .all
+    public var brand: BrandFilter { brandChoice.resolved(for: accounts) }
+
+    /// The accounts on screen: every one, or the chosen brand's.
+    public var shown: [Account] { accounts.filter(brand.matches) }
+
+    /// Only what is on screen can be published to. A stamp chosen under one
+    /// brand and then hidden by another would send a post somewhere the person
+    /// can no longer see.
+    ///
+    /// Nor can an account whose credentials the platform refused: the server
+    /// would reject the post, so it is left out until it is connected again.
+    public var chosen: [Account] { shown.filter { selected.contains($0.id) && !$0.needsReconnect } }
 
     /// What would stop `account`'s platform from taking the post as written.
     public func problems(for account: Account) -> [String] {
@@ -90,6 +103,7 @@ public final class Composer {
     }
 
     public func toggle(_ account: Account) {
+        guard !account.needsReconnect else { return }
         if selected.contains(account.id) { selected.remove(account.id) } else { selected.insert(account.id) }
     }
 

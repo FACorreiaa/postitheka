@@ -123,6 +123,10 @@ func (s *Service) CreatePost(ctx context.Context, userID uuid.UUID, in CreatePos
 	post := publisher.Post{Text: in.Text, Media: pubMedia}
 	for _, a := range accounts {
 		accountID := a.ID
+		if a.NeedsReconnectAt.Valid {
+			addIssue(Issue{AccountID: &accountID, Platform: a.Platform, Field: "account_ids", Message: a.DisplayName + " needs reconnecting before it can be posted to"})
+			continue
+		}
 		pub, ok := s.registry.Get(publisher.Platform(a.Platform))
 		if !ok {
 			addIssue(Issue{AccountID: &accountID, Platform: a.Platform, Field: "account_ids", Message: a.Platform + " is not available"})

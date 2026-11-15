@@ -39,8 +39,9 @@ const webhookURL = "https://discord.com/api/webhooks/42/secret-token"
 // fakeStorage is object storage held in memory. put stands in for the
 // client's PUT to the presigned URL.
 type fakeStorage struct {
-	mu      sync.Mutex
-	objects map[string]fakeObject
+	mu          sync.Mutex
+	failDeletes bool
+	objects     map[string]fakeObject
 }
 
 type fakeObject struct {
@@ -83,6 +84,22 @@ func (f *fakeStorage) Delete(_ context.Context, key string) error {
 	defer f.mu.Unlock()
 	delete(f.objects, key)
 	return nil
+}
+
+func (f *fakeStorage) DeletePrefix(_ context.Context, prefix string) (int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failDeletes {
+		return 0, errors.New("storage is down")
+	}
+	n := 0
+	for key := range f.objects {
+		if strings.HasPrefix(key, prefix) {
+			delete(f.objects, key)
+			n++
+		}
+	}
+	return n, nil
 }
 
 func (f *fakeStorage) has(key string) bool {
@@ -744,6 +761,88 @@ func TestDeletingAUserRemovesEverything(t *testing.T) {
 	}
 }
 
+func TestDeleteUserRemovesTheirUploadsFromStorage(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	bob := e.user(t, "bob@example.com")
+	acct := e.account(t, alice)
+	attached := e.upload(t, alice, "image/png", []byte("PNG"))
+	e.upload(t, alice, "image/png", []byte("PNG loose"))
+	e.upload(t, bob, "image/png", []byte("PNG bob"))
+	scheduled := time.Now().Add(time.Hour)
+	view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{
+		Text: "bye", MediaIDs: []uuid.UUID{attached}, AccountIDs: []uuid.UUID{acct}, ScheduledAt: &scheduled,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// In the bucket with no row: an upload whose row was swept, say.
+	stray := "uploads/" + alice.String() + "/stray.png"
+	e.storage.put(stray, "image/png", []byte("PNG stray"))
+
+	objects := func(user uuid.UUID) int {
+		e.storage.mu.Lock()
+		defer e.storage.mu.Unlock()
+		n := 0
+		for key := range e.storage.objects {
+			if strings.HasPrefix(key, "uploads/"+user.String()+"/") {
+				n++
+			}
+		}
+		return n
+	}
+	if n := objects(alice); n != 3 {
+		t.Fatalf("%d objects before, want 3", n)
+	}
+
+	// Storage down: nothing is deleted, so the call can be made again.
+	e.storage.failDeletes = true
+	if _, err := e.svc.DeleteUser(ctx, alice); err == nil {
+		t.Fatal("want an error while storage is down")
+	}
+	e.storage.failDeletes = false
+	if _, err := e.svc.GetPost(ctx, alice, view.Post.ID); err != nil {
+		t.Fatalf("the user's post after a failed delete: %v", err)
+	}
+
+	id, removed, err := e.svc.DeleteUserByEmail(ctx, " Alice@Example.com ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id != alice || removed != 3 {
+		t.Fatalf("deleted %s with %d objects, want %s with 3", id, removed, alice)
+	}
+	if n := objects(alice); n != 0 {
+		t.Fatalf("%d of the user's objects are still in storage", n)
+	}
+	if n := objects(bob); n != 1 {
+		t.Fatalf("another user has %d objects, want 1", n)
+	}
+	var left int
+	_ = e.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM users WHERE id = $1) + (SELECT count(*) FROM posts)
+		+ (SELECT count(*) FROM accounts) + (SELECT count(*) FROM post_targets) + (SELECT count(*) FROM api_tokens WHERE user_id = $1)
+		+ (SELECT count(*) FROM media WHERE user_id = $1)`, alice).Scan(&left)
+	if left != 0 {
+		t.Fatalf("%d rows survived their user", left)
+	}
+
+	// The post's job is still queued. It finds no target and posts nothing.
+	if err := e.runJob(t, view.Targets[0].ID, 1); err == nil {
+		t.Fatal("job for a deleted user's post: want it cancelled")
+	}
+	if n := e.discord.posts.Load(); n != 0 {
+		t.Fatalf("%d requests reached the platform, want none", n)
+	}
+
+	if _, err := e.svc.DeleteUser(ctx, alice); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("second delete: %v, want not found", err)
+	}
+	if _, _, err := e.svc.DeleteUserByEmail(ctx, "nobody@example.com"); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("unknown email: %v, want not found", err)
+	}
+}
+
 func TestCredentialsAreSealedAtRest(t *testing.T) {
 	e := setup(t)
 	ctx := context.Background()
@@ -1028,6 +1127,133 @@ func deref(s *string) string {
 		return ""
 	}
 	return *s
+}
+
+// BRAND-001. The brand is a label, not a tenant: it is set and cleared on an
+// account the user owns, and another user's account answers "not found", the
+// same as an account that does not exist.
+func TestAccountBrand(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	bob := e.user(t, "bob@example.com")
+	acctID := e.account(t, alice)
+
+	accounts, err := e.svc.ListAccounts(ctx, alice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(accounts) != 1 || accounts[0].Brand != nil {
+		t.Fatalf("a new account has a brand: %+v", accounts)
+	}
+
+	got, err := e.svc.SetAccountBrand(ctx, alice, acctID, "  Aaru  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Brand == nil || *got.Brand != "Aaru" {
+		t.Fatalf("brand = %v, want Aaru with the space trimmed", got.Brand)
+	}
+	if accounts, err = e.svc.ListAccounts(ctx, alice); err != nil || accounts[0].Brand == nil || *accounts[0].Brand != "Aaru" {
+		t.Fatalf("the list does not carry the brand: %+v, %v", accounts, err)
+	}
+
+	// Exactly at the limit, in characters: 40 two-byte letters are 80 bytes.
+	if _, err := e.svc.SetAccountBrand(ctx, alice, acctID, strings.Repeat("é", service.MaxBrandLength)); err != nil {
+		t.Fatalf("a brand of exactly %d characters was refused: %v", service.MaxBrandLength, err)
+	}
+	var bad *service.BadRequest
+	if _, err := e.svc.SetAccountBrand(ctx, alice, acctID, strings.Repeat("é", service.MaxBrandLength+1)); !errors.As(err, &bad) {
+		t.Fatalf("a brand one character too long: got %v, want a BadRequest", err)
+	}
+
+	if _, err := e.svc.SetAccountBrand(ctx, bob, acctID, "Mine now"); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("bob labelled alice's account: got %v, want ErrNotFound", err)
+	}
+	if _, err := e.svc.SetAccountBrand(ctx, alice, uuid.New(), "Aaru"); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("an account that does not exist: got %v, want ErrNotFound", err)
+	}
+
+	if got, err = e.svc.SetAccountBrand(ctx, alice, acctID, "   "); err != nil || got.Brand != nil {
+		t.Fatalf("a blank brand did not clear it: %v, %v", got.Brand, err)
+	}
+}
+
+func TestRefusedCredentialsMarkTheAccount(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	acct := e.account(t, alice)
+	other := e.account(t, alice)
+
+	post := func(text string, account uuid.UUID) service.PostView {
+		t.Helper()
+		view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: text, AccountIDs: []uuid.UUID{account}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return view
+	}
+	marked := func() map[uuid.UUID]bool {
+		t.Helper()
+		accts, err := e.svc.ListAccounts(ctx, alice)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[uuid.UUID]bool{}
+		for _, a := range accts {
+			out[a.ID] = a.NeedsReconnectAt.Valid
+		}
+		return out
+	}
+
+	// A post the platform rejects is about the post, not the account.
+	rejected := post("no", acct)
+	e.discord.postStatus.Store(http.StatusBadRequest)
+	_ = e.runJob(t, rejected.Targets[0].ID, 1)
+	if marked()[acct] {
+		t.Fatal("a rejected post marked the account")
+	}
+
+	first := post("one", acct)
+	queued := post("two", acct)
+
+	// The webhook is gone: Discord answers 401.
+	e.discord.postStatus.Store(http.StatusUnauthorized)
+	if err := e.runJob(t, first.Targets[0].ID, 1); err == nil {
+		t.Fatal("want the job cancelled")
+	}
+	e.discord.postStatus.Store(http.StatusOK)
+	if got := marked(); !got[acct] || got[other] {
+		t.Fatalf("marked %v, want only the refused account", got)
+	}
+	if tgt := e.target(t, alice, first.Post.ID); tgt.Status != "failed" {
+		t.Fatalf("target %s, want failed", tgt.Status)
+	}
+
+	// What was already queued for the account fails without asking again.
+	before := e.discord.posts.Load()
+	if err := e.runJob(t, queued.Targets[0].ID, 1); err == nil {
+		t.Fatal("want the queued job cancelled")
+	}
+	if n := e.discord.posts.Load(); n != before {
+		t.Fatalf("%d more requests reached the platform, want none", n-before)
+	}
+	tgt := e.target(t, alice, queued.Post.ID)
+	if tgt.Status != "failed" || tgt.LastError == nil || !strings.Contains(*tgt.LastError, "needs reconnecting") {
+		t.Fatalf("queued target %s %v, want failed asking for a reconnect", tgt.Status, tgt.LastError)
+	}
+
+	// A new post to it is refused at the door; the other account still works.
+	_, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "three", AccountIDs: []uuid.UUID{acct, other}})
+	var ve *service.ValidationError
+	if !errors.As(err, &ve) || len(ve.Issues) != 1 || ve.Issues[0].AccountID == nil || *ve.Issues[0].AccountID != acct {
+		t.Fatalf("got %v, want one issue on the marked account", err)
+	}
+	ok := post("four", other)
+	if err := e.runJob(t, ok.Targets[0].ID, 1); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestCancelPostRemovesAnUnsentPost(t *testing.T) {

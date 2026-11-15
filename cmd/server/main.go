@@ -34,6 +34,7 @@ import (
 	"github.com/FACorreiaa/postitheka/internal/media"
 	"github.com/FACorreiaa/postitheka/internal/publisher"
 	"github.com/FACorreiaa/postitheka/internal/publisher/discord"
+	"github.com/FACorreiaa/postitheka/internal/publisher/instagram"
 	"github.com/FACorreiaa/postitheka/internal/publisher/linkedin"
 	"github.com/FACorreiaa/postitheka/internal/publisher/threads"
 	"github.com/FACorreiaa/postitheka/internal/secretbox"
@@ -55,6 +56,25 @@ func dispatch(args []string) error {
 	// the deployment.
 	_ = godotenv.Load()
 
+	if len(args) > 0 && args[0] == "migrate" {
+		// A subcommand rather than a second binary, so the schema applied is
+		// always the one this image was built with. In-cluster it runs as a
+		// PreSync hook with AUTO_MIGRATE=false, and needs only the database:
+		// the hook must not fail because a storage key is not sealed yet.
+		cfg, err := config.LoadForMigrate()
+		if err != nil {
+			return err
+		}
+		slog.SetDefault(newLogger(cfg))
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := database.Migrate(ctx, cfg.DatabaseURL); err != nil {
+			return err
+		}
+		slog.Info("migrations applied")
+		return nil
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -64,21 +84,12 @@ func dispatch(args []string) error {
 	switch {
 	case len(args) == 0:
 		return serve(cfg)
-	case args[0] == "migrate":
-		// A subcommand rather than a second binary, so the schema applied is
-		// always the one this image was built with. In-cluster it runs as a
-		// PreSync hook with AUTO_MIGRATE=false.
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		if err := database.Migrate(ctx, cfg.DatabaseURL); err != nil {
-			return err
-		}
-		slog.Info("migrations applied")
-		return nil
 	case len(args) == 3 && args[0] == "user" && args[1] == "create":
 		return createUser(cfg, args[2])
+	case len(args) == 3 && args[0] == "user" && args[1] == "delete":
+		return deleteUser(cfg, args[2])
 	default:
-		return fmt.Errorf("unknown command %q; want no arguments, \"migrate\", or \"user create EMAIL\"", strings.Join(args, " "))
+		return fmt.Errorf("unknown command %q; want no arguments, \"migrate\", \"user create EMAIL\" or \"user delete EMAIL\"", strings.Join(args, " "))
 	}
 }
 
@@ -133,6 +144,9 @@ func serve(cfg config.Config) error {
 	}
 	if cfg.ThreadsAppID != "" {
 		pubs = append(pubs, threads.New(cfg.ThreadsAppID, cfg.ThreadsAppSecret, nil))
+	}
+	if cfg.InstagramAppID != "" {
+		pubs = append(pubs, instagram.New(cfg.InstagramAppID, cfg.InstagramAppSecret, nil))
 	}
 	registry := publisher.NewRegistry(pubs...)
 
@@ -205,14 +219,22 @@ func routes(cfg config.Config, pool *pgxpool.Pool, svc *service.Service) http.Ha
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer)
 
-	// Outside the API spec and its authentication: the kubelet probes this.
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	// Outside the API spec and its authentication: the kubelet probes these.
+	// Ready pings the database, so a pod that cannot reach it leaves the
+	// Service. Live does not: a database outage must not restart every pod,
+	// which would cut off the publish jobs still running.
+	ready := func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 		if err := pool.Ping(ctx); err != nil {
 			http.Error(w, "database unreachable", http.StatusServiceUnavailable)
 			return
 		}
+		_, _ = w.Write([]byte("ok"))
+	}
+	r.Get("/healthz", ready)
+	r.Get("/health/ready", ready)
+	r.Get("/health/live", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
 
@@ -258,6 +280,43 @@ func createUser(cfg config.Config, email string) error {
 	fmt.Fprintf(os.Stderr, "user %s\n", id)
 	// The token alone on stdout, so it can be piped straight into a secret.
 	fmt.Println(token)
+	return nil
+}
+
+// deleteUser removes a user with everything they own, uploads included. It is
+// the operator's side of account deletion until a signed-in user can ask for
+// it from the app (AUTH-001). There is no undo.
+func deleteUser(cfg config.Config, email string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	store, err := media.New(media.Options{
+		Endpoint:  cfg.S3Endpoint,
+		Region:    cfg.S3Region,
+		Bucket:    cfg.S3Bucket,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+		UseSSL:    cfg.S3UseSSL,
+	})
+	if err != nil {
+		return err
+	}
+
+	svc := service.New(service.Deps{Pool: pool, Storage: store})
+	id, objects, err := svc.DeleteUserByEmail(ctx, email)
+	if errors.Is(err, service.ErrNotFound) {
+		return fmt.Errorf("no user with the email address %q", email)
+	}
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "deleted user %s and %d uploaded files\n", id, objects)
 	return nil
 }
 
