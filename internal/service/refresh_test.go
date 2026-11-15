@@ -30,6 +30,8 @@ type refreshStub struct {
 	fail      error
 	mu        sync.Mutex
 	usedToken []string
+	// draft: the platform holds what it was sent for the author to finish.
+	draft bool
 }
 
 func (r *refreshStub) Platform() publisher.Platform { return refreshPlatform }
@@ -64,7 +66,7 @@ func (r *refreshStub) Publish(_ context.Context, credentials []byte, _ publisher
 	r.mu.Lock()
 	r.usedToken = append(r.usedToken, c.Token)
 	r.mu.Unlock()
-	return publisher.Result{RemoteID: "remote"}, nil
+	return publisher.Result{RemoteID: "remote", Draft: r.draft}, nil
 }
 
 // expiredAccount stores an account whose credentials need refreshing, as an
@@ -182,4 +184,38 @@ func TestTokenRefresh(t *testing.T) {
 			t.Errorf("target %s, want pending for the retry", got.Status)
 		}
 	})
+}
+
+// A platform that only holds the post for its author to finish (a video in
+// a TikTok inbox) must not be shown as published.
+func TestADraftIsNotRecordedAsPublished(t *testing.T) {
+	ctx := context.Background()
+	e := setup(t, &refreshStub{draft: true})
+	alice := e.user(t, "alice@example.com")
+	acct := expiredAccount(t, e, alice)
+
+	view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "hello", AccountIDs: []uuid.UUID{acct}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tgt := e.target(t, alice, view.Post.ID)
+	if err := e.runJob(t, tgt.ID, 1); err != nil {
+		t.Fatal(err)
+	}
+	tgt = e.target(t, alice, view.Post.ID)
+	if tgt.Status != "drafted" || !tgt.PublishedAt.Valid || deref(tgt.RemoteID) != "remote" {
+		t.Errorf("target %q at %v with id %q, want drafted, timed, with the platform's id", tgt.Status, tgt.PublishedAt, deref(tgt.RemoteID))
+	}
+
+	// Finished: a second run of the job sends nothing more, and there is
+	// nothing to send again.
+	if err := e.runJob(t, tgt.ID, 2); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.target(t, alice, view.Post.ID).Status; got != "drafted" {
+		t.Errorf("target is %q after a second run", got)
+	}
+	if _, err := e.svc.RetryTarget(ctx, alice, tgt.ID); err == nil {
+		t.Error("a drafted target was queued again")
+	}
 }

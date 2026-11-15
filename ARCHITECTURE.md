@@ -6,8 +6,8 @@ shape they produce. Update it in the same change as any new platform, table, rou
 ## Goals
 
 1. Write once, publish to several platforms, and show per destination what happened.
-2. Never post twice, and never lose a post silently: every target ends `published` or `failed`
-   with a reason.
+2. Never post twice, and never lose a post silently: every target ends `published`, `drafted` or
+   `failed` with a reason.
 3. One deployable: a single Go binary serves the API, the web app and the publish workers.
 4. Adding a platform is one package, with no changes to the rest of the system.
 
@@ -114,6 +114,7 @@ users ─┬─< api_tokens       token_hash (sha256), last_used_at
                                                     │ (at scheduled_at)
                                                     ▼
  target: pending ──claim──► publishing ──ok──► published (remote_id, remote_url)
+            ▲                   ├── ok, Result.Draft ───────► drafted (the author posts it in the platform's app)
             ▲                   │
             └── retryable ──────┤ (River backoff, or RetryAfter → snooze)
                                 ├── permanent ──────────────► failed (job cancelled)
@@ -268,7 +269,7 @@ Checked dates matter: re-check a platform's docs before building it.
 | Reddit | Direct (OAuth 2.0) | Not started | Needs Reddit's approval first; text and links only. |
 | Facebook | Direct (Facebook Login) | **Built** (stub-tested) | Pages only; one account per Page shared at login. Checked 2026-11-15: text, photos (JPEG/PNG/GIF, 10 MB) singly or several in one post, or one MP4 by URL. Meta states no text, photo-count or video limit, so those are our caps (5,000 characters, 10 photos, 300 MB). Role holders before App Review; needs the owner's Meta app. |
 | Instagram | Direct (Instagram Login) | **Built** (stub-tested) | Checked 2026-11-14: caption of 2,200 characters, no post without media, carousel of 2–20; JPEG only, 8 MB; a single video is a reel, MP4/MOV 300 MB; all media by URL (`PublicURL`). Business/Creator accounts, no Page needed. 100 posts in 24 hours. Role holders before App Review; needs the owner's Instagram app. |
-| TikTok | Direct (Content Posting API) | Not started | Until the app passes TikTok's audit, posts are private-only. Upload-to-inbox (drafts) is the low-friction first step. Verify current rules. |
+| TikTok | Direct, to the inbox (Content Posting API, `video.upload`) | **Built** (stub-tested) | A video goes to the account's TikTok inbox and the target ends `drafted`: the author adds the caption and posts it in TikTok, so the post's text is not sent. Checked 2026-11-15: one video, MP4/MOV/WebM, at most 10 minutes, no side over 4096 px, pushed in 10 MB chunks; at most 5 unfinished drafts in 24 hours; access token 2 hours, refresh token 180 days. Our own cap: 1 GiB (TikTok takes 4 GB). No photos (pull from a verified domain only). Direct posting waits for TikTok's audit (TT-002); until then such posts are private-only. |
 | WhatsApp | Assisted (iOS share sheet) | **Built** | No posting API exists. The server sends nothing; it records the handoff the phone reports. |
 
 ## Media flow

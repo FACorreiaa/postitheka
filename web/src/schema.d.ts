@@ -364,10 +364,10 @@ export interface components {
             account_id?: string;
             platform: components["schemas"]["Platform"];
             /**
-             * @description handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
+             * @description drafted: the platform holds the post for its author to finish and send from the platform's own app (a video in a TikTok inbox); published_at is when the platform took it. handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
              * @enum {string}
              */
-            status: "pending" | "publishing" | "published" | "failed" | "handing_off" | "handed_off";
+            status: "pending" | "publishing" | "published" | "failed" | "handing_off" | "handed_off" | "drafted";
             last_error?: string;
             /** @description Present and true when the target failed because an attempt died mid-request, so the post may already be live on the platform. Check there before retrying. */
             interrupted?: boolean;

@@ -80,6 +80,7 @@ postitheka/
       instagram/
       linkedin/
       threads/
+      tiktok/
       x/
     secretbox/              # credential encryption
     analytics/              # product events (PostHog); empty key sends nothing
@@ -144,7 +145,7 @@ task build                          # web build, then one binary with the web ap
 | --- | --- |
 | **Post** | What the user wrote: text, ordered media, a time to publish. Owned by one user. |
 | **Account** | A connected destination: one Discord webhook, one LinkedIn member, one Facebook Page. Holds sealed credentials; OAuth accounts carry the platform's id (`remote_id`), and reconnecting renews the same account. |
-| **Target** | One post going to one account. Has its own status: `pending`, `publishing`, `published`, `failed`; an assisted target goes `handing_off` → `handed_off` or `failed`. |
+| **Target** | One post going to one account. Has its own status: `pending`, `publishing`, `published`, `failed`, or `drafted` when the platform holds it for its author to finish (TikTok); an assisted target goes `handing_off` → `handed_off` or `failed`. |
 | **Publisher** | The code that knows one platform: its `Rules`, how to connect, how to publish. |
 | **Rules** | A platform's limits: text length, media count, size and types. |
 | **Option** | A line of text set for one target, listed by the platform's `Rules`: a Discord forum post's title. |
@@ -153,7 +154,8 @@ task build                          # web build, then one binary with the web ap
 | **Assisted publish** | The iOS app hands the post to the platform's app; the user sends it. WhatsApp only, for now. |
 
 In the UI, destinations are **stamps** and a published target gets a **postmark**. Keep the
-vocabulary: "Publish" produces "Published"; "Not sent" means failed.
+vocabulary: "Publish" produces "Published"; "Not sent" means failed; "Draft" means the platform holds it
+for its author, and gets no postmark.
 
 ## Traps already hit
 
@@ -225,6 +227,12 @@ vocabulary: "Publish" produces "Published"; "Not sent" means failed.
 - **X's character count is not ours exactly.** `x_weighted` counts an emoji per code point (X
   counts any emoji as 2) and does not see a bare domain as a link (X does). The first refuses
   early, the second lets X refuse; both are written down in `countXWeighted`.
+- **A TikTok upload is a draft, and its text goes nowhere.** `video.upload` puts a video in the
+  account's inbox with no caption; the target ends `drafted`, never `published`. Once the last
+  chunk is sent the publisher never returns a retryable error: a retry uploads the video again
+  and leaves two drafts.
+- **TikTok answers 200 with an error inside.** The token endpoint puts `error` in a 200 body, and
+  the API wraps every answer in `{"data", "error": {"code": "ok"}}`. Read the code, not the status.
 - **Platform research agents can be wrong.** Limits that came back unconfirmed from research
   (LinkedIn's text length, image size) were checked against the platform's own pages before
   going into `Rules()`.

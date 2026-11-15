@@ -142,8 +142,9 @@ HEIC is on no platform's list, so reserving an upload for one is refused.
 
 - **Owner:** a TikTok developer app with the Content Posting API, submitted for review. TikTok says
   several days to two weeks. Photos also need a domain verified with TikTok.
-- **Code:** TT-001, which needs VID-001. A draft is not a publish, so it should not show "Published";
-  it needs an outcome of its own in the target lifecycle.
+- **Code:** TT-001, built against a stub on 2026-11-15. A draft is not a publish, so its target
+  ends `drafted` and shows "Draft" with a line telling the author to finish it in TikTok. The post's
+  text is not sent: an inbox upload has no caption.
 - **Direct Post UI (TT-002):** it requires a commercial-content toggle. Choosing "Your Brand" labels
   the post "Promotional content", which is what promoting our own apps needs. It also forbids adding
   promotional watermarks and logos through the client.
@@ -192,7 +193,7 @@ and app purpose.
 
 **Step 4: X.** Build against stubs now; real posts wait for credits, bought once on TestFlight.
 
-**Step 5: TikTok drafts,** then the audit (decision 3).
+**Step 5: TikTok drafts,** built against a stub; then the audit (decision 3).
 
 ### Code work, in order
 
@@ -207,7 +208,9 @@ and app purpose.
    platforms that refuse the video. The client reads the values; the server cannot.
    **OPT-001:** done 2026-11-15. A platform lists the one-line options it takes per destination
    and the composers show them under the stamp; Discord's forum post title is the first. A choice
-   from a list, which TikTok's privacy level needs, comes with TT-001.
+   from a list, which TikTok's privacy level needs, comes with direct posting (TT-002): a draft
+   has no options.
+   **TT-001:** built 2026-11-15 against a stub; no draft has reached a real inbox.
 5. **Different text per platform,** premium only, which needs the tiers from decision 5.
 6. **Cost hint on the X stamp,** once what counts as "with URL" is known: show $0.20 before Publish.
 7. **TT-001,** with the draft outcome.

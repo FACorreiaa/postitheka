@@ -813,8 +813,11 @@ components:
           $ref: "#/components/schemas/Platform"
         status:
           type: string
-          enum: [pending, publishing, published, failed, handing_off, handed_off]
+          enum: [pending, publishing, published, failed, handing_off, handed_off, drafted]
           description: >
+            drafted: the platform holds the post for its author to finish and
+            send from the platform's own app (a video in a TikTok inbox);
+            published_at is when the platform took it.
             handing_off and handed_off are for assisted platforms: the client
             is showing the share sheet, or the user sent the post from the
             platform's own app.

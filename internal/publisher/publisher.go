@@ -70,6 +70,10 @@ type MediaSource interface {
 type Result struct {
 	RemoteID string
 	URL      string
+	// Draft: the platform holds the post for its author to finish and send
+	// from the platform's own app (a video in a TikTok inbox). Nothing is
+	// public yet, so the target is recorded as drafted, not published.
+	Draft bool
 }
 
 // Connection is what connecting an account yields: a name to show the user and

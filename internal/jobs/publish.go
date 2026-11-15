@@ -129,7 +129,7 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 	}
 
 	switch row.Status {
-	case "published", "failed":
+	case "published", "drafted", "failed":
 		return nil
 	case "publishing":
 		// The previous attempt claimed the target and never recorded an
@@ -227,6 +227,7 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 			ID:        id,
 			RemoteID:  nilIfEmpty(res.RemoteID),
 			RemoteUrl: nilIfEmpty(res.URL),
+			Draft:     res.Draft,
 		}); err != nil {
 			return err
 		}

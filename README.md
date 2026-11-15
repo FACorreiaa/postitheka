@@ -99,7 +99,11 @@ Tests stub the platform's HTTP API; see `discord_test.go`. Never a real token.
   OAuth 2.0 as a confidential client and set `X_CLIENT_ID` and
   `X_CLIENT_SECRET`. Every post is billed to that app: set a spending limit
   in X's console first.
-- **TikTok, Reddit.** Order and blockers are in
+- **TikTok** drafts are built and tested against a stub; to use them, create
+  an app with Login Kit and the Content Posting API (`video.upload`) and set
+  `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET`. A video lands in the
+  account's TikTok inbox, where its author adds the caption and posts it.
+- **TikTok direct posting, Reddit.** Order and blockers are in
   `BACKLOG.md` (P2). Start Meta Business Verification and the TikTok audit
   early; both take weeks.
 - **Discord forum channels** need `thread_name`; they fail permanently today.

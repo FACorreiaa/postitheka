@@ -38,6 +38,7 @@ import (
 	"github.com/FACorreiaa/postitheka/internal/publisher/instagram"
 	"github.com/FACorreiaa/postitheka/internal/publisher/linkedin"
 	"github.com/FACorreiaa/postitheka/internal/publisher/threads"
+	"github.com/FACorreiaa/postitheka/internal/publisher/tiktok"
 	"github.com/FACorreiaa/postitheka/internal/publisher/x"
 	"github.com/FACorreiaa/postitheka/internal/secretbox"
 	"github.com/FACorreiaa/postitheka/internal/service"
@@ -155,6 +156,9 @@ func serve(cfg config.Config) error {
 	}
 	if cfg.XClientID != "" {
 		pubs = append(pubs, x.New(cfg.XClientID, cfg.XClientSecret, nil))
+	}
+	if cfg.TikTokClientKey != "" {
+		pubs = append(pubs, tiktok.New(cfg.TikTokClientKey, cfg.TikTokClientSecret, nil))
 	}
 	registry := publisher.NewRegistry(pubs...)
 

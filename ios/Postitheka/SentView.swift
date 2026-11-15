@@ -167,6 +167,11 @@ private struct TargetRow: View {
                 if let error = target.last_error, target.status != .published {
                     Text(error).font(.caption).foregroundStyle(.secondary)
                 }
+                if target.status == .drafted {
+                    // Nothing is public until its author posts it from the platform's app.
+                    Text("Open the notification in the \(target.platform.displayName) app to add a caption and post it.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if let link = target.remote_url.flatMap(URL.init(string:)) {
                     Link("Open", destination: link).font(.caption)
                 }
@@ -182,6 +187,7 @@ private struct TargetRow: View {
         case .failed: "Not sent"
         case .handing_off: "On the phone"
         case .handed_off: target.published_at.map { "Sent \($0.formatted(date: .omitted, time: .shortened))" } ?? "Sent"
+        case .drafted: target.published_at.map { "Draft \($0.formatted(date: .omitted, time: .shortened))" } ?? "Draft"
         }
     }
 
@@ -192,6 +198,7 @@ private struct TargetRow: View {
         case .published, .handed_off: "checkmark.seal.fill"
         case .failed: "xmark.octagon.fill"
         case .handing_off: "iphone"
+        case .drafted: "tray.and.arrow.down"
         }
     }
 
@@ -199,6 +206,7 @@ private struct TargetRow: View {
         switch target.status {
         case .pending, .publishing, .handing_off: .secondary
         case .published, .handed_off: Brand.glow
+        case .drafted: Brand.cream
         case .failed: .red
         }
     }

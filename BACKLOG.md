@@ -134,7 +134,7 @@ Strangers who have published a post: **0**.
 | META-001 | Open | | Owner |
 | THR-001 | Built, unverified | `internal/publisher/threads`; `threads_test.go` (connect with the long-lived exchange, text, image, video processing, carousel order, `ERROR`/`EXPIRED`/timeout, publish without a clear answer incl. a cancelled request, error classes, refresh, no secrets in errors); mutation-checked; `max_links` and `text_counting` in the spec, mirrored and tested in web and iOS | Needs the owner's Threads app and tester account to post for real |
 | X-001 | Built, unverified | `internal/publisher/x`; `x_test.go` (connect with PKCE and Basic client auth, refresh keeps the rotated token, a revoked grant is permanent, text, photos, a video in segments with the processing wait, error classes, no secrets in errors); `TestCountXWeighted` and the same cases in `web/src/rules.test.ts` and the kit's `RulesTests.swift` | Never run against X: needs the owner's developer app and credits. The post link's form is not in X's reference |
-| TT-001 | Open | | |
+| TT-001 | Built, unverified | `internal/publisher/tiktok`; `tiktok_test.go` (connect, an error in a 200 token answer, refresh keeps a new refresh token and keeps the old one when none comes, a revoked grant is permanent, a small video whole, a large one in chunks with the rest in the last, the wait while TikTok processes, a video TikTok refuses, a lost answer to the last chunk is never retried, error classes, no secrets in errors, rules); `TestADraftIsNotRecordedAsPublished` | Never run against TikTok: needs the owner's developer app approved for `video.upload`, and an https `PUBLIC_URL`. The draft row was not seen on a device. Not built: photos, the shorter-side and frame-rate limits |
 | TT-002 | Open | | Owner |
 | FB-001 | Built, unverified | `internal/publisher/facebook`, `publisher.MultiConnector`; `facebook_test.go` (connect: long-lived exchange, Pages across result pages, only Pages the person can post to; text, photo, several photos as one post, video; a publish without a clear answer is never retried; error classes; no secrets in errors; rules), `TestOAuthConnectStoresEveryAccountGranted` | Needs the owner's Meta app with Facebook Login and a Page to post for real. Never run against Facebook. Text length, photo count and video limits are our own caps: Meta's reference states none. META-001 for strangers |
 | IG-001 | Built, unverified | `internal/publisher/instagram`; `instagram_test.go` (connect with the long-lived exchange and the account id from the profile, both answer shapes; image, reel, carousel order; `ERROR`/`EXPIRED`/timeout; publish without a clear answer incl. a cancelled request; error classes by code and subcode; refresh; no secrets in errors; rules) | Needs the owner's Meta app with the Instagram use case and a professional account with a role on it to post for real. Never run against Instagram. META-001 for strangers |
@@ -470,7 +470,9 @@ and the owner posts to a real X account.
 **Needs:** OAUTH-001, X-002, VID-001. Upload a video to the user's TikTok drafts
 (`video.upload`), which they finish in the app. Chunked upload (5 to 64 MB chunks, in order).
 Photos can only be pulled from a domain verified with TikTok, so they wait for a custom domain on
-the bucket. At most 5 pending drafts a day. Access tokens last 24 hours, refresh tokens a year.
+the bucket. At most 5 pending drafts a day. Access tokens last 2 hours, refresh tokens 180 days
+(TikTok's pages, 2026-11-15; an earlier note here said 24 hours and a year, which is what the
+example answer on the refresh page shows).
 
 **Done when:** a stubbed upload-to-inbox flow is tested, and the owner sees a draft in their
 TikTok app.
