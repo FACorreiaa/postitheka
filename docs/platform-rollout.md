@@ -21,7 +21,7 @@ Postitheka is a **public product**, so strangers connect their own accounts. Tha
   audience". Until it passes, direct posts are private-only, so drafts come first.
 - **X:** the owner buys credits once the app is on TestFlight and ready to test. The publisher is
   built against stubs before then. Set a spending limit, and post without URLs by default.
-- **Facebook and the job timeout:** the changes under Code work are accepted. Facebook was built 2026-11-15 (FB-001); the job timeout is not.
+- **Facebook and the job timeout:** the changes under Code work are accepted. Facebook was built 2026-11-15 (FB-001), and the job timeout the same day.
 - **Text per platform is a premium feature.** Free users write one text for all platforms, so selecting
   X caps it at 280 characters. Premium users can write a different text per platform.
 
@@ -198,8 +198,9 @@ and app purpose.
 
 1. **ACC-001:** show when an account needs reconnecting. Every OAuth platform needs it, LinkedIn
    within 60 days.
-2. **Job timeout:** `PublishWorker.Timeout` is 5 minutes, sized for ten 20 MiB Discord files. Large
-   Reels, X and TikTok uploads plus processing polls may not fit. Measure, then make it fit.
+2. **Job timeout:** done 2026-11-15. A publish gets 5 minutes plus one second per MiB of its
+   files, at most 30 minutes. Not measured: the rate is our own allowance, so time the first real
+   large upload on each platform and adjust.
 3. **IG-001,** then **FB-001,** then **X-001.**
 4. **VID-001:** duration and aspect ratio on stamps. Needed by TikTok and useful for Reels.
 5. **Different text per platform,** premium only, which needs the tiers from decision 5.
