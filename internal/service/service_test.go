@@ -1255,3 +1255,134 @@ func TestRefusedCredentialsMarkTheAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCancelPostRemovesAnUnsentPost(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	bob := e.user(t, "bob@example.com")
+	acct := e.account(t, alice)
+	at := time.Now().Add(time.Hour)
+	view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "later", AccountIDs: []uuid.UUID{acct}, ScheduledAt: &at})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetID := view.Targets[0].ID
+
+	if err := e.svc.CancelPost(ctx, bob, view.Post.ID); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("another user's cancel: %v, want not found", err)
+	}
+	if err := e.svc.CancelPost(ctx, alice, view.Post.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.svc.GetPost(ctx, alice, view.Post.ID); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("after cancel: %v, want not found", err)
+	}
+	// The job is still queued. When its time comes it finds no target and
+	// stops for good, without a request to the platform.
+	if err := e.runJob(t, targetID, 1); err == nil {
+		t.Fatal("job for a cancelled post: want it cancelled")
+	}
+	if n := e.discord.posts.Load(); n != 0 {
+		t.Fatalf("%d requests reached the platform, want none", n)
+	}
+	if err := e.svc.CancelPost(ctx, alice, view.Post.ID); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("second cancel: %v, want not found", err)
+	}
+}
+
+func TestReschedulePostMovesAnUnsentPost(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	bob := e.user(t, "bob@example.com")
+	acct := e.account(t, alice)
+	at := time.Now().Add(time.Hour)
+	view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "later", AccountIDs: []uuid.UUID{acct}, ScheduledAt: &at})
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldTarget := view.Targets[0].ID
+
+	later := time.Now().Add(48 * time.Hour).Truncate(time.Microsecond)
+	if _, err := e.svc.ReschedulePost(ctx, bob, view.Post.ID, later); !errors.Is(err, service.ErrNotFound) {
+		t.Fatalf("another user's reschedule: %v, want not found", err)
+	}
+	moved, err := e.svc.ReschedulePost(ctx, alice, view.Post.ID, later)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !moved.Post.ScheduledAt.Equal(later) {
+		t.Fatalf("scheduled at %v, want %v", moved.Post.ScheduledAt, later)
+	}
+	if len(moved.Targets) != 1 || moved.Targets[0].ID == oldTarget || moved.Targets[0].Status != "pending" {
+		t.Fatalf("targets %+v, want one new pending target", moved.Targets)
+	}
+	newTarget := moved.Targets[0].ID
+
+	var scheduled time.Time
+	if err := e.pool.QueryRow(ctx,
+		"SELECT scheduled_at FROM river_job WHERE args->>'target_id' = $1", newTarget.String()).Scan(&scheduled); err != nil {
+		t.Fatalf("job for the new target: %v", err)
+	}
+	if !scheduled.Equal(later) {
+		t.Fatalf("job scheduled at %v, want %v", scheduled, later)
+	}
+
+	// The job from before the move fires at the old time and must not post.
+	if err := e.runJob(t, oldTarget, 1); err == nil {
+		t.Fatal("job for the replaced target: want it cancelled")
+	}
+	if n := e.discord.posts.Load(); n != 0 {
+		t.Fatalf("%d requests reached the platform, want none", n)
+	}
+	// The new one posts, once.
+	if err := e.runJob(t, newTarget, 1); err != nil {
+		t.Fatal(err)
+	}
+	if n := e.discord.posts.Load(); n != 1 {
+		t.Fatalf("%d requests reached the platform, want 1", n)
+	}
+
+	// A time already past means now.
+	second, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: "soon", AccountIDs: []uuid.UUID{acct}, ScheduledAt: &at})
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := time.Now().Add(-time.Second)
+	now, err := e.svc.ReschedulePost(ctx, alice, second.Post.ID, time.Now().Add(-24*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if now.Post.ScheduledAt.Before(before) {
+		t.Fatalf("scheduled at %v, want now", now.Post.ScheduledAt)
+	}
+}
+
+func TestAPostThatStartedSendingCannotBeCancelledOrMoved(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+	acct := e.account(t, alice)
+	later := time.Now().Add(time.Hour)
+
+	for _, status := range []string{"publishing", "published", "failed"} {
+		view, err := e.svc.CreatePost(ctx, alice, service.CreatePostInput{Text: status, AccountIDs: []uuid.UUID{acct}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.pool.Exec(ctx, "UPDATE post_targets SET status = $2 WHERE id = $1", view.Targets[0].ID, status); err != nil {
+			t.Fatal(err)
+		}
+		var conflict *service.Conflict
+		if err := e.svc.CancelPost(ctx, alice, view.Post.ID); !errors.As(err, &conflict) {
+			t.Fatalf("%s: cancel: %v, want a conflict", status, err)
+		}
+		if _, err := e.svc.ReschedulePost(ctx, alice, view.Post.ID, later); !errors.As(err, &conflict) {
+			t.Fatalf("%s: reschedule: %v, want a conflict", status, err)
+		}
+		if tgt := e.target(t, alice, view.Post.ID); tgt.ID != view.Targets[0].ID || tgt.Status != status {
+			t.Fatalf("%s: target changed to %+v", status, tgt)
+		}
+	}
+}

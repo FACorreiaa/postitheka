@@ -127,6 +127,7 @@ Strangers who have published a post: **0**.
 | OAUTH-001 | Built, unverified | `internal/service/connect.go`, `internal/httpapi/oauth.go`, `migrations/20261023150000_oauth_connect.sql`; `TestOAuthConnect` (start, callback, replay, cancel, expiry, reconnect, two users); web Accounts checked headless at 1400 and 390 px, light and dark; iOS kit `ConnectTests` | Never run against a real platform; iOS connect screen built, not looked at on a simulator |
 | X-002 | Built, unverified | `publisher.Refresher`, `PublishWorker.refresh` (row lock, re-check, seal, then publish); `TestTokenRefresh` (three concurrent posts refresh once and publish with the new token, revoked grant fails asking for reconnect, transient failure stays pending); mutation-checked; Threads implements it | Never run against a real platform |
 | ACC-001 | Built, unverified | `migrations/20261114150000_account_needs_reconnect.sql`, `publisher.Reconnect`, `needs_reconnect` on Account; `TestRefusedCredentialsMarkTheAccount` (a 401 marks only that account, a rejected post does not, queued targets fail without a request, a new post is refused at the door), revoked refresh in `TestTokenRefresh`, reconnect clears it in `TestOAuthConnect`; web stamp and Accounts looked at in a browser at desktop and 375 px with seeded accounts; iOS kit test | Never against a real platform: which answers mean dead credentials is read from each platform's docs. Marks after the first refusal; nothing warns before a token expires. iOS views built, not looked at on a simulator. Web Reconnect button seen, not pressed (it leaves for the platform) |
+| POST-001 | Built, unverified | `PATCH` and `DELETE /v1/posts/{id}`; `TestCancelPostRemovesAnUnsentPost`, `TestReschedulePostMovesAnUnsentPost` (the old job posts nothing, the new one posts once), `TestAPostThatStartedSendingCannotBeCancelledOrMoved`; web Sent checked in a browser at desktop and 375 px against a local server with seeded posts; iOS kit `APITests` | iOS swipe actions and the reschedule sheet built, not looked at on a simulator. Not run against a job firing at the same moment outside a test |
 | BRAND-001 | Built, unverified | `migrations/20261114120000_account_brand.sql`, `PATCH /v1/accounts/{id}`; `TestAccountBrand`; web `brands.test.ts`, kit `BrandsTests`; web looked at in a browser at desktop and 375 px against a local server | iOS built and kit-tested, not looked at in a simulator |
 | LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
 | DSC-001 | Built, unverified | `internal/publisher/discord`: a refusal with Discord's error 220001 is answered by sending the message again with `thread_name`; `TestPublishToAForumChannelNamesTheThread`, `TestPublishMediaToAForumChannelSendsTheFilesAgain`, `TestANormalChannelGetsNoThreadName`, `TestOtherRefusalsAreNotSentAgain`, `TestThreadName` | Never posted to a real forum channel: the error code and the 100-character name limit are from Discord's docs. A forum that requires a tag still fails (40067), with Discord's message |
@@ -359,6 +360,17 @@ the account and its stamp.
 
 **Done when:** a 401 from a stubbed platform marks the account, the composer shows the stamp as
 needing reconnection, and reconnecting clears it (tests and a browser check).
+
+### POST-001 · Cancel or move a scheduled post · S
+A post that has not started sending can be cancelled or given another time, from Sent on the web
+and on iOS. "Not started" means every target is still `pending`; once one is sending, sent or
+failed the answer is 409, because part of the post may already be public. Cancelling removes the
+post. Moving it replaces its targets and queues them for the new time: a publish job is unique by
+its target, so the job already queued is left to find its target gone and stop. Editing the text
+or media of a scheduled post is not part of this.
+
+**Done when:** a cancelled post's job posts nothing, a moved post is sent once at the new time,
+and both are refused once sending has started (tests and a browser check).
 
 ### LI-001 · LinkedIn publisher · M
 **Needs:** OAUTH-001. Personal profile through "Share on LinkedIn" (`w_member_social`,

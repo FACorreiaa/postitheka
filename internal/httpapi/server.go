@@ -310,6 +310,34 @@ func (s *Server) GetPost(ctx context.Context, req GetPostRequestObject) (GetPost
 	return GetPost200JSONResponse(toPost(view)), nil
 }
 
+func (s *Server) ReschedulePost(ctx context.Context, req ReschedulePostRequestObject) (ReschedulePostResponseObject, error) {
+	view, err := s.svc.ReschedulePost(ctx, userID(ctx), req.PostId, req.Body.ScheduledAt)
+	var conflict *service.Conflict
+	switch {
+	case errors.Is(err, service.ErrNotFound):
+		return ReschedulePost404JSONResponse{NotFoundJSONResponse{Message: "no such post"}}, nil
+	case errors.As(err, &conflict):
+		return ReschedulePost409JSONResponse{Message: conflict.Message}, nil
+	case err != nil:
+		return nil, err
+	}
+	return ReschedulePost200JSONResponse(toPost(view)), nil
+}
+
+func (s *Server) CancelPost(ctx context.Context, req CancelPostRequestObject) (CancelPostResponseObject, error) {
+	err := s.svc.CancelPost(ctx, userID(ctx), req.PostId)
+	var conflict *service.Conflict
+	switch {
+	case errors.Is(err, service.ErrNotFound):
+		return CancelPost404JSONResponse{NotFoundJSONResponse{Message: "no such post"}}, nil
+	case errors.As(err, &conflict):
+		return CancelPost409JSONResponse{Message: conflict.Message}, nil
+	case err != nil:
+		return nil, err
+	}
+	return CancelPost204Response{}, nil
+}
+
 func badRequest(err error) (string, bool) {
 	var br *service.BadRequest
 	if errors.As(err, &br) {

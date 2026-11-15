@@ -54,6 +54,48 @@ struct APITests {
         #expect(abs(accounts[0].created_at.timeIntervalSince(accounts[1].created_at) - 0.429157) < 0.001)
     }
 
+    @Test func cancellingAPostDeletesIt() async throws {
+        let stub = StubTransport([(204, ""), (404, #"{"message":"no such post"}"#), (409, #"{"message":"this post has started sending"}"#)])
+        let api = API(baseURL: base, tokens: MemoryTokenStore("pk_test"), transport: stub)
+
+        try await api.cancel(postID: "p1")
+        // Already gone is what was asked for.
+        try await api.cancel(postID: "p1")
+        await #expect(throws: APIError.message("this post has started sending")) { try await api.cancel(postID: "p1") }
+
+        #expect(stub.sent[0].request.method == .delete)
+        #expect(stub.sent[0].request.path == "/v1/posts/p1")
+    }
+
+    @Test func reschedulingSendsTheNewTime() async throws {
+        let stub = StubTransport([(200, postJSON), (409, #"{"message":"this post has started sending"}"#)])
+        let api = API(baseURL: base, tokens: MemoryTokenStore("pk_test"), transport: stub)
+        let at = Date(timeIntervalSince1970: 1_800_000_000)
+
+        let post = try await api.reschedule(postID: "p1", to: at)
+        await #expect(throws: APIError.message("this post has started sending")) { _ = try await api.reschedule(postID: "p1", to: at) }
+
+        #expect(post.id == "p1")
+        #expect(stub.sent[0].request.method == .patch)
+        #expect(stub.sent[0].request.path == "/v1/posts/p1")
+        #expect(stub.sent[0].body.contains("2027-01-15T08"))
+    }
+
+    @Test func onlyAPostWithEveryTargetPendingIsUnsent() throws {
+        func post(_ statuses: [String]) throws -> Post {
+            let targets = statuses.enumerated().map { #"{"id":"t\#($0.offset)","platform":"discord","status":"\#($0.element)","interrupted":false}"# }
+            let json = #"{"id":"p","text":"","media_ids":[],"scheduled_at":"2026-10-23T00:15:18Z","created_at":"2026-10-23T00:15:18Z","targets":[\#(targets.joined(separator: ","))]}"#
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(Post.self, from: Data(json.utf8))
+        }
+        #expect(try post(["pending", "pending"]).isUnsent)
+        #expect(try !post(["pending", "published"]).isUnsent)
+        #expect(try !post(["failed"]).isUnsent)
+        #expect(try !post(["handing_off"]).isUnsent)
+        #expect(try !post([]).isUnsent)
+    }
+
     @Test func errorsAreTypedForTheApp() async {
         let stub = StubTransport([(401, #"{"message":"no"}"#), (400, #"{"message":"not a Discord webhook"}"#)])
         let api = API(baseURL: base, tokens: MemoryTokenStore(), transport: stub)

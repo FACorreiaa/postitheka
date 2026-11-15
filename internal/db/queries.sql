@@ -160,6 +160,25 @@ WHERE status = 'handing_off' AND updated_at < sqlc.arg(cutoff);
 -- name: GetPost :one
 SELECT * FROM posts WHERE id = $1 AND user_id = $2;
 
+-- The post's row lock is what a cancel or a reschedule holds while it decides:
+-- two of them for one post run one after the other.
+-- name: LockPost :one
+SELECT * FROM posts WHERE id = $1 AND user_id = $2 FOR UPDATE;
+
+-- Locked so that a publish job about to claim one of these targets waits for
+-- the cancel or reschedule to finish, then finds the row gone and stops.
+-- name: LockPostTargets :many
+SELECT * FROM post_targets WHERE post_id = $1 ORDER BY platform, id FOR UPDATE;
+
+-- name: DeletePost :exec
+DELETE FROM posts WHERE id = $1;
+
+-- name: DeletePostTargets :exec
+DELETE FROM post_targets WHERE post_id = $1;
+
+-- name: SetPostScheduledAt :exec
+UPDATE posts SET scheduled_at = $2 WHERE id = $1;
+
 -- name: GetPostByIdempotencyKey :one
 SELECT * FROM posts WHERE user_id = $1 AND idempotency_key = $2;
 

@@ -747,6 +747,33 @@ label {
   color: var(--ink);
 }
 
+.post-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+/* Quiet buttons carry their own padding; pull the first back to the text edge. */
+.post-actions > button:first-of-type {
+  margin-left: -0.6rem;
+}
+
+.post-actions .schedule,
+.post-actions .reason {
+  flex-basis: 100%;
+  color: var(--ink);
+}
+
+.post-actions .reason.error {
+  color: var(--cancel);
+}
+
+.post-actions .quiet {
+  color: var(--gold);
+}
+
 .target-actions {
   display: flex;
   gap: 0.25rem;

@@ -309,6 +309,24 @@ func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) (i
 	return result.RowsAffected(), nil
 }
 
+const deletePost = `-- name: DeletePost :exec
+DELETE FROM posts WHERE id = $1
+`
+
+func (q *Queries) DeletePost(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deletePost, id)
+	return err
+}
+
+const deletePostTargets = `-- name: DeletePostTargets :exec
+DELETE FROM post_targets WHERE post_id = $1
+`
+
+func (q *Queries) DeletePostTargets(ctx context.Context, postID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deletePostTargets, postID)
+	return err
+}
+
 const deleteStaleOAuthStates = `-- name: DeleteStaleOAuthStates :exec
 DELETE FROM oauth_states WHERE user_id = $1 AND created_at < $2
 `
@@ -830,6 +848,71 @@ func (q *Queries) LockAccountCredentials(ctx context.Context, id uuid.UUID) ([]b
 	return credentials, err
 }
 
+const lockPost = `-- name: LockPost :one
+SELECT id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash FROM posts WHERE id = $1 AND user_id = $2 FOR UPDATE
+`
+
+type LockPostParams struct {
+	ID     uuid.UUID
+	UserID uuid.UUID
+}
+
+// The post's row lock is what a cancel or a reschedule holds while it decides:
+// two of them for one post run one after the other.
+func (q *Queries) LockPost(ctx context.Context, arg LockPostParams) (Post, error) {
+	row := q.db.QueryRow(ctx, lockPost, arg.ID, arg.UserID)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Text,
+		&i.ScheduledAt,
+		&i.CreatedAt,
+		&i.IdempotencyKey,
+		&i.RequestHash,
+	)
+	return i, err
+}
+
+const lockPostTargets = `-- name: LockPostTargets :many
+SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries FROM post_targets WHERE post_id = $1 ORDER BY platform, id FOR UPDATE
+`
+
+// Locked so that a publish job about to claim one of these targets waits for
+// the cancel or reschedule to finish, then finds the row gone and stops.
+func (q *Queries) LockPostTargets(ctx context.Context, postID uuid.UUID) ([]PostTarget, error) {
+	rows, err := q.db.Query(ctx, lockPostTargets, postID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PostTarget{}
+	for rows.Next() {
+		var i PostTarget
+		if err := rows.Scan(
+			&i.ID,
+			&i.PostID,
+			&i.AccountID,
+			&i.Platform,
+			&i.Status,
+			&i.LastError,
+			&i.RemoteID,
+			&i.RemoteUrl,
+			&i.PublishedAt,
+			&i.UpdatedAt,
+			&i.Interrupted,
+			&i.Retries,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockUnattachedMedia = `-- name: LockUnattachedMedia :many
 SELECT m.id FROM media m
 WHERE m.created_at < $1
@@ -1078,6 +1161,20 @@ func (q *Queries) SetAccountBrand(ctx context.Context, arg SetAccountBrandParams
 		&i.NeedsReconnectAt,
 	)
 	return i, err
+}
+
+const setPostScheduledAt = `-- name: SetPostScheduledAt :exec
+UPDATE posts SET scheduled_at = $2 WHERE id = $1
+`
+
+type SetPostScheduledAtParams struct {
+	ID          uuid.UUID
+	ScheduledAt time.Time
+}
+
+func (q *Queries) SetPostScheduledAt(ctx context.Context, arg SetPostScheduledAtParams) error {
+	_, err := q.db.Exec(ctx, setPostScheduledAt, arg.ID, arg.ScheduledAt)
+	return err
 }
 
 const takeOAuthState = `-- name: TakeOAuthState :one

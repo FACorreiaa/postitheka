@@ -85,6 +85,29 @@ final class AppModel {
         if let i = posts.firstIndex(where: { $0.id == post.id }) { posts[i] = post } else { posts.insert(post, at: 0) }
     }
 
+    /// Cancels a post that has not started sending. Returns what went wrong.
+    func cancel(_ post: Post) async -> String? {
+        do {
+            try await api.cancel(postID: post.id)
+            posts.removeAll { $0.id == post.id }
+            return nil
+        } catch {
+            if error == .unauthorized { signOut() }
+            return error.localizedDescription
+        }
+    }
+
+    /// Moves a post that has not started sending. Returns what went wrong.
+    func reschedule(_ post: Post, to date: Date) async -> String? {
+        do {
+            replace(try await api.reschedule(postID: post.id, to: date))
+            return nil
+        } catch {
+            if error == .unauthorized { signOut() }
+            return error.localizedDescription
+        }
+    }
+
     func connectDiscord(webhookURL: String, name: String) async -> String? {
         do {
             let account = try await api.connectDiscord(webhookURL: webhookURL, displayName: name.isEmpty ? nil : name)

@@ -72,6 +72,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/posts/{postId}`.
     /// - Remark: Generated from `#/paths//v1/posts/{postId}/get(getPost)`.
     func getPost(_ input: Operations.getPost.Input) async throws -> Operations.getPost.Output
+    /// Moves a post that has not started sending to another time. A time that has passed means now. Every target must still be pending: once any has been sent, is being sent, or has failed, the answer is 409. The post's targets are replaced, so their ids change.
+    ///
+    ///
+    /// - Remark: HTTP `PATCH /v1/posts/{postId}`.
+    /// - Remark: Generated from `#/paths//v1/posts/{postId}/patch(reschedulePost)`.
+    func reschedulePost(_ input: Operations.reschedulePost.Input) async throws -> Operations.reschedulePost.Output
+    /// Cancels a post that has not started sending, and removes it. Every target must still be pending; otherwise the answer is 409 and nothing changes. This does not delete anything from a platform.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/posts/{postId}`.
+    /// - Remark: Generated from `#/paths//v1/posts/{postId}/delete(cancelPost)`.
+    func cancelPost(_ input: Operations.cancelPost.Input) async throws -> Operations.cancelPost.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -223,6 +235,36 @@ extension APIProtocol {
         headers: Operations.getPost.Input.Headers = .init()
     ) async throws -> Operations.getPost.Output {
         try await getPost(Operations.getPost.Input(
+            path: path,
+            headers: headers
+        ))
+    }
+    /// Moves a post that has not started sending to another time. A time that has passed means now. Every target must still be pending: once any has been sent, is being sent, or has failed, the answer is 409. The post's targets are replaced, so their ids change.
+    ///
+    ///
+    /// - Remark: HTTP `PATCH /v1/posts/{postId}`.
+    /// - Remark: Generated from `#/paths//v1/posts/{postId}/patch(reschedulePost)`.
+    public func reschedulePost(
+        path: Operations.reschedulePost.Input.Path,
+        headers: Operations.reschedulePost.Input.Headers = .init(),
+        body: Operations.reschedulePost.Input.Body
+    ) async throws -> Operations.reschedulePost.Output {
+        try await reschedulePost(Operations.reschedulePost.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Cancels a post that has not started sending, and removes it. Every target must still be pending; otherwise the answer is 409 and nothing changes. This does not delete anything from a platform.
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /v1/posts/{postId}`.
+    /// - Remark: Generated from `#/paths//v1/posts/{postId}/delete(cancelPost)`.
+    public func cancelPost(
+        path: Operations.cancelPost.Input.Path,
+        headers: Operations.cancelPost.Input.Headers = .init()
+    ) async throws -> Operations.cancelPost.Output {
+        try await cancelPost(Operations.cancelPost.Input(
             path: path,
             headers: headers
         ))

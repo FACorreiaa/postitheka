@@ -5,6 +5,9 @@ import SwiftUI
 /// its postmark: the date and a link to where it landed.
 struct SentView: View {
     @Environment(AppModel.self) private var model
+    @State private var cancelling: Post?
+    @State private var moving: Post?
+    @State private var actionError: String?
 
     var body: some View {
         NavigationStack {
@@ -14,6 +17,14 @@ struct SentView: View {
                 }
                 ForEach(model.posts, id: \.id) { post in
                     PostRow(post: post).brandRow()
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            // Only while nothing has gone out; the server refuses otherwise.
+                            if post.isUnsent {
+                                Button("Cancel", systemImage: "trash", role: .destructive) { cancelling = post }
+                                Button("Reschedule", systemImage: "calendar") { moving = post }
+                                    .tint(Brand.glow)
+                            }
+                        }
                 }
             }
             .brandBackdrop()
@@ -34,6 +45,27 @@ struct SentView: View {
                 }
             }
             .navigationTitle("Sent")
+            .confirmationDialog(
+                "Cancel this post?", isPresented: .init(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
+                titleVisibility: .visible, presenting: cancelling
+            ) { post in
+                Button("Cancel Post", role: .destructive) {
+                    Task { actionError = await model.cancel(post) }
+                }
+                Button("Keep Post", role: .cancel) {}
+            } message: { _ in
+                Text("This removes the post. It will not be sent.")
+            }
+            .sheet(isPresented: .init(get: { moving != nil }, set: { if !$0 { moving = nil } })) {
+                if let post = moving {
+                    RescheduleSheet(post: post) { date in await model.reschedule(post, to: date) }
+                }
+            }
+            .alert("That did not work", isPresented: .init(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(actionError ?? "")
+            }
             .refreshable { await model.refreshPosts() }
             // Polls only while something is on its way, like the web app.
             .task(id: model.hasPending) {
@@ -43,6 +75,54 @@ struct SentView: View {
                 }
             }
         }
+    }
+}
+
+/// Picks a new time for a post that has not started sending.
+private struct RescheduleSheet: View {
+    let post: Post
+    /// Returns what went wrong, or nil when the post moved.
+    let save: (Date) async -> String?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var date: Date
+    @State private var saving = false
+    @State private var error: String?
+
+    init(post: Post, save: @escaping (Date) async -> String?) {
+        self.post = post
+        self.save = save
+        _date = State(initialValue: max(post.scheduled_at, .now))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                DatePicker("Publish at", selection: $date, in: Date.now...)
+                if let error {
+                    Text(error).foregroundStyle(.red)
+                }
+            }
+            .navigationTitle("Reschedule")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Keep Time") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            saving = true
+                            error = await save(date)
+                            saving = false
+                            if error == nil { dismiss() }
+                        }
+                    }
+                    .disabled(saving)
+                }
+            }
+        }
+        .presentationDetents([.medium])
     }
 }
 

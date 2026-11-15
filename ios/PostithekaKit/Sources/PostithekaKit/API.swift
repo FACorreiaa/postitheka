@@ -36,6 +36,14 @@ public enum PublishOutcome: Sendable {
     case rejected([Issue])
 }
 
+extension Post {
+    /// Nothing has gone out yet, so the post can still be cancelled or moved.
+    /// The server decides for real; this only hides actions it would refuse.
+    public var isUnsent: Bool {
+        !targets.isEmpty && targets.allSatisfy { $0.status == .pending }
+    }
+}
+
 /// The API as the app uses it: typed results instead of the generated
 /// response enums, and one error type.
 public struct API: Sendable {
@@ -198,6 +206,33 @@ public struct API: Sendable {
         switch out {
         case .ok(let r): return try body { try r.body.json }
         case .notFound: throw .message("That post no longer exists.")
+        case .unauthorized: throw .unauthorized
+        case .undocumented(let code, _): throw Self.unexpected(code)
+        }
+    }
+
+    /// Cancels a post that has not started sending. The server removes it.
+    public func cancel(postID: String) async throws(APIError) {
+        let out = try await call { try await client.cancelPost(path: .init(postId: postID)) }
+        switch out {
+        case .noContent, .notFound: return // already gone is what was asked for
+        case .conflict(let r): throw .message(try body { try r.body.json.message })
+        case .unauthorized: throw .unauthorized
+        case .undocumented(let code, _): throw Self.unexpected(code)
+        }
+    }
+
+    /// Moves a post that has not started sending to another time. The post
+    /// comes back with new targets: the server replaces them.
+    public func reschedule(postID: String, to date: Date) async throws(APIError) -> Post {
+        let out = try await call {
+            try await client.reschedulePost(path: .init(postId: postID), body: .json(.init(scheduled_at: date)))
+        }
+        switch out {
+        case .ok(let r): return try body { try r.body.json }
+        case .badRequest(let r): throw .message(try body { try r.body.json.message })
+        case .notFound: throw .message("That post no longer exists.")
+        case .conflict(let r): throw .message(try body { try r.body.json.message })
         case .unauthorized: throw .unauthorized
         case .undocumented(let code, _): throw Self.unexpected(code)
         }

@@ -77,7 +77,7 @@ These appear in old docs, in brand copy or in the code, but a user cannot use th
 | **Different text per network** | Decided as premium, not built | `docs/platform-rollout.md` |
 | **Free / premium / any price** | No tiers or billing exist | No billing code |
 | **Retry a failed post** | No route or button | WEB-001 |
-| **Edit, delete or cancel a post** | No route. A scheduled post cannot be cancelled | `api/openapi.yaml` has no DELETE or PATCH on posts |
+| **Edit a post, or delete a sent one** | A scheduled post can be cancelled or moved to another time until it starts sending (POST-001, built, not yet in production). Its text and media cannot be changed, and nothing is ever deleted from a network | `PATCH` and `DELETE /v1/posts/{id}` take a time only |
 | **Warning before access expires** | An account is marked "needs reconnecting" only after the platform refuses it once (ACC-001, built, not yet in production). Nothing warns ahead of a LinkedIn token's 60 days | ACC-001 |
 | **Video length and shape checks** | Only type and size are checked | VID-001 |
 | **Video conversion on the phone** | Not built; videos keep their container | IOS-004, `ios/Postitheka/MediaImport.swift` |
