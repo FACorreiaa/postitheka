@@ -71,7 +71,7 @@ a job cut off mid-request leaves its target `publishing`, and the next attempt f
 
 ```text
 users ─┬─< api_tokens       token_hash (sha256), last_used_at
-       ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id, brand
+       ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id, brand, needs_reconnect_at
        ├─< oauth_states     state_hash (sha256), platform, verifier (sealed, AAD = hash), client
        ├─< media            object_key, content_type, size_bytes, verified_at
        └─< posts            text, scheduled_at, idempotency_key + request_hash
@@ -296,7 +296,7 @@ spec because auth wraps every spec route, and it holds nothing secret.
 | Route | Does |
 | --- | --- |
 | `GET /v1/platforms` | Registered platforms and their rules |
-| `GET /v1/accounts` | Connected accounts (never credentials) |
+| `GET /v1/accounts` | Connected accounts (never credentials). `needs_reconnect` is true once the platform has refused the account's credentials: the worker marks the account, fails what is queued for it without asking again, and `POST /v1/posts` refuses it. Connecting the account again clears it |
 | `POST /v1/accounts/discord` | Connect a webhook; 400 if Discord does not recognise it |
 | `POST /v1/accounts/{platform}/connect` | Start an OAuth connect: `{client}` → `{authorize_url}`; 404 if the platform does not connect by OAuth here |
 | `PATCH /v1/accounts/{id}` | Set or clear the account's brand: `{brand}`, trimmed, at most 40 characters, empty clears it |

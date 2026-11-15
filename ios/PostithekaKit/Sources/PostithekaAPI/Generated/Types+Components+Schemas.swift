@@ -179,6 +179,11 @@ extension Components {
             public var brand: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Account/created_at`.
             public var created_at: Foundation.Date
+            /// True when the platform has refused this account's credentials (expired past refreshing, revoked, a deleted webhook). Posts to it are refused until it is connected again. Absent otherwise.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Account/needs_reconnect`.
+            public var needs_reconnect: Swift.Bool?
             /// Creates a new `Account`.
             ///
             /// - Parameters:
@@ -187,18 +192,21 @@ extension Components {
             ///   - display_name:
             ///   - brand: The product this account posts for, as the user named it. Absent when the account has no brand.
             ///   - created_at:
+            ///   - needs_reconnect: True when the platform has refused this account's credentials (expired past refreshing, revoked, a deleted webhook). Posts to it are refused until it is connected again. Absent otherwise.
             public init(
                 id: Swift.String,
                 platform: Components.Schemas.Platform,
                 display_name: Swift.String,
                 brand: Swift.String? = nil,
-                created_at: Foundation.Date
+                created_at: Foundation.Date,
+                needs_reconnect: Swift.Bool? = nil
             ) {
                 self.id = id
                 self.platform = platform
                 self.display_name = display_name
                 self.brand = brand
                 self.created_at = created_at
+                self.needs_reconnect = needs_reconnect
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -206,6 +214,7 @@ extension Components {
                 case display_name
                 case brand
                 case created_at
+                case needs_reconnect
             }
         }
         /// - Remark: Generated from `#/components/schemas/UpdateAccountRequest`.

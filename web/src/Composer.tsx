@@ -68,7 +68,9 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
   // Only what is on screen can be published to. A stamp affixed under one
   // brand and then hidden by another would send a post somewhere the person
   // can no longer see.
-  const chosen = shown.filter((a) => selected.has(a.id));
+  // Nor can an account whose credentials the platform refused (ACC-001): the
+  // server would reject the post, so its stamp cannot be affixed.
+  const chosen = shown.filter((a) => selected.has(a.id) && !a.needs_reconnect);
 
   function showBrand(next: BrandFilter) {
     setBrandChoice(next);
@@ -271,8 +273,9 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
                       used={countText(text, rules?.text_counting)}
                       limit={rules?.max_text_length}
                       problems={selected.has(a.id) ? [...(rules ? problems(rules, draft) : []), ...own] : []}
-                      on={selected.has(a.id)}
+                      on={selected.has(a.id) && !a.needs_reconnect}
                       onToggle={() => toggle(a.id)}
+                      onReconnect={onConnect}
                     />
                   </li>
                 );
@@ -312,10 +315,28 @@ interface StampProps {
   problems: string[];
   on: boolean;
   onToggle: () => void;
+  /** Opens Accounts, where an account that needs it is connected again. */
+  onReconnect: () => void;
 }
 
-function Stamp({ account, used, limit, problems: issues, on, onToggle }: StampProps) {
+function Stamp({ account, used, limit, problems: issues, on, onToggle, onReconnect }: StampProps) {
   const over = limit !== undefined && used > limit;
+  if (account.needs_reconnect) {
+    return (
+      <div className="stamp-wrap">
+        <button className="stamp stale" aria-pressed={false} disabled>
+          <span className="platform">{platformNames[account.platform] ?? account.platform}</span>
+          <span className="name">{account.display_name}</span>
+        </button>
+        <p className="stamp-issues">
+          Needs reconnecting.{" "}
+          <button className="link" onClick={onReconnect}>
+            Open Accounts
+          </button>
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="stamp-wrap">
       <button

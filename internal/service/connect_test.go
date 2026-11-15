@@ -136,6 +136,10 @@ func TestOAuthConnect(t *testing.T) {
 
 	t.Run("reconnecting renews the same account", func(t *testing.T) {
 		stub.name = "Ada L."
+		// The platform had refused the old credentials (ACC-001).
+		if _, err := e.pool.Exec(ctx, "UPDATE accounts SET needs_reconnect_at = now() WHERE id = $1", first); err != nil {
+			t.Fatal(err)
+		}
 		s := consent(t, e, alice, service.ConnectFromWeb)
 		callback(t, e, url.Values{"state": {s}, "code": {"c2"}})
 		accounts, _ := e.svc.ListAccounts(ctx, alice)
@@ -145,6 +149,9 @@ func TestOAuthConnect(t *testing.T) {
 				n++
 				if a.ID != first || a.DisplayName != "Ada L." {
 					t.Errorf("reconnected account %+v, want id %s renamed", a, first)
+				}
+				if a.NeedsReconnectAt.Valid {
+					t.Error("reconnected account is still marked as needing reconnection")
 				}
 			}
 		}

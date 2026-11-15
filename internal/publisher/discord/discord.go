@@ -350,7 +350,7 @@ func apiError(resp *http.Response) error {
 	case resp.StatusCode >= 500:
 		return err
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusNotFound:
-		return publisher.Permanent(fmt.Errorf("%w (the webhook was deleted; reconnect the channel)", err))
+		return publisher.Reconnect(fmt.Errorf("%w (the webhook was deleted; reconnect the channel)", err))
 	default:
 		return publisher.Permanent(err)
 	}

@@ -163,7 +163,7 @@ func (p *Publisher) Publish(ctx context.Context, raw []byte, post publisher.Post
 		return publisher.Result{}, publisher.Permanent(errors.New("linkedin: stored credentials are unreadable"))
 	}
 	if !creds.ExpiresAt.IsZero() && p.now().After(creds.ExpiresAt) {
-		return publisher.Result{}, publisher.Permanent(ErrExpired)
+		return publisher.Result{}, publisher.Reconnect(ErrExpired)
 	}
 
 	body := map[string]any{
@@ -450,7 +450,7 @@ func apiError(op string, resp *http.Response) error {
 		return err
 	case resp.StatusCode == http.StatusUnauthorized:
 		// Expired or revoked: only the member reconnecting fixes it.
-		return publisher.Permanent(fmt.Errorf("%w (reconnect the account)", err))
+		return publisher.Reconnect(fmt.Errorf("%w (reconnect the account)", err))
 	case resp.StatusCode == 426:
 		// The pinned Linkedin-Version was sunset: a code change, not a retry.
 		return publisher.Permanent(fmt.Errorf("%w (Linkedin-Version %s is no longer served)", err, version))

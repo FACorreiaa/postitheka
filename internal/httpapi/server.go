@@ -298,7 +298,11 @@ func badRequest(err error) (string, bool) {
 }
 
 func toAccount(a service.Account) Account {
-	return Account{Id: a.ID, Platform: Platform(a.Platform), DisplayName: a.DisplayName, Brand: a.Brand, CreatedAt: a.CreatedAt}
+	out := Account{Id: a.ID, Platform: Platform(a.Platform), DisplayName: a.DisplayName, Brand: a.Brand, CreatedAt: a.CreatedAt}
+	if a.NeedsReconnectAt.Valid {
+		out.NeedsReconnect = new(true)
+	}
+	return out
 }
 
 func toPost(v service.PostView) Post {

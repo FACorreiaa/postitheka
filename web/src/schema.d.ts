@@ -234,6 +234,8 @@ export interface components {
             brand?: string;
             /** Format: date-time */
             created_at: string;
+            /** @description True when the platform has refused this account's credentials (expired past refreshing, revoked, a deleted webhook). Posts to it are refused until it is connected again. Absent otherwise. */
+            needs_reconnect?: boolean;
         };
         UpdateAccountRequest: {
             /** @description Surrounding space is trimmed. An empty string clears the brand. */

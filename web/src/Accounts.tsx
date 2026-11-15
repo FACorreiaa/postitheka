@@ -98,6 +98,13 @@ export function Accounts({ ref, accounts, platforms, outcome, onChanged }: Props
               <span>
                 <strong>{a.display_name}</strong>
                 <span className="help">{platformNames[a.platform] ?? a.platform}</span>
+                {a.needs_reconnect && (
+                  <span className="stale-note">
+                    {a.platform === "discord"
+                      ? "The webhook no longer works. Connect the channel again below, then disconnect this one."
+                      : "Access expired or was withdrawn. Reconnect to post here again."}
+                  </span>
+                )}
               </span>
               <span className="account-actions">
                 <input
@@ -114,6 +121,11 @@ export function Accounts({ ref, accounts, platforms, outcome, onChanged }: Props
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
                 />
+                {a.needs_reconnect && oauth.some((p) => p.platform === a.platform) && (
+                  <button className="secondary" disabled={leaving !== ""} onClick={() => void connectOAuth(a.platform)}>
+                    {leaving === a.platform ? "Opening…" : "Reconnect"}
+                  </button>
+                )}
                 <button className="quiet danger" onClick={() => void disconnect(a.id)}>
                   Disconnect
                 </button>

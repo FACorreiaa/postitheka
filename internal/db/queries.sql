@@ -18,22 +18,28 @@ RETURNING user_id;
 -- name: CreateAccount :one
 INSERT INTO accounts (id, user_id, platform, display_name, credentials, remote_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, platform, display_name, created_at, brand;
+RETURNING id, user_id, platform, display_name, created_at, brand, needs_reconnect_at;
 
 -- name: GetAccountByRemoteID :one
-SELECT id, user_id, platform, display_name, created_at, brand
+SELECT id, user_id, platform, display_name, created_at, brand, needs_reconnect_at
 FROM accounts
 WHERE user_id = $1 AND platform = $2 AND remote_id = $3;
 
 -- name: ReplaceAccountCredentials :one
-UPDATE accounts SET credentials = $3, display_name = $4
+UPDATE accounts SET credentials = $3, display_name = $4, needs_reconnect_at = NULL
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, platform, display_name, created_at, brand;
+RETURNING id, user_id, platform, display_name, created_at, brand, needs_reconnect_at;
 
 -- Held while credentials are refreshed, so two jobs for one account do not
 -- both spend a refresh token that rotates.
 -- name: LockAccountCredentials :one
 SELECT credentials FROM accounts WHERE id = $1 FOR UPDATE;
+
+-- The first time only: the time says since when, and a later failure for the
+-- same dead credentials is not news.
+-- name: MarkAccountNeedsReconnect :exec
+UPDATE accounts SET needs_reconnect_at = now()
+WHERE id = $1 AND needs_reconnect_at IS NULL;
 
 -- name: UpdateAccountCredentials :exec
 UPDATE accounts SET credentials = $2 WHERE id = $1;
@@ -53,20 +59,20 @@ RETURNING *;
 DELETE FROM oauth_states WHERE user_id = $1 AND created_at < $2;
 
 -- name: ListAccounts :many
-SELECT id, user_id, platform, display_name, created_at, brand
+SELECT id, user_id, platform, display_name, created_at, brand, needs_reconnect_at
 FROM accounts
 WHERE user_id = $1
 ORDER BY created_at;
 
 -- name: GetAccountsByIDs :many
-SELECT id, user_id, platform, display_name, created_at, brand
+SELECT id, user_id, platform, display_name, created_at, brand, needs_reconnect_at
 FROM accounts
 WHERE user_id = $1 AND id = ANY(sqlc.arg(ids)::uuid[]);
 
 -- name: SetAccountBrand :one
 UPDATE accounts SET brand = $3
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, platform, display_name, created_at, brand;
+RETURNING id, user_id, platform, display_name, created_at, brand, needs_reconnect_at;
 
 -- name: DeleteAccount :execrows
 DELETE FROM accounts WHERE id = $1 AND user_id = $2;
@@ -175,7 +181,7 @@ ORDER BY pm.post_id, pm.position;
 SELECT
     t.id, t.post_id, t.account_id, t.platform, t.status,
     p.user_id, p.text,
-    a.credentials
+    a.credentials, a.needs_reconnect_at
 FROM post_targets t
 JOIN posts p ON p.id = t.post_id
 LEFT JOIN accounts a ON a.id = t.account_id

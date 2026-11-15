@@ -92,7 +92,7 @@ func (q *Queries) CreateAPIToken(ctx context.Context, arg CreateAPITokenParams) 
 const createAccount = `-- name: CreateAccount :one
 INSERT INTO accounts (id, user_id, platform, display_name, credentials, remote_id)
 VALUES ($1, $2, $3, $4, $5, $6)
-RETURNING id, user_id, platform, display_name, created_at, brand
+RETURNING id, user_id, platform, display_name, created_at, brand, needs_reconnect_at
 `
 
 type CreateAccountParams struct {
@@ -105,12 +105,13 @@ type CreateAccountParams struct {
 }
 
 type CreateAccountRow struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	Platform    string
-	DisplayName string
-	CreatedAt   time.Time
-	Brand       *string
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	Platform         string
+	DisplayName      string
+	CreatedAt        time.Time
+	Brand            *string
+	NeedsReconnectAt pgtype.Timestamptz
 }
 
 func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (CreateAccountRow, error) {
@@ -130,6 +131,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 		&i.DisplayName,
 		&i.CreatedAt,
 		&i.Brand,
+		&i.NeedsReconnectAt,
 	)
 	return i, err
 }
@@ -373,7 +375,7 @@ func (q *Queries) ExpireHandoffs(ctx context.Context, arg ExpireHandoffsParams) 
 }
 
 const getAccountByRemoteID = `-- name: GetAccountByRemoteID :one
-SELECT id, user_id, platform, display_name, created_at, brand
+SELECT id, user_id, platform, display_name, created_at, brand, needs_reconnect_at
 FROM accounts
 WHERE user_id = $1 AND platform = $2 AND remote_id = $3
 `
@@ -385,12 +387,13 @@ type GetAccountByRemoteIDParams struct {
 }
 
 type GetAccountByRemoteIDRow struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	Platform    string
-	DisplayName string
-	CreatedAt   time.Time
-	Brand       *string
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	Platform         string
+	DisplayName      string
+	CreatedAt        time.Time
+	Brand            *string
+	NeedsReconnectAt pgtype.Timestamptz
 }
 
 func (q *Queries) GetAccountByRemoteID(ctx context.Context, arg GetAccountByRemoteIDParams) (GetAccountByRemoteIDRow, error) {
@@ -403,12 +406,13 @@ func (q *Queries) GetAccountByRemoteID(ctx context.Context, arg GetAccountByRemo
 		&i.DisplayName,
 		&i.CreatedAt,
 		&i.Brand,
+		&i.NeedsReconnectAt,
 	)
 	return i, err
 }
 
 const getAccountsByIDs = `-- name: GetAccountsByIDs :many
-SELECT id, user_id, platform, display_name, created_at, brand
+SELECT id, user_id, platform, display_name, created_at, brand, needs_reconnect_at
 FROM accounts
 WHERE user_id = $1 AND id = ANY($2::uuid[])
 `
@@ -419,12 +423,13 @@ type GetAccountsByIDsParams struct {
 }
 
 type GetAccountsByIDsRow struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	Platform    string
-	DisplayName string
-	CreatedAt   time.Time
-	Brand       *string
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	Platform         string
+	DisplayName      string
+	CreatedAt        time.Time
+	Brand            *string
+	NeedsReconnectAt pgtype.Timestamptz
 }
 
 func (q *Queries) GetAccountsByIDs(ctx context.Context, arg GetAccountsByIDsParams) ([]GetAccountsByIDsRow, error) {
@@ -443,6 +448,7 @@ func (q *Queries) GetAccountsByIDs(ctx context.Context, arg GetAccountsByIDsPara
 			&i.DisplayName,
 			&i.CreatedAt,
 			&i.Brand,
+			&i.NeedsReconnectAt,
 		); err != nil {
 			return nil, err
 		}
@@ -544,7 +550,7 @@ const getTargetForPublish = `-- name: GetTargetForPublish :one
 SELECT
     t.id, t.post_id, t.account_id, t.platform, t.status,
     p.user_id, p.text,
-    a.credentials
+    a.credentials, a.needs_reconnect_at
 FROM post_targets t
 JOIN posts p ON p.id = t.post_id
 LEFT JOIN accounts a ON a.id = t.account_id
@@ -552,14 +558,15 @@ WHERE t.id = $1
 `
 
 type GetTargetForPublishRow struct {
-	ID          uuid.UUID
-	PostID      uuid.UUID
-	AccountID   uuid.NullUUID
-	Platform    string
-	Status      string
-	UserID      uuid.UUID
-	Text        string
-	Credentials []byte
+	ID               uuid.UUID
+	PostID           uuid.UUID
+	AccountID        uuid.NullUUID
+	Platform         string
+	Status           string
+	UserID           uuid.UUID
+	Text             string
+	Credentials      []byte
+	NeedsReconnectAt pgtype.Timestamptz
 }
 
 // Everything the publish job needs, in one read. LEFT JOIN because the
@@ -576,6 +583,7 @@ func (q *Queries) GetTargetForPublish(ctx context.Context, id uuid.UUID) (GetTar
 		&i.UserID,
 		&i.Text,
 		&i.Credentials,
+		&i.NeedsReconnectAt,
 	)
 	return i, err
 }
@@ -623,19 +631,20 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 }
 
 const listAccounts = `-- name: ListAccounts :many
-SELECT id, user_id, platform, display_name, created_at, brand
+SELECT id, user_id, platform, display_name, created_at, brand, needs_reconnect_at
 FROM accounts
 WHERE user_id = $1
 ORDER BY created_at
 `
 
 type ListAccountsRow struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	Platform    string
-	DisplayName string
-	CreatedAt   time.Time
-	Brand       *string
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	Platform         string
+	DisplayName      string
+	CreatedAt        time.Time
+	Brand            *string
+	NeedsReconnectAt pgtype.Timestamptz
 }
 
 func (q *Queries) ListAccounts(ctx context.Context, userID uuid.UUID) ([]ListAccountsRow, error) {
@@ -654,6 +663,7 @@ func (q *Queries) ListAccounts(ctx context.Context, userID uuid.UUID) ([]ListAcc
 			&i.DisplayName,
 			&i.CreatedAt,
 			&i.Brand,
+			&i.NeedsReconnectAt,
 		); err != nil {
 			return nil, err
 		}
@@ -843,6 +853,18 @@ func (q *Queries) LockUnattachedMedia(ctx context.Context, arg LockUnattachedMed
 	return items, nil
 }
 
+const markAccountNeedsReconnect = `-- name: MarkAccountNeedsReconnect :exec
+UPDATE accounts SET needs_reconnect_at = now()
+WHERE id = $1 AND needs_reconnect_at IS NULL
+`
+
+// The first time only: the time says since when, and a later failure for the
+// same dead credentials is not news.
+func (q *Queries) MarkAccountNeedsReconnect(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markAccountNeedsReconnect, id)
+	return err
+}
+
 const markMediaVerified = `-- name: MarkMediaVerified :exec
 UPDATE media SET verified_at = now(), size_bytes = $2, content_type = $3
 WHERE id = $1
@@ -926,9 +948,9 @@ func (q *Queries) MarkTargetPublishing(ctx context.Context, id uuid.UUID) (int64
 }
 
 const replaceAccountCredentials = `-- name: ReplaceAccountCredentials :one
-UPDATE accounts SET credentials = $3, display_name = $4
+UPDATE accounts SET credentials = $3, display_name = $4, needs_reconnect_at = NULL
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, platform, display_name, created_at, brand
+RETURNING id, user_id, platform, display_name, created_at, brand, needs_reconnect_at
 `
 
 type ReplaceAccountCredentialsParams struct {
@@ -939,12 +961,13 @@ type ReplaceAccountCredentialsParams struct {
 }
 
 type ReplaceAccountCredentialsRow struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	Platform    string
-	DisplayName string
-	CreatedAt   time.Time
-	Brand       *string
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	Platform         string
+	DisplayName      string
+	CreatedAt        time.Time
+	Brand            *string
+	NeedsReconnectAt pgtype.Timestamptz
 }
 
 func (q *Queries) ReplaceAccountCredentials(ctx context.Context, arg ReplaceAccountCredentialsParams) (ReplaceAccountCredentialsRow, error) {
@@ -962,6 +985,7 @@ func (q *Queries) ReplaceAccountCredentials(ctx context.Context, arg ReplaceAcco
 		&i.DisplayName,
 		&i.CreatedAt,
 		&i.Brand,
+		&i.NeedsReconnectAt,
 	)
 	return i, err
 }
@@ -1007,7 +1031,7 @@ func (q *Queries) RetryTarget(ctx context.Context, arg RetryTargetParams) (PostT
 const setAccountBrand = `-- name: SetAccountBrand :one
 UPDATE accounts SET brand = $3
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, platform, display_name, created_at, brand
+RETURNING id, user_id, platform, display_name, created_at, brand, needs_reconnect_at
 `
 
 type SetAccountBrandParams struct {
@@ -1017,12 +1041,13 @@ type SetAccountBrandParams struct {
 }
 
 type SetAccountBrandRow struct {
-	ID          uuid.UUID
-	UserID      uuid.UUID
-	Platform    string
-	DisplayName string
-	CreatedAt   time.Time
-	Brand       *string
+	ID               uuid.UUID
+	UserID           uuid.UUID
+	Platform         string
+	DisplayName      string
+	CreatedAt        time.Time
+	Brand            *string
+	NeedsReconnectAt pgtype.Timestamptz
 }
 
 func (q *Queries) SetAccountBrand(ctx context.Context, arg SetAccountBrandParams) (SetAccountBrandRow, error) {
@@ -1035,6 +1060,7 @@ func (q *Queries) SetAccountBrand(ctx context.Context, arg SetAccountBrandParams
 		&i.DisplayName,
 		&i.CreatedAt,
 		&i.Brand,
+		&i.NeedsReconnectAt,
 	)
 	return i, err
 }

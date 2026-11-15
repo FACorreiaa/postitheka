@@ -37,6 +37,20 @@ struct BrandsTests {
         #expect(c.chosen.map(\.id) == ["2"], "norviq's stamp is off screen, so it is not a destination")
     }
 
+    @Test func anAccountThatNeedsReconnectingIsNotPublishedTo() {
+        let c = Composer(api: API(baseURL: URL(string: "http://localhost:8095")!, tokens: MemoryTokenStore("pk_test"), transport: StubTransport()))
+        let stale = Account(id: "9", platform: .linkedin, display_name: "Ada", created_at: .now, needs_reconnect: true)
+        c.accounts = accounts + [stale]
+
+        c.toggle(stale)
+        #expect(c.selected.isEmpty, "its stamp cannot be chosen")
+
+        // Chosen while it still worked, refused since.
+        c.selected = ["2", "9"]
+        #expect(c.chosen.map(\.id) == ["2"])
+        #expect(!Self.account("1").needsReconnect)
+    }
+
     @Test func settingABrandSendsItAndReturnsTheAccount() async throws {
         let stub = StubTransport([(200, ##"{"id":"a1","platform":"discord","display_name":"#general","brand":"Aaru","created_at":"2026-11-14T10:00:00Z"}"##)])
         let api = API(baseURL: URL(string: "http://localhost:8095")!, tokens: MemoryTokenStore("pk_test"), transport: stub)

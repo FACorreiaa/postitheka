@@ -78,7 +78,7 @@ These appear in old docs, in brand copy or in the code, but a user cannot use th
 | **Free / premium / any price** | No tiers or billing exist | No billing code |
 | **Retry a failed post** | No route or button | WEB-001 |
 | **Edit, delete or cancel a post** | No route. A scheduled post cannot be cancelled | `api/openapi.yaml` has no DELETE or PATCH on posts |
-| **Reconnect warning** | An expired LinkedIn token is not shown until posts fail | ACC-001 |
+| **Warning before access expires** | An account is marked "needs reconnecting" only after the platform refuses it once (ACC-001, built, not yet in production). Nothing warns ahead of a LinkedIn token's 60 days | ACC-001 |
 | **Video length and shape checks** | Only type and size are checked | VID-001 |
 | **Video conversion on the phone** | Not built; videos keep their container | IOS-004, `ios/Postitheka/MediaImport.swift` |
 | **Share extension** ("share from Photos") | Not built | IOS-005 |
@@ -240,7 +240,7 @@ These appear in old docs, in brand copy or in the code, but a user cannot use th
 - **Workflow.** 1) Accounts > Connect LinkedIn. 2) Sign in on LinkedIn and allow. 3) Back in Postitheka: "LinkedIn connected." 4) The profile is a stamp.
 - **Location.** Accounts > "Connect LinkedIn" (appears only when `LINKEDIN_CLIENT_ID` is set).
 - **Code.** `internal/publisher/linkedin/linkedin.go`, `internal/service/connect.go`, `internal/httpapi/oauth.go`; tests `linkedin_test.go`, `TestOAuthConnect`.
-- **Status.** `experimental`. Stub-tested only. **No LinkedIn developer app exists**, so the button does not appear in any environment. Posts go to the main feed as **PUBLIC**. Personal profile only. Tokens last 60 days with no refresh and nothing warns before they expire (ACC-001).
+- **Status.** `experimental`. Stub-tested only. **No LinkedIn developer app exists**, so the button does not appear in any environment. Posts go to the main feed as **PUBLIC**. Personal profile only. Tokens last 60 days with no refresh and nothing warns before they expire; after the first refused post the account is marked as needing reconnection (ACC-001).
 - **Priority.** Medium, once it has posted for real.
 - **Headline.** "Your LinkedIn, one more stamp."
 - **Recording.** Stamp and rules only, Tier A (seeded account plus a placeholder client id). A real publish is **blocked under the capture rules**: there is no LinkedIn sandbox, posts are public, and fake profiles are understood to break LinkedIn's terms. Owner decision.

@@ -121,7 +121,8 @@ private struct StampRow: View {
     let composer: Composer
 
     var body: some View {
-        let chosen = composer.selected.contains(account.id)
+        let stale = account.needsReconnect
+        let chosen = composer.selected.contains(account.id) && !stale
         let problems = composer.problems(for: account) + composer.issues(for: account).map(\.message)
         Button {
             composer.toggle(account)
@@ -132,12 +133,16 @@ private struct StampRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(account.display_name).foregroundStyle(Brand.cream)
                     Text(account.platform.displayName).font(.caption).foregroundStyle(Color.secondary)
+                    if stale {
+                        Text("Needs reconnecting. Open Accounts to connect it again.").font(.caption).foregroundStyle(.red)
+                    }
                     if chosen {
                         ForEach(problems, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
                     }
                 }
             }
         }
+        .disabled(stale)
         .accessibilityAddTraits(chosen ? .isSelected : [])
     }
 }
