@@ -142,8 +142,14 @@ The claim (`MarkTargetPublishing`) is conditional on `pending`, so two runs of o
 both publish. Outcomes are recorded with a context that survives the job's own timeout. River
 jobs are unique by target id.
 
-Retry budget: 10 attempts with River's default backoff, which spans roughly a day. Job timeout:
-5 minutes (ten 20 MiB files streamed to Discord).
+Retry budget: 10 attempts with River's default backoff, which spans roughly a day. Publish time
+limit, per post: 5 minutes plus one second per MiB of attached files, at most 30 minutes
+(`publishBudget` in `internal/jobs/publish.go`). A text post that hangs frees its worker after
+5 minutes; a 500 MiB video gets about 13. The job's own River timeout is 31 minutes, under the
+hour after which River takes a running job for stuck. These are our own allowances; no real
+upload has been timed. A publish still running when the process stops (`SHUTDOWN_TIMEOUT`,
+30 seconds by default) is cut off and its target fails as interrupted, so a deploy in the middle
+of a large upload costs that post.
 
 ## Publishers
 

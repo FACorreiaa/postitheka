@@ -79,9 +79,42 @@ const (
 	failExhausted    = "retries_exhausted"
 )
 
-// Timeout covers the slowest legitimate job: ten 20 MiB files streamed from
-// storage to Discord.
-func (w *PublishWorker) Timeout(*river.Job[PublishArgs]) time.Duration { return 5 * time.Minute }
+// How long one publish may take. These are our own allowances, not platform
+// limits, and no real upload has been timed yet (2026-11-15).
+const (
+	// publishBase covers everything that does not grow with the files: the
+	// platform's own processing (the publishers wait up to four minutes for
+	// a video) and the requests around it.
+	publishBase = 5 * time.Minute
+	// publishBytesPerSecond is the slowest transfer still treated as healthy.
+	// LinkedIn and Discord are sent the bytes by this server; the platforms
+	// that fetch from a URL get the same allowance, which costs nothing.
+	publishBytesPerSecond = 1 << 20
+	// maxPublishTime is the ceiling for any post. It must stay well under
+	// River's hour before a running job is taken for stuck and run again.
+	maxPublishTime = 30 * time.Minute
+)
+
+// publishBudget is how long a post's publish may run: a text post that hangs
+// frees its worker after publishBase, while a 500 MiB video gets the minutes
+// its upload needs.
+func publishBudget(post publisher.Post) time.Duration {
+	var size int64
+	for _, m := range post.Media {
+		size += m.Size
+	}
+	budget := publishBase + time.Duration(size/publishBytesPerSecond)*time.Second
+	if budget > maxPublishTime || budget < publishBase { // the second guards overflow
+		return maxPublishTime
+	}
+	return budget
+}
+
+// Timeout is River's limit on the whole job: the longest publish, plus the
+// database work before and after it. Work sets the tighter limit per post.
+func (w *PublishWorker) Timeout(*river.Job[PublishArgs]) time.Duration {
+	return maxPublishTime + time.Minute
+}
 
 func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) error {
 	id := job.Args.TargetID
@@ -169,7 +202,11 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 		return nil // another run of this job got here first
 	}
 
-	res, pubErr := pub.Publish(ctx, creds, post, w.media)
+	// Reaching the limit is an unclassified error, so the target is retried;
+	// a publisher that cannot tell whether the post went out says so itself.
+	pubCtx, cancel := context.WithTimeout(ctx, publishBudget(post))
+	res, pubErr := pub.Publish(pubCtx, creds, post, w.media)
+	cancel()
 
 	// The outcome is recorded even if the job's own deadline has just passed:
 	// a target left in 'publishing' after a definite answer would be treated
