@@ -252,7 +252,7 @@ Checked dates matter: re-check a platform's docs before building it.
 | X | Direct (OAuth 2.0 PKCE) | Not started | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23); owner decision. Weighted `CountText`. |
 | Reddit | Direct (OAuth 2.0) | Not started | Needs Reddit's approval first; text and links only. |
 | Facebook | Direct (Meta OAuth) | Not started | Pages only. Role holders on the app need no review; anyone else needs Business Verification + App Review (checked 2026-11-05). |
-| Instagram | Direct (Instagram Login) | Not started | Business/Creator accounts, no Page needed. JPEG only, by URL (`PublicURL`). 50–100 posts a day. App Review. |
+| Instagram | Direct (Instagram Login) | **Built** (stub-tested) | Checked 2026-11-14: caption of 2,200 characters, no post without media, carousel of 2–20; JPEG only, 8 MB; a single video is a reel, MP4/MOV 300 MB; all media by URL (`PublicURL`). Business/Creator accounts, no Page needed. 100 posts in 24 hours. Role holders before App Review; needs the owner's Instagram app. |
 | TikTok | Direct (Content Posting API) | Not started | Until the app passes TikTok's audit, posts are private-only. Upload-to-inbox (drafts) is the low-friction first step. Verify current rules. |
 | WhatsApp | Assisted (iOS share sheet) | **Built** | No posting API exists. The server sends nothing; it records the handoff the phone reports. |
 

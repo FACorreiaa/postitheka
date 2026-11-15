@@ -60,6 +60,12 @@ type Config struct {
 	ThreadsAppID     string
 	ThreadsAppSecret string
 
+	// Instagram app (the Meta app's "API setup with Instagram login"; its own
+	// app id and secret, not the main Meta app's and not Threads's). Both
+	// empty: Instagram is not offered.
+	InstagramAppID     string
+	InstagramAppSecret string
+
 	// PostHog product analytics. An empty key disables capture entirely:
 	// nothing is sent, and no credential is needed to develop.
 	PostHogAPIKey string
@@ -98,6 +104,8 @@ func Load() (Config, error) {
 		LinkedInClientSecret: env("LINKEDIN_CLIENT_SECRET", ""),
 		ThreadsAppID:         env("THREADS_APP_ID", ""),
 		ThreadsAppSecret:     env("THREADS_APP_SECRET", ""),
+		InstagramAppID:       env("INSTAGRAM_APP_ID", ""),
+		InstagramAppSecret:   env("INSTAGRAM_APP_SECRET", ""),
 		PostHogAPIKey:        env("POSTHOG_API_KEY", ""),
 		PostHogHost:          strings.TrimSuffix(env("POSTHOG_HOST", "https://eu.i.posthog.com"), "/"),
 		Mascot3DModelURL:     env("MASCOT_3D_MODEL_URL", ""),
@@ -125,6 +133,9 @@ func Load() (Config, error) {
 	}
 	if (c.ThreadsAppID == "") != (c.ThreadsAppSecret == "") {
 		return Config{}, fmt.Errorf("config: set both THREADS_APP_ID and THREADS_APP_SECRET, or neither")
+	}
+	if (c.InstagramAppID == "") != (c.InstagramAppSecret == "") {
+		return Config{}, fmt.Errorf("config: set both INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET, or neither")
 	}
 
 	if c.PublicURL == "" && !c.IsProduction() {

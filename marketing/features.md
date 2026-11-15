@@ -66,7 +66,7 @@ These appear in old docs, in brand copy or in the code, but a user cannot use th
 |---|---|---|
 | **Anything as "available"** | Not deployed, no hostname, no sign-up, no TestFlight | `platform/infra/argocd/apps` has no Postitheka app; `ios/Config/Release.xcconfig` is empty |
 | **X** | Not built. Pay-per-use, billed to the owner | `BACKLOG.md` X-001; no `internal/publisher/x` |
-| **Instagram** | Not built | IG-001 |
+| **Instagram** | Built 2026-11-14, tested against a stub only. Never posted for real; no Meta app exists. Photos, reels and carousels; no text-only posts, JPEG only | IG-001; `internal/publisher/instagram` |
 | **Facebook Pages** | Not built | FB-001 |
 | **TikTok** | Not built. Drafts first, then an audit | TT-001, TT-002 |
 | **Reddit** | Not built; rollout recommends by hand | RDT-001, RDT-002 |

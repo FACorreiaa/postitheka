@@ -86,7 +86,7 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | X developer app + credits | X-001 used for real | Pay-per-use: $0.015 a post, $0.20 with a URL (2026-10-23) |
 | TikTok developer app | TT-001 used for real, TT-002 | Photos also need a domain verified with TikTok |
 | Reddit API access request | RDT-001 | Approval required since Nov 2025; commercial use needs an agreement |
-| Meta app with the Threads API use case, owner as Threads Tester | THR-001 used before review | `THREADS_APP_ID` / `THREADS_APP_SECRET` (the Threads ones, not the main app's) in `.env`; redirect `PUBLIC_URL/oauth/threads/callback`. Meta may refuse a plain-http redirect (not checked); then `PUBLIC_URL` must be an https tunnel to the local server |
+| Meta app with the Threads API use case, owner as Threads Tester | THR-001 used before review | `THREADS_APP_ID` / `THREADS_APP_SECRET` (the Threads ones, not the main app's) in `.env`; redirect `PUBLIC_URL/oauth/threads/callback`. Instagram is the same app with the Instagram use case: `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` from "API setup with Instagram login", redirect `PUBLIC_URL/oauth/instagram/callback`, and a professional account with a role on the app. Meta may refuse a plain-http redirect (not checked); then `PUBLIC_URL` must be an https tunnel to the local server |
 | Meta app, Business Verification, App Review | THR-001, IG-001, FB-001 for strangers | Weeks; needs PRV-001 live. Not needed for accounts with a role on the app (Standard Access, checked 2026-11-05) |
 | Approve privacy policy and terms text | PRV-001 | Agent drafts |
 
@@ -134,7 +134,7 @@ Strangers who have published a post: **0**.
 | TT-001 | Open | | |
 | TT-002 | Open | | Owner |
 | FB-001 | Open | | META-001 for strangers; role holders can use it before |
-| IG-001 | Open | | META-001 for strangers; role holders can use it before |
+| IG-001 | Built, unverified | `internal/publisher/instagram`; `instagram_test.go` (connect with the long-lived exchange and the account id from the profile, both answer shapes; image, reel, carousel order; `ERROR`/`EXPIRED`/timeout; publish without a clear answer incl. a cancelled request; error classes by code and subcode; refresh; no secrets in errors; rules) | Needs the owner's Meta app with the Instagram use case and a professional account with a role on it to post for real. Never run against Instagram. META-001 for strangers |
 | RDT-001 | Open | | Owner |
 | RDT-002 | Open | | OPEN: title and subreddit |
 | VID-001 | Open | | |
@@ -382,6 +382,16 @@ URL; video can be uploaded (resumable). The docs give both 50 and 100 posts a da
 connect before review.
 
 **Done when:** tests against a stub pass, and a photo post lands on the owner's account.
+
+**Built 2026-11-14, against a stub only.** What the docs said on that day, where it differs from
+the above: video also goes by URL (the resumable upload is for apps on Facebook Login only); a
+single video is a reel (`media_type=REELS`) and a video inside a carousel is `VIDEO`; the code
+exchange is on `api.instagram.com` and everything else on `graph.instagram.com`; the id
+containers are created under is `user_id` from `/me`, not the one the code exchange returns.
+The daily limit is not read ahead of time: Instagram's refusal (subcode 2207042) is retried
+hourly. Left for later: aspect ratio and duration checks (VID-001), the 30 hashtag and 20
+@-tag limits, alt text, and marking the account for reconnect on error 190 once ACC-001 has
+merged (`publisher.Reconnect`).
 
 ### X-001 · X publisher · M
 **Owner:** buys X API credits once the app is on TestFlight and ready to test (decided 2026-11-05).
