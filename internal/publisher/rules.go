@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -25,6 +26,14 @@ type Rules struct {
 	// VideoAlone means a video must be the only file in its post: LinkedIn
 	// takes one image, several images, or one video, never a mix.
 	VideoAlone bool
+
+	// Limits on a video's length and shape; zero means no limit. They are
+	// checked against what the client declared with the upload, and skipped
+	// for a video whose client declared nothing. Aspect is width divided by
+	// height.
+	MinVideoLength, MaxVideoLength time.Duration
+	MinVideoAspect, MaxVideoAspect float64
+	MaxVideoWidth                  int
 
 	// TextCounting is how the platform measures MaxTextLength. It is a
 	// named mode rather than a function because the clients count too, and
@@ -165,6 +174,9 @@ func Validate(rules Rules, post Post) []Issue {
 		}
 		if IsVideo(m.ContentType) {
 			videos++
+			for _, msg := range rules.videoIssues(m) {
+				add(field, "%s", msg)
+			}
 		}
 		total += m.Size
 	}
@@ -176,4 +188,38 @@ func Validate(rules Rules, post Post) []Issue {
 	}
 
 	return issues
+}
+
+// videoIssues checks one video against the length and shape limits, using
+// only what its client declared.
+func (r Rules) videoIssues(m Media) []string {
+	var out []string
+	if m.Duration > 0 {
+		if r.MinVideoLength > 0 && m.Duration < r.MinVideoLength {
+			out = append(out, fmt.Sprintf("the video is %s long, the shortest accepted is %s", clock(m.Duration), clock(r.MinVideoLength)))
+		}
+		if r.MaxVideoLength > 0 && m.Duration > r.MaxVideoLength {
+			out = append(out, fmt.Sprintf("the video is %s long, limit is %s", clock(m.Duration), clock(r.MaxVideoLength)))
+		}
+	}
+	if m.Width > 0 && m.Height > 0 {
+		aspect := float64(m.Width) / float64(m.Height)
+		if (r.MinVideoAspect > 0 && aspect < r.MinVideoAspect) || (r.MaxVideoAspect > 0 && aspect > r.MaxVideoAspect) {
+			out = append(out, fmt.Sprintf("the video is %d by %d, a shape that is not accepted", m.Width, m.Height))
+		}
+		if r.MaxVideoWidth > 0 && m.Width > r.MaxVideoWidth {
+			out = append(out, fmt.Sprintf("the video is %d pixels wide, limit is %d", m.Width, r.MaxVideoWidth))
+		}
+	}
+	return out
+}
+
+// clock writes a length as m:ss, to the tenth of a second under ten seconds
+// where a limit of three seconds makes the tenths matter.
+func clock(d time.Duration) string {
+	if d < 10*time.Second {
+		return fmt.Sprintf("%.1f s", d.Seconds())
+	}
+	s := int(d.Round(time.Second).Seconds())
+	return fmt.Sprintf("%d:%02d", s/60, s%60)
 }

@@ -167,8 +167,8 @@ func (q *Queries) CreateAssistedTarget(ctx context.Context, arg CreateAssistedTa
 }
 
 const createMedia = `-- name: CreateMedia :exec
-INSERT INTO media (id, user_id, object_key, content_type, size_bytes)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO media (id, user_id, object_key, content_type, size_bytes, duration_ms, width, height)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type CreateMediaParams struct {
@@ -177,6 +177,9 @@ type CreateMediaParams struct {
 	ObjectKey   string
 	ContentType string
 	SizeBytes   int64
+	DurationMs  *int32
+	Width       *int32
+	Height      *int32
 }
 
 func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) error {
@@ -186,6 +189,9 @@ func (q *Queries) CreateMedia(ctx context.Context, arg CreateMediaParams) error 
 		arg.ObjectKey,
 		arg.ContentType,
 		arg.SizeBytes,
+		arg.DurationMs,
+		arg.Width,
+		arg.Height,
 	)
 	return err
 }
@@ -494,7 +500,7 @@ func (q *Queries) GetAccountsByIDs(ctx context.Context, arg GetAccountsByIDsPara
 }
 
 const getMediaByIDs = `-- name: GetMediaByIDs :many
-SELECT id, user_id, object_key, content_type, size_bytes, verified_at, created_at FROM media
+SELECT id, user_id, object_key, content_type, size_bytes, verified_at, created_at, duration_ms, width, height FROM media
 WHERE user_id = $1 AND id = ANY($2::uuid[])
 `
 
@@ -520,6 +526,9 @@ func (q *Queries) GetMediaByIDs(ctx context.Context, arg GetMediaByIDsParams) ([
 			&i.SizeBytes,
 			&i.VerifiedAt,
 			&i.CreatedAt,
+			&i.DurationMs,
+			&i.Width,
+			&i.Height,
 		); err != nil {
 			return nil, err
 		}
@@ -709,7 +718,7 @@ func (q *Queries) ListAccounts(ctx context.Context, userID uuid.UUID) ([]ListAcc
 }
 
 const listPostMedia = `-- name: ListPostMedia :many
-SELECT pm.post_id, m.id, m.user_id, m.object_key, m.content_type, m.size_bytes, m.verified_at, m.created_at
+SELECT pm.post_id, m.id, m.user_id, m.object_key, m.content_type, m.size_bytes, m.verified_at, m.created_at, m.duration_ms, m.width, m.height
 FROM post_media pm
 JOIN media m ON m.id = pm.media_id
 WHERE pm.post_id = ANY($1::uuid[])
@@ -725,6 +734,9 @@ type ListPostMediaRow struct {
 	SizeBytes   int64
 	VerifiedAt  pgtype.Timestamptz
 	CreatedAt   time.Time
+	DurationMs  *int32
+	Width       *int32
+	Height      *int32
 }
 
 func (q *Queries) ListPostMedia(ctx context.Context, postIds []uuid.UUID) ([]ListPostMediaRow, error) {
@@ -745,6 +757,9 @@ func (q *Queries) ListPostMedia(ctx context.Context, postIds []uuid.UUID) ([]Lis
 			&i.SizeBytes,
 			&i.VerifiedAt,
 			&i.CreatedAt,
+			&i.DurationMs,
+			&i.Width,
+			&i.Height,
 		); err != nil {
 			return nil, err
 		}

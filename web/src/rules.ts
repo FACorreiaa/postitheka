@@ -2,7 +2,7 @@ import type { Rules } from "./api";
 
 export interface Draft {
   text: string;
-  media: { contentType: string; size: number }[];
+  media: { contentType: string; size: number; durationMs?: number; width?: number; height?: number }[];
 }
 
 // An emoji part, as publisher.isEmojiPart in Go defines it: any symbol (So)
@@ -66,7 +66,10 @@ export function problems(rules: Rules, draft: Draft): string[] {
     const video = m.contentType.startsWith("video/");
     const limit = video && rules.max_video_bytes > 0 ? rules.max_video_bytes : rules.max_media_bytes;
     if (m.size > limit) out.push(`A ${video ? "video" : "file"} is over ${formatBytes(limit)}`);
-    if (video) videos++;
+    if (video) {
+      videos++;
+      out.push(...videoProblems(rules, m));
+    }
     total += m.size;
   }
   if (rules.video_alone && videos > 0 && draft.media.length > 1) out.push("A video must be posted alone");
@@ -74,6 +77,32 @@ export function problems(rules: Rules, draft: Draft): string[] {
     out.push(`Files total over ${formatBytes(rules.max_total_media_bytes)}`);
   }
   return out;
+}
+
+// Mirrors Rules.videoIssues in Go: a limit is checked only against a value
+// the file gave up, and 0 means the platform has no such limit.
+function videoProblems(rules: Rules, m: Draft["media"][number]): string[] {
+  const out: string[] = [];
+  if (m.durationMs && m.durationMs > 0) {
+    if (rules.min_video_ms > 0 && m.durationMs < rules.min_video_ms) out.push(`A video is shorter than ${formatLength(rules.min_video_ms)}`);
+    if (rules.max_video_ms > 0 && m.durationMs > rules.max_video_ms) out.push(`A video is longer than ${formatLength(rules.max_video_ms)}`);
+  }
+  if (m.width && m.height && m.width > 0 && m.height > 0) {
+    const aspect = m.width / m.height;
+    if ((rules.min_video_aspect > 0 && aspect < rules.min_video_aspect) || (rules.max_video_aspect > 0 && aspect > rules.max_video_aspect)) {
+      out.push("A video's shape is not accepted");
+    }
+    if (rules.max_video_width > 0 && m.width > rules.max_video_width) out.push(`A video is wider than ${rules.max_video_width} pixels`);
+  }
+  return out;
+}
+
+/** A length limit in words: "3 seconds", "5 minutes", "1:30". */
+export function formatLength(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s} second${s === 1 ? "" : "s"}`;
+  if (s % 60 === 0) return `${s / 60} minute${s === 60 ? "" : "s"}`;
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 export function formatBytes(n: number): string {

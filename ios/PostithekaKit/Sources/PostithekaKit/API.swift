@@ -138,9 +138,14 @@ public struct API: Sendable {
         }
     }
 
-    public func reserveUpload(contentType: String, size: Int64) async throws(APIError) -> Upload {
+    /// `video` is what the client read from a video file; the server cannot
+    /// measure one, and checks each platform's limits against these.
+    public func reserveUpload(contentType: String, size: Int64, video: VideoFacts? = nil) async throws(APIError) -> Upload {
         let out = try await call {
-            try await client.createUpload(body: .json(.init(content_type: contentType, size_bytes: size)))
+            try await client.createUpload(body: .json(.init(
+                content_type: contentType, size_bytes: size,
+                duration_ms: video?.durationMs, width: video?.width, height: video?.height
+            )))
         }
         switch out {
         case .created(let r): return try body { try r.body.json }

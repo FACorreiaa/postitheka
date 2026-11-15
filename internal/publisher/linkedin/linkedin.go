@@ -92,7 +92,7 @@ func (p *Publisher) Platform() publisher.Platform { return publisher.LinkedIn }
 // to 5 MB and 20 to a post (a527229). Video is MP4, 3 seconds to 30 minutes,
 // 75 KB to 500 MB, per the Videos API (the same page also says 5 GB, under an
 // ads heading; 500 MB is the floor). A post is one image, 2 to 20 images, or
-// one video. Duration is not checked until Rules can express it (VID-001).
+// one video. The Videos API states no limit on a video's shape.
 func (p *Publisher) Rules() publisher.Rules {
 	return publisher.Rules{
 		MaxTextLength: 3000,
@@ -101,6 +101,9 @@ func (p *Publisher) Rules() publisher.Rules {
 		MaxVideoBytes: 500 << 20,
 		MediaTypes:    []string{"image/jpeg", "image/png", "image/gif", "video/mp4"},
 		VideoAlone:    true,
+
+		MinVideoLength: 3 * time.Second,
+		MaxVideoLength: 30 * time.Minute,
 	}
 }
 

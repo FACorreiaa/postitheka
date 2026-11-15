@@ -313,11 +313,15 @@ func (s *Service) resolveMedia(ctx context.Context, userID uuid.UUID, ids []uuid
 			m.SizeBytes = obj.Size
 		}
 
+		length, width, height := media.Declared(m.DurationMs, m.Width, m.Height)
 		out = append(out, publisher.Media{
 			Key:         m.ObjectKey,
 			ContentType: m.ContentType,
 			Size:        m.SizeBytes,
 			Filename:    media.Filename(m.ID, m.ContentType),
+			Duration:    length,
+			Width:       width,
+			Height:      height,
 		})
 	}
 	return out, issues, nil

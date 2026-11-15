@@ -186,11 +186,15 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 	}
 	post := publisher.Post{Text: row.Text}
 	for _, m := range mediaRows {
+		length, width, height := media.Declared(m.DurationMs, m.Width, m.Height)
 		post.Media = append(post.Media, publisher.Media{
 			Key:         m.ObjectKey,
 			ContentType: m.ContentType,
 			Size:        m.SizeBytes,
 			Filename:    media.Filename(m.ID, m.ContentType),
+			Duration:    length,
+			Width:       width,
+			Height:      height,
 		})
 	}
 

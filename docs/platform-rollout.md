@@ -67,7 +67,7 @@ Instagram or TikTok, and a post with media cannot include Reddit.
 | --- | --- | --- |
 | Image | JPEG, under 5 MB, 1080×1350 (4:5) | LinkedIn and X cap at 5 MB, Instagram takes only JPEG and 4:5 to 1.91:1. **PNG screenshots block Instagram** |
 | Video | MP4, H.264/AAC, 3 to 60 s, about 2.5 Mbps | 60 s at 2.5 Mbps is about 18 MiB, under Discord's 20 MiB. Instagram also needs 3 s or more |
-| Video shape | 9:16 vertical | Intended for Reels and TikTok; ratio limits not re-checked, and nothing validates them yet (VID-001) |
+| Video shape | 9:16 vertical | Intended for Reels and TikTok; Instagram and Threads take 0.01:1 to 10:1 and at most 1920 pixels across (checked 2026-11-15); the composer blocks their stamps outside that (VID-001) |
 | Text | 280 weighted characters if X is selected | X counts URLs as 23, and CJK and emoji as 2. Threads counts emoji by UTF-8 bytes |
 
 The server does not transcode, and the cluster has no ffmpeg. Files must be right when uploaded.
@@ -202,7 +202,8 @@ and app purpose.
    files, at most 30 minutes. Not measured: the rate is our own allowance, so time the first real
    large upload on each platform and adjust.
 3. **IG-001,** then **FB-001,** then **X-001.**
-4. **VID-001:** duration and aspect ratio on stamps. Needed by TikTok and useful for Reels.
+4. **VID-001:** done 2026-11-15. Length, shape and width limits block only the stamps of the
+   platforms that refuse the video. The client reads the values; the server cannot.
 5. **Different text per platform,** premium only, which needs the tiers from decision 5.
 6. **Cost hint on the X stamp,** once what counts as "with URL" is known: show $0.20 before Publish.
 7. **TT-001,** with the draft outcome.

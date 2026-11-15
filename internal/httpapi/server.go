@@ -119,6 +119,11 @@ func (s *Server) ListPlatforms(ctx context.Context, _ ListPlatformsRequestObject
 				MaxTotalMediaBytes: r.MaxTotalMediaBytes,
 				MaxVideoBytes:      r.MaxVideoBytes,
 				VideoAlone:         r.VideoAlone,
+				MinVideoMs:         int(r.MinVideoLength.Milliseconds()),
+				MaxVideoMs:         int(r.MaxVideoLength.Milliseconds()),
+				MinVideoAspect:     r.MinVideoAspect,
+				MaxVideoAspect:     r.MaxVideoAspect,
+				MaxVideoWidth:      r.MaxVideoWidth,
 				MediaTypes:         r.MediaTypes,
 				RequiresText:       r.RequiresText,
 				RequiresMedia:      r.RequiresMedia,
@@ -194,7 +199,11 @@ func (s *Server) CreateUpload(ctx context.Context, req CreateUploadRequestObject
 	if ok, wait := s.limits.uploads.Allow(userID(ctx).String()); !ok {
 		return CreateUpload429JSONResponse{tooManyRequests(wait)}, nil
 	}
-	up, err := s.svc.ReserveUpload(ctx, userID(ctx), req.Body.ContentType, req.Body.SizeBytes)
+	up, err := s.svc.ReserveUpload(ctx, userID(ctx), req.Body.ContentType, req.Body.SizeBytes, service.VideoFacts{
+		DurationMS: orZero(req.Body.DurationMs),
+		Width:      orZero(req.Body.Width),
+		Height:     orZero(req.Body.Height),
+	})
 	if msg, ok := badRequest(err); ok {
 		return CreateUpload400JSONResponse{BadRequestJSONResponse{Message: msg}}, nil
 	}
@@ -394,4 +403,11 @@ func textCounting(m publisher.TextCounting) RulesTextCounting {
 		return EmojiBytes
 	}
 	return CodePoints
+}
+
+func orZero(n *int) int {
+	if n == nil {
+		return 0
+	}
+	return *n
 }

@@ -16,10 +16,13 @@ public struct Draft: Sendable, Equatable {
     public struct Media: Sendable, Equatable {
         public var contentType: String
         public var size: Int64
+        /// Read from a video file; nil for anything else, or when unknown.
+        public var video: VideoFacts?
 
-        public init(contentType: String, size: Int64) {
+        public init(contentType: String, size: Int64, video: VideoFacts? = nil) {
             self.contentType = contentType
             self.size = size
+            self.video = video
         }
     }
 
@@ -91,7 +94,10 @@ public func problems(_ rules: Rules, _ draft: Draft) -> [String] {
         let video = m.contentType.hasPrefix("video/")
         let limit = video && rules.max_video_bytes > 0 ? rules.max_video_bytes : rules.max_media_bytes
         if m.size > limit { out.append("A \(video ? "video" : "file") is over \(formatBytes(limit))") }
-        if video { videos += 1 }
+        if video {
+            videos += 1
+            out += videoProblems(rules, m.video)
+        }
         total += m.size
     }
     if rules.video_alone && videos > 0 && draft.media.count > 1 { out.append("A video must be posted alone") }
@@ -99,6 +105,32 @@ public func problems(_ rules: Rules, _ draft: Draft) -> [String] {
         out.append("Files total over \(formatBytes(rules.max_total_media_bytes))")
     }
     return out
+}
+
+/// Mirrors `Rules.videoIssues` in Go: a limit is checked only against a value
+/// the file gave up, and 0 means the platform has no such limit.
+func videoProblems(_ rules: Rules, _ facts: VideoFacts?) -> [String] {
+    var out: [String] = []
+    if let ms = facts?.durationMs, ms > 0 {
+        if rules.min_video_ms > 0 && ms < rules.min_video_ms { out.append("A video is shorter than \(formatLength(rules.min_video_ms))") }
+        if rules.max_video_ms > 0 && ms > rules.max_video_ms { out.append("A video is longer than \(formatLength(rules.max_video_ms))") }
+    }
+    if let w = facts?.width, let h = facts?.height, w > 0, h > 0 {
+        let aspect = Double(w) / Double(h)
+        if (rules.min_video_aspect > 0 && aspect < rules.min_video_aspect) || (rules.max_video_aspect > 0 && aspect > rules.max_video_aspect) {
+            out.append("A video's shape is not accepted")
+        }
+        if rules.max_video_width > 0 && w > rules.max_video_width { out.append("A video is wider than \(rules.max_video_width) pixels") }
+    }
+    return out
+}
+
+/// A length limit in words: "3 seconds", "5 minutes", "1:30".
+public func formatLength(_ ms: Int) -> String {
+    let s = Int((Double(ms) / 1000).rounded())
+    if s < 60 { return "\(s) second\(s == 1 ? "" : "s")" }
+    if s % 60 == 0 { return "\(s / 60) minute\(s == 60 ? "" : "s")" }
+    return "\(s / 60):\(s % 60 < 10 ? "0" : "")\(s % 60)"
 }
 
 public func formatBytes(_ n: Int64) -> String {
