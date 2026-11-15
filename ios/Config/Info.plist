@@ -5,10 +5,11 @@
 	<!-- Merged with the generated Info.plist (GENERATE_INFOPLIST_FILE). Only what build settings cannot express. -->
 	<key>PostithekaAPIBaseURL</key>
 	<string>$(API_BASE_URL)</string>
-	<!-- Only to tell the user whether WhatsApp is installed before they choose it. -->
+	<!-- Only to tell the user whether WhatsApp or Reddit is installed before they choose it. -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>whatsapp</string>
+		<string>reddit</string>
 	</array>
 	<!-- The launch screen in the app's night colour, so opening it does not flash system black. -->
 	<key>UILaunchScreen</key>

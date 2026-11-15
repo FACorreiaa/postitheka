@@ -47,11 +47,15 @@ public final class Composer {
     public var scheduledAt: Date?
     /// What is set for one destination alone: by account id, then option key.
     public var options: [String: [String: String]] = [:]
-    /// Hand the post to WhatsApp from this device once it is created.
-    public var handToWhatsApp = false
-    /// Set after publishing when a share sheet should open; the view presents
-    /// it and calls `finishHandoff`.
-    public private(set) var pendingHandoff: Handoff?
+    /// The assisted platforms (WhatsApp, Reddit) to hand the post to from this
+    /// device once it is created.
+    public var handTo: Set<Platform> = []
+    /// Set after publishing, one for each assisted platform chosen. The share
+    /// sheet takes one app at a time, so they are handed over one by one.
+    public private(set) var handoffs: [Handoff] = []
+    /// The handoff whose share sheet should be open; the view presents it and
+    /// calls `finishHandoff`, which brings up the next.
+    public var pendingHandoff: Handoff? { handoffs.first }
     public private(set) var serverIssues: [Issue] = []
     public private(set) var error: String?
     public private(set) var busy = false
@@ -108,10 +112,10 @@ public final class Composer {
     }
 
     public var canPublish: Bool {
-        !busy && (!chosen.isEmpty || handToWhatsApp) && !isEmpty
+        !busy && (!chosen.isEmpty || !handTo.isEmpty) && !isEmpty
             && chosen.allSatisfy { problems(for: $0).isEmpty }
             && !attachments.contains { $0.isUploading || $0.error != nil }
-            && !(handToWhatsApp && scheduledAt != nil) // a handoff happens now, on this device
+            && !(!handTo.isEmpty && scheduledAt != nil) // a handoff happens now, on this device
     }
 
     public func toggle(_ account: Account) {
@@ -153,7 +157,8 @@ public final class Composer {
 
         let mediaIDs = attachments.compactMap(\.mediaID)
         let accountIDs = chosen.map(\.id)
-        let assisted: [Platform] = handToWhatsApp ? [.whatsapp] : []
+        // Sorted: the same post must give the same idempotency signature.
+        let assisted = handTo.sorted { $0.rawValue < $1.rawValue }
         // Only for where the post goes: the server refuses options for an
         // account that is not a destination.
         let options = options.filter { accountIDs.contains($0.key) }
@@ -165,10 +170,11 @@ public final class Composer {
             ) {
             case .created(let post):
                 attempt = nil
-                if let target = post.targets.first(where: { $0.platform == .whatsapp && $0.status == .handing_off }) {
-                    pendingHandoff = Handoff(id: target.id, platform: .whatsapp, text: text, files: attachments.map(\.file))
-                }
-                handToWhatsApp = false
+                let files = attachments.map(\.file)
+                handoffs = post.targets
+                    .filter { handTo.contains($0.platform) && $0.status == .handing_off }
+                    .map { Handoff(id: $0.id, platform: $0.platform, text: text, files: files) }
+                handTo = []
                 text = ""
                 attachments = []
                 self.options = [:]
@@ -190,10 +196,10 @@ public final class Composer {
     /// Records how the share sheet ended and returns the updated post. The
     /// handoff is cleared either way: a failure to report leaves the target
     /// waiting on the server, which is shown as such, rather than a sheet that
-    /// reopens.
+    /// reopens. The next handoff, if there is one, becomes pending.
     public func finishHandoff(sent: Bool) async -> Post? {
         guard let handoff = pendingHandoff else { return nil }
-        pendingHandoff = nil
+        handoffs.removeFirst()
         do {
             return try await api.completeHandoff(targetID: handoff.id, sent: sent)
         } catch {

@@ -157,4 +157,5 @@ export const platformNames: Record<string, string> = {
   facebook: "Facebook",
   tiktok: "TikTok",
   whatsapp: "WhatsApp",
+  reddit: "Reddit",
 };

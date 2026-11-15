@@ -194,6 +194,7 @@ extension Platform {
         case .facebook: "Facebook"
         case .tiktok: "TikTok"
         case .whatsapp: "WhatsApp"
+        case .reddit: "Reddit"
         }
     }
 }

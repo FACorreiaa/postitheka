@@ -29,7 +29,7 @@ type CreatePostInput struct {
 	// Options are what the author set per destination, by account. Every
 	// account here must also be in AccountIDs.
 	Options map[uuid.UUID]map[string]string
-	// Assisted platforms the client hands the post to itself (WhatsApp).
+	// Assisted platforms the client hands the post to itself (WhatsApp, Reddit).
 	Assisted    []string
 	ScheduledAt *time.Time
 	// IdempotencyKey, when set, makes the call safe to retry: a second call

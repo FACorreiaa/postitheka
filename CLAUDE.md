@@ -31,8 +31,10 @@ This file is the working contract for anyone, human or agent, changing the repo.
   before posting again" instead of retrying. A duplicate on someone's timeline is worse than a
   failure they can retry by hand.
 - **Official APIs only.** No scraping, no unofficial endpoints, no automating a platform's own
-  app or website. A platform with no posting API (WhatsApp) is an **assisted publish**: the iOS
-  app hands the post to the platform's app through the share sheet and the user taps Send.
+  app or website. A platform with no posting API (WhatsApp), or one the owner chose to post to
+  by hand (Reddit, 2026-11-15: its API needs approval and its documented part takes no media),
+  is an **assisted publish**: the iOS app hands the post to the platform's app through the
+  share sheet and the user taps Send. Adding a third is the owner's call, not a default.
 - **Platform limits come from the platform's docs, dated.** Every `Rules()` says when it was
   checked. Never guess a limit: Discord's was remembered as 10 MiB and is 20 MiB per file.
 - **No secrets in the repo.** Every secret (database URL, encryption key, storage keys, a
@@ -151,7 +153,7 @@ task build                          # web build, then one binary with the web ap
 | **Option** | A line of text set for one target, listed by the platform's `Rules`: a Discord forum post's title. |
 | **Media** | An uploaded file. Reserved first, uploaded by the client, verified against storage on first use. |
 | **Direct publish** | The server posts through the platform's API. |
-| **Assisted publish** | The iOS app hands the post to the platform's app; the user sends it. WhatsApp only, for now. |
+| **Assisted publish** | The iOS app hands the post to the platform's app; the user sends it. WhatsApp and Reddit (`publisher.IsAssisted`). Several chosen at once are handed over one share sheet after another. |
 
 In the UI, destinations are **stamps** and a published target gets a **postmark**. Keep the
 vocabulary: "Publish" produces "Published"; "Not sent" means failed; "Draft" means the platform holds it

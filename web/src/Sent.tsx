@@ -207,7 +207,7 @@ function TargetRow({
     }
   }
 
-  // A handoff gets its postmark too: the user sent it from WhatsApp's own app,
+  // A handoff gets its postmark too: the user sent it from the platform's own app,
   // so there is no link to show, only where and when.
   if ((t.status === "published" || t.status === "handed_off") && t.published_at) {
     const at = new Date(t.published_at);
@@ -265,7 +265,7 @@ function TargetRow({
             {sentence(error)}
           </span>
         )}
-        {/* No account: disconnected, or a WhatsApp handoff, which is sent again from the phone. */}
+        {/* No account: disconnected, or a handoff (WhatsApp, Reddit), which is sent again from the phone. */}
         {t.status === "failed" && t.account_id && (
           <span className="target-actions">
             <button

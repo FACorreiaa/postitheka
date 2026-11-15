@@ -103,13 +103,15 @@ Tests stub the platform's HTTP API; see `discord_test.go`. Never a real token.
   an app with Login Kit and the Content Posting API (`video.upload`) and set
   `TIKTOK_CLIENT_KEY` and `TIKTOK_CLIENT_SECRET`. A video lands in the
   account's TikTok inbox, where its author adds the caption and posts it.
-- **TikTok direct posting, Reddit.** Order and blockers are in
+- **TikTok direct posting.** Order and blockers are in
   `BACKLOG.md` (P2). Start Meta Business Verification and the TikTok audit
   early; both take weeks.
 - **Discord forum channels** need `thread_name`; they fail permanently today.
 - **iOS:** the share extension and on-device video conversion. The composer,
-  Sent, accounts and the WhatsApp handoff are built; WhatsApp has no posting
-  API, so the app hands the post over through the share sheet.
+  Sent, accounts and the handoff to WhatsApp and Reddit are built: the app
+  hands the post over through the share sheet and you send it there.
+  WhatsApp has no posting API; Reddit is by hand by choice. Neither has
+  been tried on a device.
 - **Deployment.** Nothing is in `platform/infra` yet. When it is: R2 bucket,
   sealed secrets for `TOKEN_ENCRYPTION_KEY` and the S3 keys (sealed for the
   right namespace), and a PreSync hook running `server migrate`. The R2 bucket

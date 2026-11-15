@@ -193,7 +193,7 @@ public struct API: Sendable {
         case .notFound: throw .message("That post no longer exists.")
         // The server stops waiting after an hour and marks the handoff
         // failed; only a report arriving after that lands here from the app.
-        case .conflict: throw .message("Postitheka stopped waiting for this one. Check WhatsApp to see whether it was sent.")
+        case .conflict: throw .message("Postitheka stopped waiting for this one. Check the app it was handed to, to see whether it was sent.")
         case .unauthorized: throw .unauthorized
         case .undocumented(let code, _): throw Self.unexpected(code)
         }

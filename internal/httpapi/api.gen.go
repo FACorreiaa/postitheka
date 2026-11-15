@@ -29,6 +29,7 @@ const (
 	Facebook  Platform = "facebook"
 	Instagram Platform = "instagram"
 	Linkedin  Platform = "linkedin"
+	Reddit    Platform = "reddit"
 	Threads   Platform = "threads"
 	Tiktok    Platform = "tiktok"
 	Whatsapp  Platform = "whatsapp"
@@ -45,6 +46,8 @@ func (e Platform) Valid() bool {
 	case Instagram:
 		return true
 	case Linkedin:
+		return true
+	case Reddit:
 		return true
 	case Threads:
 		return true
@@ -175,7 +178,7 @@ type Account struct {
 	// NeedsReconnect True when the platform has refused this account's credentials (expired past refreshing, revoked, a deleted webhook). Posts to it are refused until it is connected again. Absent otherwise.
 	NeedsReconnect *bool `json:"needs_reconnect,omitempty"`
 
-	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+	// Platform whatsapp and reddit are assisted only: the iOS app hands the post to the platform's own app and the user sends it there. WhatsApp has no posting API; Reddit is by hand by choice, and its title and subreddit are set in Reddit's app.
 	Platform Platform `json:"platform"`
 }
 
@@ -198,7 +201,7 @@ type ConnectDiscordRequest struct {
 type CreatePostRequest struct {
 	AccountIds []openapi_types.UUID `json:"account_ids"`
 
-	// Assisted Platforms the client will hand the post to itself (WhatsApp, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
+	// Assisted Platforms the client will hand the post to itself (WhatsApp and Reddit, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
 	Assisted *[]Platform `json:"assisted,omitempty"`
 
 	// MediaIds In display order.
@@ -241,11 +244,11 @@ type Issue struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 
-	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+	// Platform whatsapp and reddit are assisted only: the iOS app hands the post to the platform's own app and the user sends it there. WhatsApp has no posting API; Reddit is by hand by choice, and its title and subreddit are set in Reddit's app.
 	Platform *Platform `json:"platform,omitempty"`
 }
 
-// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+// Platform whatsapp and reddit are assisted only: the iOS app hands the post to the platform's own app and the user sends it there. WhatsApp has no posting API; Reddit is by hand by choice, and its title and subreddit are set in Reddit's app.
 type Platform string
 
 // PlatformInfo defines model for PlatformInfo.
@@ -253,7 +256,7 @@ type PlatformInfo struct {
 	// Connect How an account is connected. webhook: paste a URL (POST /v1/accounts/discord). oauth: open the platform's consent page (POST /v1/accounts/{platform}/connect).
 	Connect PlatformInfoConnect `json:"connect"`
 
-	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+	// Platform whatsapp and reddit are assisted only: the iOS app hands the post to the platform's own app and the user sends it there. WhatsApp has no posting API; Reddit is by hand by choice, and its title and subreddit are set in Reddit's app.
 	Platform Platform `json:"platform"`
 	Rules    Rules    `json:"rules"`
 }
@@ -367,7 +370,7 @@ type Target struct {
 	// Options Option values by key, as the platform's rules list them.
 	Options *TargetOptions `json:"options,omitempty"`
 
-	// Platform whatsapp is assisted only: it has no posting API, so the iOS app hands the post to WhatsApp and the user sends it there.
+	// Platform whatsapp and reddit are assisted only: the iOS app hands the post to the platform's own app and the user sends it there. WhatsApp has no posting API; Reddit is by hand by choice, and its title and subreddit are set in Reddit's app.
 	Platform    Platform   `json:"platform"`
 	PublishedAt *time.Time `json:"published_at,omitempty"`
 	RemoteUrl   *string    `json:"remote_url,omitempty"`
@@ -2397,78 +2400,78 @@ var swaggerSpec = []string{
 	"vl58IvLepslLXdV03r8JlevlcuATxhJqUd3LDpZBbzeIOdo6WBpdjVj1xIKo60mEFFvH4gXjO2ZKfy9t",
 	"pk2+d8PbIjne+Pe4FE3puUrbC8x+YoGUmMZMYvIZXrtqTElz4mdB1EvmSeFcbefTae53Ncl0NRW1nIYB",
 	"dnpy+mwqFlnEM4+PPVwhenpmJ0nk4OTjs505KJEEXKte8bXxj9ZKS1La8oOOOSZcGHElc36UDit7kPKG",
-	"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",
-	"PAz78H7+ePvx9n8HAA==",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,
