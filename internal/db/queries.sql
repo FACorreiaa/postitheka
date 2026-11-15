@@ -5,6 +5,12 @@ RETURNING *;
 -- name: GetUserByEmail :one
 SELECT * FROM users WHERE email = $1;
 
+-- Everything a user owns goes with the row: tokens, accounts, posts, targets,
+-- media rows, OAuth states. The objects in the bucket do not; DeleteUser in
+-- the service removes those.
+-- name: DeleteUser :execrows
+DELETE FROM users WHERE id = $1;
+
 -- name: CreateAPIToken :exec
 INSERT INTO api_tokens (user_id, token_hash, name) VALUES ($1, $2, $3);
 
