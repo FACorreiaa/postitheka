@@ -76,6 +76,7 @@ postitheka/
     media/                  # object storage, presigned URLs, filenames
     publisher/              # Publisher interface, Rules, Validate, error classes
       discord/              # one package per platform
+      facebook/
       instagram/
       linkedin/
       threads/

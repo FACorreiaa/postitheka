@@ -104,15 +104,34 @@ func (s *Service) FinishConnect(ctx context.Context, platform publisher.Platform
 		return client, Account{}, fmt.Errorf("open oauth verifier: %w", err)
 	}
 
-	conn, err := connector.Exchange(ctx, code, string(verifier), s.redirectURL(platform))
+	// One consent can yield several accounts (Facebook: one per Page shared).
+	var conns []publisher.Connection
+	if multi, ok := connector.(publisher.MultiConnector); ok {
+		conns, err = multi.ExchangeAll(ctx, code, string(verifier), s.redirectURL(platform))
+	} else {
+		var conn publisher.Connection
+		conn, err = connector.Exchange(ctx, code, string(verifier), s.redirectURL(platform))
+		conns = []publisher.Connection{conn}
+	}
 	if err != nil {
 		// Logged here because the user only sees "failed": the platform's
 		// reason is what an operator needs. Never the code or tokens.
 		slog.WarnContext(ctx, "oauth exchange failed", "platform", platform, "error", err)
 		return client, Account{}, ConnectFailed
 	}
-	acct, err := s.storeAccount(ctx, row.UserID, platform, conn, nil)
-	return client, acct, err
+	// Each is stored on its own: one that fails does not undo the others,
+	// and connecting again renews them all. The first is what is returned.
+	var first Account
+	for i, conn := range conns {
+		acct, err := s.storeAccount(ctx, row.UserID, platform, conn, nil)
+		if err != nil {
+			return client, first, err
+		}
+		if i == 0 {
+			first = acct
+		}
+	}
+	return client, first, nil
 }
 
 // ConnectsByOAuth reports whether a platform's accounts connect through its

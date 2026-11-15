@@ -91,7 +91,11 @@ Tests stub the platform's HTTP API; see `discord_test.go`. Never a real token.
   use case to a Meta app, give a professional (Business or Creator) account a
   role on it, and set `INSTAGRAM_APP_ID` and `INSTAGRAM_APP_SECRET`. Meta
   downloads the media itself, so it cannot post from local storage.
-- **X, TikTok, Reddit, Facebook.** Order and blockers are in
+- **Facebook Pages** are built and tested against a stub; to use them, add
+  Facebook Login to the Meta app and set `FACEBOOK_APP_ID` and
+  `FACEBOOK_APP_SECRET` (the Meta app's own). Every Page you share in
+  Facebook's dialog becomes an account.
+- **X, TikTok, Reddit.** Order and blockers are in
   `BACKLOG.md` (P2). Start Meta Business Verification and the TikTok audit
   early; both take weeks.
 - **Discord forum channels** need `thread_name`; they fail permanently today.

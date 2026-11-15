@@ -160,7 +160,8 @@ type Publisher interface {
   ttl)` for platforms that download media themselves (Instagram, Threads, TikTok pull-from-URL).
 - Connecting by webhook is platform-specific (`discord.Connect`). An OAuth platform implements
   `publisher.OAuthConnector` (`AuthorizeURL`, `Exchange`) and shares one flow, below; both end in
-  `service.storeAccount`.
+  `service.storeAccount`. Where one consent grants several accounts (Facebook: one per Page), the
+  publisher also implements `publisher.MultiConnector` (`ExchangeAll`) and each is stored.
 - A publisher whose credentials expire implements `publisher.Refresher` (`NeedsRefresh`, no
   I/O; `Refresh`). The worker refreshes before claiming the target, holding `SELECT … FOR
   UPDATE` on the account and asking `NeedsRefresh` again once it has the lock, so a rotating
@@ -254,7 +255,7 @@ Checked dates matter: re-check a platform's docs before building it.
 | Threads | Direct (OAuth, threads.com) | **Built** (stub-tested) | Checked 2026-10-23: 500 characters (emoji counted in UTF-8 bytes), 5 links, carousel of 2–20; JPEG/PNG 8 MB, MP4/MOV 1 GB. Testers before App Review; needs the owner's Threads app. |
 | X | Direct (OAuth 2.0 PKCE) | Not started | Pay-per-use ($0.015 a post, $0.20 with a URL, 2026-10-23); owner decision. Weighted `CountText`. |
 | Reddit | Direct (OAuth 2.0) | Not started | Needs Reddit's approval first; text and links only. |
-| Facebook | Direct (Meta OAuth) | Not started | Pages only. Role holders on the app need no review; anyone else needs Business Verification + App Review (checked 2026-11-05). |
+| Facebook | Direct (Facebook Login) | **Built** (stub-tested) | Pages only; one account per Page shared at login. Checked 2026-11-15: text, photos (JPEG/PNG/GIF, 10 MB) singly or several in one post, or one MP4 by URL. Meta states no text, photo-count or video limit, so those are our caps (5,000 characters, 10 photos, 300 MB). Role holders before App Review; needs the owner's Meta app. |
 | Instagram | Direct (Instagram Login) | **Built** (stub-tested) | Checked 2026-11-14: caption of 2,200 characters, no post without media, carousel of 2–20; JPEG only, 8 MB; a single video is a reel, MP4/MOV 300 MB; all media by URL (`PublicURL`). Business/Creator accounts, no Page needed. 100 posts in 24 hours. Role holders before App Review; needs the owner's Instagram app. |
 | TikTok | Direct (Content Posting API) | Not started | Until the app passes TikTok's audit, posts are private-only. Upload-to-inbox (drafts) is the low-friction first step. Verify current rules. |
 | WhatsApp | Assisted (iOS share sheet) | **Built** | No posting API exists. The server sends nothing; it records the handoff the phone reports. |

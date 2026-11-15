@@ -540,6 +540,9 @@ func TestErrorClassification(t *testing.T) {
 			if err == nil {
 				t.Fatal("no error")
 			}
+			if publisher.NeedsReconnect(err) != (c.name == "expired token") {
+				t.Errorf("reconnect = %v: %v", publisher.NeedsReconnect(err), err)
+			}
 			if publisher.IsPermanent(err) != c.permanent {
 				t.Errorf("permanent = %v, want %v: %v", publisher.IsPermanent(err), c.permanent, err)
 			}

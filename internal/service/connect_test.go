@@ -236,3 +236,83 @@ func TestOAuthConnect(t *testing.T) {
 		}
 	})
 }
+
+// pagesStub is a platform where one consent yields several accounts, as a
+// Facebook login does with Pages.
+type pagesStub struct {
+	*oauthStub
+	pages []publisher.Connection
+	err   error
+}
+
+func (p *pagesStub) ExchangeAll(context.Context, string, string, string) ([]publisher.Connection, error) {
+	return p.pages, p.err
+}
+
+// FB-001. Every account the consent granted is stored, each under its own
+// remote id, and connecting again renews them instead of adding more.
+func TestOAuthConnectStoresEveryAccountGranted(t *testing.T) {
+	stub := &pagesStub{oauthStub: newOAuthStub(), pages: []publisher.Connection{
+		{DisplayName: "Bakery", Credentials: []byte("t1"), RemoteID: "page-1"},
+		{DisplayName: "Bike Shop", Credentials: []byte("t2"), RemoteID: "page-2"},
+	}}
+	e := setup(t, stub)
+	ctx := context.Background()
+	alice := e.user(t, "alice@example.com")
+
+	names := func() map[string]string {
+		t.Helper()
+		accounts, err := e.svc.ListAccounts(ctx, alice)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, a := range accounts {
+			if a.Platform == string(stubPlatform) {
+				out[a.ID.String()] = a.DisplayName
+			}
+		}
+		return out
+	}
+
+	state := consent(t, e, alice, service.ConnectFromWeb)
+	if got := callback(t, e, url.Values{"state": {state}, "code": {"c1"}}); got != "/?connected=oauthstub" {
+		t.Fatalf("redirect %q", got)
+	}
+	first := names()
+	if len(first) != 2 {
+		t.Fatalf("accounts %v, want Bakery and Bike Shop", first)
+	}
+
+	// Later the person shares one more Page and renames another.
+	stub.pages[0].DisplayName = "Bakery & Café"
+	stub.pages = append(stub.pages, publisher.Connection{DisplayName: "Choir", Credentials: []byte("t3"), RemoteID: "page-3"})
+	state = consent(t, e, alice, service.ConnectFromWeb)
+	callback(t, e, url.Values{"state": {state}, "code": {"c2"}})
+	second := names()
+	if len(second) != 3 {
+		t.Fatalf("accounts %v, want three", second)
+	}
+	renamed := false
+	for id, name := range first {
+		if _, kept := second[id]; !kept {
+			t.Errorf("%s got a new account instead of being renewed", name)
+		}
+		renamed = renamed || second[id] == "Bakery & Café"
+	}
+	if !renamed {
+		t.Errorf("accounts %v: the renamed Page kept its old name", second)
+	}
+
+	t.Run("nothing granted is a failure, and stores nothing", func(t *testing.T) {
+		bob := e.user(t, "bob@example.com")
+		stub.pages, stub.err = nil, errors.New("no pages")
+		s := consent(t, e, bob, service.ConnectFromWeb)
+		if got := callback(t, e, url.Values{"state": {s}, "code": {"c3"}}); got != "/?connect_error=failed" {
+			t.Errorf("redirect %q", got)
+		}
+		if accounts, _ := e.svc.ListAccounts(ctx, bob); len(accounts) != 0 {
+			t.Errorf("accounts %+v", accounts)
+		}
+	})
+}
