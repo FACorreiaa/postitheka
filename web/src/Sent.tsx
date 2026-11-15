@@ -231,7 +231,9 @@ function TargetRow({
   const status =
     t.status === "failed"
       ? "Not sent"
-      : t.status === "publishing"
+      : t.status === "drafted"
+        ? "Draft"
+        : t.status === "publishing"
         ? "Sending"
         : t.status === "handing_off"
           ? "On the phone"
@@ -244,6 +246,14 @@ function TargetRow({
       <span>
         {where}
         {t.last_error && <span className="reason">{sentence(t.last_error)}</span>}
+        {/* No postmark: nothing is public until its author posts it from the platform's app. */}
+        {t.status === "drafted" && (
+          <span className="reason">
+            Waiting in {platform}
+            {t.published_at ? ` since ${time.format(new Date(t.published_at))}` : ""}. Open the notification in the{" "}
+            {platform} app to add a caption and post it.
+          </span>
+        )}
         {warning && (
           <span className="reason caution">
             The last attempt stopped mid-send, so this may already be on {platform}. Check there before sending

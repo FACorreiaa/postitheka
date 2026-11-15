@@ -78,6 +78,9 @@ type Config struct {
 	XClientID     string
 	XClientSecret string
 
+	TikTokClientKey    string
+	TikTokClientSecret string
+
 	// PostHog product analytics. An empty key disables capture entirely:
 	// nothing is sent, and no credential is needed to develop.
 	PostHogAPIKey string
@@ -132,6 +135,8 @@ func load(serving bool) (Config, error) {
 		FacebookAppSecret:    env("FACEBOOK_APP_SECRET", ""),
 		XClientID:            env("X_CLIENT_ID", ""),
 		XClientSecret:        env("X_CLIENT_SECRET", ""),
+		TikTokClientKey:      env("TIKTOK_CLIENT_KEY", ""),
+		TikTokClientSecret:   env("TIKTOK_CLIENT_SECRET", ""),
 		PostHogAPIKey:        env("POSTHOG_API_KEY", ""),
 		PostHogHost:          strings.TrimSuffix(env("POSTHOG_HOST", "https://eu.i.posthog.com"), "/"),
 		Mascot3DModelURL:     env("MASCOT_3D_MODEL_URL", ""),
@@ -173,6 +178,9 @@ func load(serving bool) (Config, error) {
 	}
 	if (c.XClientID == "") != (c.XClientSecret == "") {
 		return Config{}, fmt.Errorf("config: set both X_CLIENT_ID and X_CLIENT_SECRET, or neither")
+	}
+	if (c.TikTokClientKey == "") != (c.TikTokClientSecret == "") {
+		return Config{}, fmt.Errorf("config: set both TIKTOK_CLIENT_KEY and TIKTOK_CLIENT_SECRET, or neither")
 	}
 
 	if c.PublicURL == "" && !c.IsProduction() {

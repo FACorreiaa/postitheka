@@ -1043,19 +1043,27 @@ func (q *Queries) MarkTargetPending(ctx context.Context, arg MarkTargetPendingPa
 
 const markTargetPublished = `-- name: MarkTargetPublished :exec
 UPDATE post_targets
-SET status = 'published', remote_id = $2, remote_url = $3, last_error = NULL,
+SET status = CASE WHEN $1::boolean THEN 'drafted' ELSE 'published' END,
+    remote_id = $2, remote_url = $3, last_error = NULL,
     published_at = now(), updated_at = now()
-WHERE id = $1
+WHERE id = $4
 `
 
 type MarkTargetPublishedParams struct {
-	ID        uuid.UUID
+	Draft     bool
 	RemoteID  *string
 	RemoteUrl *string
+	ID        uuid.UUID
 }
 
+// drafted: the platform holds the post for its author to finish there.
 func (q *Queries) MarkTargetPublished(ctx context.Context, arg MarkTargetPublishedParams) error {
-	_, err := q.db.Exec(ctx, markTargetPublished, arg.ID, arg.RemoteID, arg.RemoteUrl)
+	_, err := q.db.Exec(ctx, markTargetPublished,
+		arg.Draft,
+		arg.RemoteID,
+		arg.RemoteUrl,
+		arg.ID,
+	)
 	return err
 }
 

@@ -810,6 +810,12 @@ label {
   color: var(--cancel);
 }
 
+.target.drafted .pill {
+  border-style: solid;
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
 .target.publishing .pill {
   border-style: solid;
   color: var(--postmark);

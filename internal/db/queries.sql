@@ -218,11 +218,13 @@ WHERE t.id = $1;
 UPDATE post_targets SET status = 'publishing', updated_at = now()
 WHERE id = $1 AND status = 'pending';
 
+-- drafted: the platform holds the post for its author to finish there.
 -- name: MarkTargetPublished :exec
 UPDATE post_targets
-SET status = 'published', remote_id = $2, remote_url = $3, last_error = NULL,
+SET status = CASE WHEN sqlc.arg(draft)::boolean THEN 'drafted' ELSE 'published' END,
+    remote_id = sqlc.narg(remote_id), remote_url = sqlc.narg(remote_url), last_error = NULL,
     published_at = now(), updated_at = now()
-WHERE id = $1;
+WHERE id = sqlc.arg(id);
 
 -- name: MarkTargetPending :exec
 UPDATE post_targets SET status = 'pending', last_error = $2, updated_at = now()

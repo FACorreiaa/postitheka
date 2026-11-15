@@ -695,7 +695,7 @@ extension Components {
             public var account_id: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Target/platform`.
             public var platform: Components.Schemas.Platform
-            /// handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
+            /// drafted: the platform holds the post for its author to finish and send from the platform's own app (a video in a TikTok inbox); published_at is when the platform took it. handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/Target/status`.
@@ -706,8 +706,9 @@ extension Components {
                 case failed = "failed"
                 case handing_off = "handing_off"
                 case handed_off = "handed_off"
+                case drafted = "drafted"
             }
-            /// handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
+            /// drafted: the platform holds the post for its author to finish and send from the platform's own app (a video in a TikTok inbox); published_at is when the platform took it. handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/Target/status`.
@@ -731,7 +732,7 @@ extension Components {
             ///   - id:
             ///   - account_id: Absent once the account has been disconnected.
             ///   - platform:
-            ///   - status: handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
+            ///   - status: drafted: the platform holds the post for its author to finish and send from the platform's own app (a video in a TikTok inbox); published_at is when the platform took it. handing_off and handed_off are for assisted platforms: the client is showing the share sheet, or the user sent the post from the platform's own app.
             ///   - last_error:
             ///   - interrupted: Present and true when the target failed because an attempt died mid-request, so the post may already be live on the platform. Check there before retrying.
             ///   - remote_url:
