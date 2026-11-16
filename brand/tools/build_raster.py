@@ -49,23 +49,9 @@ bg.resize((256, 256), Image.LANCZOS).save(f"{OUT}/mascot/mascot-avatar-256.png",
 # --- icons -------------------------------------------------------------------
 B = f"{OUT}/svg"
 I = f"{OUT}/icons"
-for s in (16, 32, 48):
-    svg(f"{B}/favicon.svg", f"{I}/favicon-{s}.png", s)
-ico = Image.open(f"{I}/favicon-48.png")
-ico.save(f"{I}/favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)],
-         append_images=[Image.open(f"{I}/favicon-{s}.png") for s in (16, 32)])
-for s in (192, 512):
-    svg(f"{B}/icon-rounded.svg", f"{I}/icon-{s}.png", s)
-    svg(f"{B}/icon-square.svg", f"{I}/icon-maskable-{s}.png", s)  # mark sits inside the 80% safe zone
-
-
-def flat(src, dst, s):  # iOS rejects alpha in app icons
-    svg(src, dst, s)
-    Image.open(dst).convert("RGB").save(dst, optimize=True)
-
-
-flat(f"{B}/icon-square.svg", f"{I}/apple-touch-icon.png", 180)
-flat(f"{B}/icon-square.svg", f"{I}/ios-appicon-1024.png", 1024)
+# The app and browser icons (favicon, PWA, apple-touch-icon, iOS app icon) come from the emblem
+# the owner chose on 2026-11-16: brand/tools/build_app_icon.py. Writing them here as well would
+# put the old stamp icons back.
 
 # Android adaptive icon: 108dp canvas, foreground must fit the 66dp safe circle
 fg = 432
