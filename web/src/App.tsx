@@ -81,6 +81,11 @@ function SignIn({ onSignIn }: { onSignIn: (token: string) => void }) {
             Sign in
           </button>
         </form>
+        {/* Plain links: the pages are static HTML outside the app (PRV-001). */}
+        <p className="legal">
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+        </p>
       </div>
       <figure className="hero">
         <Mascot3D />

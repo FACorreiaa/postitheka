@@ -49,6 +49,18 @@ struct SignInView: View {
                 .disabled(token.isEmpty || busy)
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
+
+                // The pages are served by the same server the app talks to (PRV-001).
+                if let base = model.baseURL {
+                    HStack(spacing: 20) {
+                        Link("Privacy", destination: base.appending(path: "privacy/"))
+                        Link("Terms", destination: base.appending(path: "terms/"))
+                    }
+                    .font(.footnote)
+                    .tint(Color.secondary)
+                    .frame(maxWidth: .infinity)
+                    .listRowBackground(Color.clear)
+                }
             }
             .brandBackdrop()
             .scrollDismissesKeyboard(.interactively)

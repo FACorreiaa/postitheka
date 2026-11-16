@@ -358,6 +358,14 @@ git-ignored `out/mascot3d/`; Vite serves that folder at `/mascot3d/` in developm
 never reaches `dist` or the binary. A beta deployment points the variable at a CDN (undecided).
 `scripts/size-budget.mjs` holds the entry's gzip budget and the lazy total separately.
 
+### Privacy and terms (`web/public/privacy/`, `web/public/terms/`)
+
+Static HTML copied into `web/dist` by Vite and served by `web.Handler` as directories
+(`/privacy/`, `/terms/`), so a platform reviewer's crawler reads them without JavaScript. They
+share `web/public/legal.css`, which repeats the app's colour tokens. Both sign-in screens link to
+them; the iOS app builds the links from `API_BASE_URL`. A change to what the server stores or
+who it sends data to changes the privacy page in the same change (PRV-001).
+
 ### iOS (`ios/`, built: composer, Sent, accounts, WhatsApp handoff)
 
 SwiftUI, iOS 18. `PostithekaKit` (a local Swift package) holds everything testable without a
