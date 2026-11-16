@@ -90,6 +90,22 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
   const failedUpload = files.some((f) => f.error);
   const empty = text.trim() === "" && files.length === 0;
   const canPublish = !busy && chosen.length > 0 && !empty && !blocked && !uploading && !failedUpload;
+  // Why Publish is disabled, in the order a person would fix it. A disabled
+  // button alone said nothing, and the first production user could not tell
+  // that a stamp had to be clicked (2026-11-16).
+  const waitingFor = busy || canPublish
+    ? null
+    : uploading
+      ? "Publish unlocks when uploads finish."
+      : failedUpload
+        ? "Remove the file that failed to upload."
+        : empty
+          ? "Write something or add a photo or video."
+          : shown.length > 0 && chosen.length === 0
+            ? "Click a stamp to choose where it goes."
+            : blocked
+              ? "Fix what a chosen stamp objects to."
+              : null;
 
   function patch(localId: string, change: Partial<Attachment>) {
     setFiles((prev) => prev.map((f) => (f.localId === localId ? { ...f, ...change } : f)));
@@ -325,7 +341,7 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
           {busy ? "Publishing…" : scheduleAt ? "Schedule" : "Publish"}
         </button>
       </div>
-      {uploading && <p className="help">Publish unlocks when uploads finish.</p>}
+      {waitingFor && <p className="help publish-reason">{waitingFor}</p>}
     </section>
   );
 }

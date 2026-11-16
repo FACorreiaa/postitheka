@@ -124,6 +124,19 @@ struct ComposerTests {
         #expect(c.pendingHandoff == nil)
     }
 
+    @Test func saysWhatPublishIsWaitingFor() {
+        let c = composer(StubTransport())
+        c.selected = []
+        #expect(c.waitingFor == "Write something or add a photo or video.")
+        c.text = "hello"
+        #expect(c.waitingFor == "Tap a stamp to choose where it goes.")
+        c.selected = [account.id]
+        #expect(c.canPublish)
+        #expect(c.waitingFor == nil)
+        c.text = String(repeating: "a", count: 2001)
+        #expect(c.waitingFor == "Fix what a chosen stamp objects to.")
+    }
+
     @Test func aHandoffCannotBeScheduled() {
         let c = composer(StubTransport())
         c.text = "x"

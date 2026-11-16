@@ -72,6 +72,9 @@ struct ComposerView: View {
                 }
                 .brandRow()
 
+                if let reason = composer.waitingFor {
+                    Section { Text(reason).font(.callout).foregroundStyle(.secondary) }.brandRow()
+                }
                 if let error = composer.error {
                     Section { Text(error).foregroundStyle(.red) }.brandRow()
                 }
