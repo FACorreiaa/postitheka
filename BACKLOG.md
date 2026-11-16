@@ -107,7 +107,7 @@ Strangers who have published a post: **0**.
 | ID | Status | Evidence | Caveat |
 | --- | --- | --- | --- |
 | FND-001 | Done | `internal/`, `cmd/server`; `task check` green | |
-| FND-002 | Done | `internal/publisher/discord`; `discord_test.go` | Never posted to a real channel |
+| FND-002 | Done | `internal/publisher/discord`; `discord_test.go`. First real post 2026-11-16 from production: text, one PNG, a forum post title set, published first try with a message URL | |
 | FND-003 | Done | `internal/service/service_test.go` (`TestPostIsPublishedEndToEnd`, `TestWorkerOutcomes`) | |
 | FND-004 | Done | `web/`; checked in Chrome at 1400 and 390 px | |
 | FND-005 | Done | `migrations/20261022170000_post_media_cascade.sql`; `TestDeletingAUserRemovesEverything` | |
@@ -115,7 +115,7 @@ Strangers who have published a post: **0**.
 | REL-001 | Done | PR #1: CI green, `internal/service` tests ran (3.6 s, none skipped), image built | |
 | REL-002 | Done | Image workflow run 39870125984 on `main` (38a1c3a) after PR #1 merged, 2026-10-22 | Package visibility not checked |
 | REL-003 | Done | R2 bucket `postitheka-production` (Western Europe, private) with the upload CORS rule; account token scoped to that bucket, sealed into `postitheka-env` (LuminaVaultInfra #651, #656), 2026-11-16 | |
-| REL-004 | Done | Live at https://postitheka.facorreia.com since 2026-11-16: promote by hand (LuminaVaultInfra #654, image `990fdcb`), migrations applied, `/healthz` `/health/live` `/health/ready` 200, TLS from Let's Encrypt, R2 preflight 204 from the app origin and 403 from others. Promotes are manual by the owner's choice; `INFRA_TOKEN` is not set | First real post not sent yet |
+| REL-004 | Done | Live at https://postitheka.facorreia.com since 2026-11-16: promote by hand (LuminaVaultInfra #654, image `990fdcb`), migrations applied, `/healthz` `/health/live` `/health/ready` 200, TLS from Let's Encrypt, R2 preflight 204 from the app origin and 403 from others. Promotes are manual by the owner's choice; `INFRA_TOKEN` is not set. The owner published a post with an image to a real Discord channel from production on 2026-11-16 | |
 | AUTH-001 | Open | App ID `com.fernandocorreia.postitheka` registered | Needs hostname and the key (Owner) |
 | API-001 | Done | `migrations/20261022190000_post_idempotency.sql`; `TestCreatePostIsIdempotent` (incl. 8 concurrent requests, one post) | Web retry path checked by typecheck only, not in a browser |
 | MED-002 | Built, unverified | `Service.DeleteUser`, `media.Store.DeletePrefix`, `server user delete EMAIL` (`task user:delete`); `TestDeleteUserRemovesTheirUploadsFromStorage` (objects with and without a row, another user's untouched, storage down leaves the user in place, queued job posts nothing); live run against RustFS removed two objects and left another prefix alone | Not run against R2. No route or button yet: a signed-in user cannot delete their own account until AUTH-001. An upload URL issued before the deletion still works for its 30 minutes |

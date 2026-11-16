@@ -47,7 +47,7 @@ write a different text per platform. Still open: whether X is premium too, and h
 
 | Platform | Text only | Images | Video | Image + video together | Cost | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| Discord | Yes, 2,000 | 10 files, 20 MiB each | 20 MiB per file | Yes | Free | Built |
+| Discord | Yes, 2,000 | 10 files, 20 MiB each | 20 MiB per file | Yes | Free | Live (first real post 2026-11-16) |
 | LinkedIn | Yes, 3,000 | 1 to 20, 5 MB | One MP4, 3 s to 30 min, 500 MB | No | Free | Built |
 | Threads | Yes, 500 | Up to 20, JPEG/PNG, 8 MB | MP4/MOV, 5 min, 1 GB | Carousel: not checked | Free | Built, not on `main` |
 | X | Yes, 280 weighted | Up to 4, 5 MB | 20 min, 8 GB | Unconfirmed | $0.015 a post, $0.20 with a URL | Not built |
