@@ -1,0 +1,44 @@
+/* The privacy and terms pages (PRV-001). Plain HTML so a reviewer's crawler reads them without
+   JavaScript. Colours are the app's tokens from src/styles.css; the app's font is bundled by
+   Vite and not available here, so these use the system's. */
+:root {
+  --paper: #0b0e14;
+  --sheet: #151923;
+  --ink: #f3e3cb;
+  --muted: #a89d8e;
+  --rule: #2f2e33;
+  --gold: #e0ae6e;
+  --gold-bright: #f4cc94;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 2rem; }
+header img { width: 40px; height: 40px; }
+header a { color: var(--ink); text-decoration: none; font-weight: 700; font-size: 1.25rem; }
+h1 { font-size: 1.953rem; line-height: 1.2; margin: 0 0 0.25rem; }
+h2 { font-size: 1.25rem; margin: 2.25rem 0 0.5rem; color: var(--gold-bright); }
+p, li { color: var(--ink); }
+.updated, .muted { color: var(--muted); font-size: 0.9rem; }
+a { color: var(--gold); }
+a:focus-visible { outline: 2px solid var(--gold-bright); outline-offset: 2px; }
+ul { padding-left: 1.25rem; }
+li { margin: 0.35rem 0; }
+table { width: 100%; border-collapse: collapse; margin: 0.75rem 0; font-size: 0.95rem; }
+th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.5rem 0.5rem 0; border-bottom: 1px solid var(--rule); }
+th { color: var(--muted); font-weight: 600; }
+footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+footer a { margin-right: 1rem; }
+@media (max-width: 480px) {
+  table, thead, tbody, tr, th, td { display: block; }
+  thead { display: none; }
+  td { border: 0; padding: 0.15rem 0; }
+  tr { border-bottom: 1px solid var(--rule); padding: 0.5rem 0; }
+  td:first-child { font-weight: 600; color: var(--gold-bright); }
+}

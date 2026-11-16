@@ -219,6 +219,22 @@ label {
   }
 }
 
+.signin .legal {
+  display: flex;
+  gap: 1.25rem;
+  margin: 1.5rem 0 0;
+  font-size: var(--s-1);
+}
+
+.signin .legal a {
+  color: var(--muted);
+}
+
+.signin .legal a:hover,
+.signin .legal a:focus-visible {
+  color: var(--gold-bright);
+}
+
 .signin .wordmark .logo {
   height: 5rem;
 }
