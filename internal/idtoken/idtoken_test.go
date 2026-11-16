@@ -1,4 +1,4 @@
-package appleid_test
+package idtoken_test
 
 import (
 	"context"
@@ -17,7 +17,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/FACorreiaa/postitheka/internal/appleid"
+	"github.com/FACorreiaa/postitheka/internal/idtoken"
 )
 
 const bundle = "com.example.postitheka"
@@ -64,6 +64,13 @@ func (a *apple) sign(t *testing.T, kid string, claims map[string]any) string {
 	return head + "." + base64.RawURLEncoding.EncodeToString(sig)
 }
 
+// appleVerifier is the real Apple verifier pointed at a stub key server.
+func appleVerifier(audiences []string, keys string) *idtoken.Verifier {
+	v := idtoken.Apple(audiences)
+	v.KeysURL = keys
+	return v
+}
+
 func hashed(raw string) string {
 	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
@@ -71,7 +78,7 @@ func hashed(raw string) string {
 
 func claims(now time.Time, nonce string) map[string]any {
 	return map[string]any{
-		"iss": appleid.Issuer, "aud": bundle, "sub": "001234.abcd",
+		"iss": idtoken.AppleIssuer, "aud": bundle, "sub": "001234.abcd",
 		"exp": now.Add(5 * time.Minute).Unix(), "iat": now.Unix(),
 		"nonce": hashed(nonce), "email": "Person@Example.com", "email_verified": "true",
 	}
@@ -80,7 +87,7 @@ func claims(now time.Time, nonce string) map[string]any {
 func TestVerifyAcceptsAGoodToken(t *testing.T) {
 	a := newApple(t)
 	now := time.Now()
-	v := &appleid.Verifier{Audiences: []string{"web.services.id", bundle}, KeysURL: a.server.URL}
+	v := appleVerifier([]string{"web.services.id", bundle}, a.server.URL)
 	got, err := v.Verify(context.Background(), a.sign(t, a.kid, claims(now, "raw-nonce")), "raw-nonce")
 	if err != nil {
 		t.Fatal(err)
@@ -125,8 +132,8 @@ func TestVerifyRefusesWhatApplesDocsSayToCheck(t *testing.T) {
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			v := &appleid.Verifier{Audiences: []string{bundle}, KeysURL: a.server.URL}
-			if _, err := v.Verify(context.Background(), c.token, c.nonce); !errors.Is(err, appleid.ErrInvalid) {
+			v := appleVerifier([]string{bundle}, a.server.URL)
+			if _, err := v.Verify(context.Background(), c.token, c.nonce); !errors.Is(err, idtoken.ErrInvalid) {
 				t.Fatalf("err = %v, want ErrInvalid", err)
 			}
 		})
@@ -146,7 +153,7 @@ func tamper(token string) string {
 
 func TestUnknownKidsDoNotHammerApple(t *testing.T) {
 	a := newApple(t)
-	v := &appleid.Verifier{Audiences: []string{bundle}, KeysURL: a.server.URL}
+	v := appleVerifier([]string{bundle}, a.server.URL)
 	for range 20 {
 		_, _ = v.Verify(context.Background(), a.sign(t, "forged", claims(time.Now(), "n")), "n")
 	}
@@ -161,15 +168,40 @@ func TestAppleUnreachableIsNotAnInvalidToken(t *testing.T) {
 	}))
 	defer down.Close()
 	a := newApple(t)
-	v := &appleid.Verifier{Audiences: []string{bundle}, KeysURL: down.URL}
+	v := appleVerifier([]string{bundle}, down.URL)
 	_, err := v.Verify(context.Background(), a.sign(t, a.kid, claims(time.Now(), "n")), "n")
-	if err == nil || errors.Is(err, appleid.ErrInvalid) {
+	if err == nil || errors.Is(err, idtoken.ErrInvalid) {
 		t.Fatalf("err = %v, want a fetch error", err)
 	}
 }
 
 func TestNoAudienceMeansOff(t *testing.T) {
-	if (&appleid.Verifier{}).Configured() {
+	if (&idtoken.Verifier{}).Configured() {
 		t.Fatal("a verifier with no client id must be off")
+	}
+}
+
+// Google's tokens differ from Apple's only in issuer and keys; the checks are the same code.
+func TestGoogleTokensAreCheckedTheSameWay(t *testing.T) {
+	g := newApple(t) // a key server like any other
+	now := time.Now()
+	const client = "123-abc.apps.googleusercontent.com"
+	v := idtoken.Google([]string{client})
+	v.KeysURL = g.server.URL
+	good := func(iss string) map[string]any {
+		return map[string]any{
+			"iss": iss, "aud": client, "sub": "10987654321", "exp": now.Add(time.Hour).Unix(),
+			"nonce": hashed("n"), "email": "Person@Gmail.com", "email_verified": true,
+		}
+	}
+	for _, iss := range []string{idtoken.GoogleIssuer, idtoken.GoogleIssuerShort} {
+		got, err := v.Verify(context.Background(), g.sign(t, g.kid, good(iss)), "n")
+		if err != nil || got.Subject != "10987654321" || got.Email != "person@gmail.com" || !got.EmailVerified {
+			t.Fatalf("iss %s: identity %+v, err %v", iss, got, err)
+		}
+	}
+	// An Apple token is not a Google one, even with our client id in it.
+	if _, err := v.Verify(context.Background(), g.sign(t, g.kid, good(idtoken.AppleIssuer)), "n"); !errors.Is(err, idtoken.ErrInvalid) {
+		t.Fatalf("Apple's issuer accepted by the Google verifier: %v", err)
 	}
 }

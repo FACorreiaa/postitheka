@@ -91,4 +91,5 @@ type User struct {
 	Email     string
 	CreatedAt time.Time
 	AppleSub  *string
+	GoogleSub *string
 }

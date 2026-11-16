@@ -26,11 +26,11 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/FACorreiaa/postitheka/internal/analytics"
-	"github.com/FACorreiaa/postitheka/internal/appleid"
 	"github.com/FACorreiaa/postitheka/internal/config"
 	"github.com/FACorreiaa/postitheka/internal/database"
 	"github.com/FACorreiaa/postitheka/internal/db"
 	"github.com/FACorreiaa/postitheka/internal/httpapi"
+	"github.com/FACorreiaa/postitheka/internal/idtoken"
 	"github.com/FACorreiaa/postitheka/internal/jobs"
 	"github.com/FACorreiaa/postitheka/internal/media"
 	"github.com/FACorreiaa/postitheka/internal/publisher"
@@ -191,7 +191,8 @@ func serve(cfg config.Config) error {
 		Discord:   discordPub,
 		Analytics: events,
 		PublicURL: cfg.PublicURL,
-		Apple:     &appleid.Verifier{Audiences: cfg.AppleAudiences()},
+		Apple:     idtoken.Apple(cfg.AppleAudiences()),
+		Google:    idtoken.Google(cfg.GoogleAudiences()),
 	})
 
 	srv := &http.Server{
@@ -266,11 +267,12 @@ func routes(cfg config.Config, pool *pgxpool.Pool, svc *service.Service) http.Ha
 	r.With(public).Get("/oauth/{platform}/callback", httpapi.OAuthCallback(svc, slog.Default()))
 
 	// Outside the spec too: the sign-in page reads it before there is a token.
-	r.With(public).Get("/client-config", httpapi.ClientConfig(cfg.Mascot3DModelURL, cfg.AppleWebClientID))
+	r.With(public).Get("/client-config", httpapi.ClientConfig(cfg.Mascot3DModelURL, cfg.AppleWebClientID, cfg.GoogleWebClientID))
 
 	// Outside the spec too: this is how a person gets their first token (AUTH-001). Limited by
 	// address like the routes above; a body is a few kilobytes at most.
 	r.With(public).Post("/auth/apple", httpapi.AppleSignIn(svc, slog.Default()))
+	r.With(public).Post("/auth/google", httpapi.GoogleSignIn(svc, slog.Default()))
 
 	r.Group(func(api chi.Router) {
 		// Every API body is JSON: media goes straight to object storage, so

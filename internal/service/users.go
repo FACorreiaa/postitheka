@@ -11,10 +11,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/FACorreiaa/postitheka/internal/analytics"
-	"github.com/FACorreiaa/postitheka/internal/appleid"
 	"github.com/FACorreiaa/postitheka/internal/db"
+	"github.com/FACorreiaa/postitheka/internal/idtoken"
 )
 
 // tokenPrefix makes a leaked token recognisable to secret scanners and to a
@@ -26,8 +27,8 @@ var ErrUnauthenticated = errors.New("unauthenticated")
 // CreateUserWithToken creates a user, or finds an existing one by email, and
 // mints a new API token for it. The token is returned once and never stored.
 //
-// The operator's path (`server user create EMAIL`): people sign in with Apple
-// (SignInWithApple), which claims a user made here by its email.
+// The operator's path (`server user create EMAIL`): people sign in with Apple or Google
+// (SignInWithApple, SignInWithGoogle), which claim a user made here by its email.
 func (s *Service) CreateUserWithToken(ctx context.Context, email, tokenName string) (uuid.UUID, string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if !strings.Contains(email, "@") {
@@ -70,51 +71,95 @@ func (s *Service) mintToken(ctx context.Context, userID uuid.UUID, name string) 
 	return token, nil
 }
 
-// AppleVerifier checks a Sign in with Apple identity token; appleid.Verifier is the real one.
-type AppleVerifier interface {
+// IdentityVerifier checks ID tokens from one sign-in provider; idtoken.Verifier is the real one.
+type IdentityVerifier interface {
 	Configured() bool
-	Verify(ctx context.Context, identityToken, rawNonce string) (appleid.Identity, error)
+	Verify(ctx context.Context, idToken, rawNonce string) (idtoken.Identity, error)
 }
 
-// ErrAppleOff is Apple sign-in asked for on a server with no Apple client id configured.
-var ErrAppleOff = errors.New("sign in with Apple is not configured")
+// ErrProviderOff is a sign-in asked for with a provider that has no client id configured.
+var ErrProviderOff = errors.New("this sign-in provider is not configured")
 
-// SignInWithApple signs a person in with an identity token from Apple, creating their user on
-// the first sign-in, and returns a new API token: the same bearer token the rest of the API
-// already takes (AUTH-001). client names the token ("apple-ios", "apple-web").
+// provider is one way to sign in: its verifier and the queries that key users on its subject.
+type provider struct {
+	name     string // for people: "Apple", "Google"
+	verifier IdentityVerifier
+	bySub    func(context.Context, *string) (db.User, error)
+	claim    func(context.Context, string, *string) (db.User, error)
+	create   func(context.Context, string, *string) (db.User, error)
+}
+
+// SignInWithApple signs a person in with an identity token from Apple (AUTH-001). client names
+// the token ("apple-ios", "apple-web"). See signIn.
+func (s *Service) SignInWithApple(ctx context.Context, idToken, rawNonce, client string) (string, bool, error) {
+	return s.signIn(ctx, provider{
+		name: "Apple", verifier: s.apple,
+		bySub: s.q.GetUserByAppleSub,
+		claim: func(ctx context.Context, email string, sub *string) (db.User, error) {
+			return s.q.ClaimUserForApple(ctx, db.ClaimUserForAppleParams{Email: email, AppleSub: sub})
+		},
+		create: func(ctx context.Context, email string, sub *string) (db.User, error) {
+			return s.q.CreateAppleUser(ctx, db.CreateAppleUserParams{Email: email, AppleSub: sub})
+		},
+	}, idToken, rawNonce, client)
+}
+
+// SignInWithGoogle signs a person in with an ID token from Google (AUTH-002). client names the
+// token ("google-ios", "google-web"). See signIn.
+func (s *Service) SignInWithGoogle(ctx context.Context, idToken, rawNonce, client string) (string, bool, error) {
+	return s.signIn(ctx, provider{
+		name: "Google", verifier: s.google,
+		bySub: s.q.GetUserByGoogleSub,
+		claim: func(ctx context.Context, email string, sub *string) (db.User, error) {
+			return s.q.ClaimUserForGoogle(ctx, db.ClaimUserForGoogleParams{Email: email, GoogleSub: sub})
+		},
+		create: func(ctx context.Context, email string, sub *string) (db.User, error) {
+			return s.q.CreateGoogleUser(ctx, db.CreateGoogleUserParams{Email: email, GoogleSub: sub})
+		},
+	}, idToken, rawNonce, client)
+}
+
+// signIn checks an ID token, finds or creates its user, and returns a new API token: the same
+// bearer token the rest of the API already takes. The bool is true when the user was created.
 //
-// The user is found by Apple's subject, never by email. A user made before Apple sign-in (by
-// `server user create`) is claimed by the first Apple sign-in whose verified email matches, so
-// the owner's existing account carries over. An Apple id with no user yet and no email to
-// create one with is refused: an account needs an address to be reached at.
-func (s *Service) SignInWithApple(ctx context.Context, identityToken, rawNonce, client string) (string, bool, error) {
-	if s.apple == nil || !s.apple.Configured() {
-		return "", false, ErrAppleOff
+// The user is found by the provider's subject, never by email. Failing that, a user with the
+// same email is claimed, but only for an email the provider has verified: one the CLI made (so
+// the owner's account carries over), or one another provider made (so a person who signs in
+// with Apple and then Google stays one account). Failing that, a user is created; that too
+// needs a verified email, since an account needs an address to be reached at.
+func (s *Service) signIn(ctx context.Context, p provider, idToken, rawNonce, client string) (string, bool, error) {
+	if p.verifier == nil || !p.verifier.Configured() {
+		return "", false, ErrProviderOff
 	}
-	id, err := s.apple.Verify(ctx, identityToken, rawNonce)
-	if errors.Is(err, appleid.ErrInvalid) {
+	id, err := p.verifier.Verify(ctx, idToken, rawNonce)
+	if errors.Is(err, idtoken.ErrInvalid) {
 		return "", false, ErrUnauthenticated
 	}
 	if err != nil {
-		return "", false, fmt.Errorf("sign in with apple: %w", err)
+		return "", false, fmt.Errorf("sign in with %s: %w", p.name, err)
 	}
 
 	created := false
-	user, err := s.q.GetUserByAppleSub(ctx, &id.Subject)
-	if errors.Is(err, pgx.ErrNoRows) && id.Email != "" && id.EmailVerified {
-		user, err = s.q.ClaimUserForApple(ctx, db.ClaimUserForAppleParams{Email: id.Email, AppleSub: &id.Subject})
-	}
+	user, err := p.bySub(ctx, &id.Subject)
 	if errors.Is(err, pgx.ErrNoRows) {
-		if id.Email == "" {
-			return "", false, &BadRequest{Message: "Apple did not share an email address; sign in again and allow it"}
+		switch {
+		case id.Email == "":
+			return "", false, &BadRequest{Message: p.name + " did not share an email address; sign in again and allow it"}
+		case !id.EmailVerified:
+			return "", false, &BadRequest{Message: p.name + " has not verified this email address"}
 		}
-		user, err = s.q.CreateAppleUser(ctx, db.CreateAppleUserParams{Email: id.Email, AppleSub: &id.Subject})
-		created = err == nil
+		user, err = p.claim(ctx, id.Email, &id.Subject)
+		if errors.Is(err, pgx.ErrNoRows) {
+			user, err = p.create(ctx, id.Email, &id.Subject)
+			created = err == nil
+		}
+	}
+	if isUniqueViolation(err) {
+		// The email belongs to a user already tied to another id at this provider.
+		return "", false, &BadRequest{Message: "This email address already belongs to another account"}
 	}
 	if err != nil {
-		// An email already held by another Apple id (a unique violation) lands here too; it
-		// cannot happen with Apple's own addresses, which are unique to one Apple id.
-		return "", false, fmt.Errorf("sign in with apple: user: %w", err)
+		return "", false, fmt.Errorf("sign in with %s: user: %w", p.name, err)
 	}
 	if created {
 		s.events.Capture(analytics.Event{Name: analytics.EventSignedUp, DistinctID: user.ID.String()})
@@ -124,6 +169,11 @@ func (s *Service) SignInWithApple(ctx context.Context, identityToken, rawNonce, 
 		return "", false, err
 	}
 	return token, created, nil
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 // Authenticate resolves a bearer token to its user.

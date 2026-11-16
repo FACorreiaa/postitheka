@@ -87,7 +87,7 @@ postitheka/
       tiktok/
       x/
     secretbox/              # credential encryption
-    appleid/                # Sign in with Apple: identity tokens checked against Apple's keys
+    idtoken/                # Sign in with Apple and Google: ID tokens checked against the provider's keys
     analytics/              # product events (PostHog); empty key sends nothing
     service/                # application behaviour: accounts, uploads, posts, tokens
   migrations/               # goose SQL; never edit one that has been applied

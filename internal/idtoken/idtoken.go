@@ -1,14 +1,18 @@
-// Package appleid verifies Sign in with Apple identity tokens (AUTH-001).
+// Package idtoken verifies the ID tokens people sign in with: Sign in with Apple (AUTH-001)
+// and Sign in with Google (AUTH-002).
 //
-// The iOS app and the web page each get an identity token from Apple and send it here. It is a
-// JWT that Apple signs with RS256; the keys are published at Keys. Verifying it needs no private
-// key of ours: a .p8 key is only for exchanging an authorization code or revoking a token, which
-// sign-in does not do. Same approach as Khepri and Aaru.
+// The iOS app and the web page each get an ID token from the provider and send it here. It is a
+// JWT the provider signs with RS256, with its public keys published at a fixed URL. Verifying it
+// needs no secret of ours: Apple's .p8 key and Google's client secret are only for exchanging an
+// authorization code or revoking a token, which sign-in does not do.
 //
-// Checked against https://developer.apple.com/documentation/signinwithapple/verifying-a-user
-// (2026-11-16): signature by a key from Keys, iss is Issuer, aud is our client id (the app's
-// bundle id, or the web Services ID), exp not passed, nonce matches what the client sent.
-package appleid
+// Checked 2026-11-16 against
+// https://developer.apple.com/documentation/signinwithapple/verifying-a-user and
+// https://developers.google.com/identity/gsi/web/guides/verify-google-id-token: signature by a
+// published key, iss is the provider's, aud is one of our client ids, exp not passed. Both let
+// the client set the token's nonce; the client sets the SHA-256 of a raw nonce and sends the raw
+// one here, so a token lifted from another sign-in does not verify.
+package idtoken
 
 import (
 	"context"
@@ -23,15 +27,32 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
-	Issuer = "https://appleid.apple.com"
-	Keys   = "https://appleid.apple.com/auth/keys"
+	AppleIssuer = "https://appleid.apple.com"
+	AppleKeys   = "https://appleid.apple.com/auth/keys"
+	// Google issues tokens under either spelling.
+	GoogleIssuer      = "https://accounts.google.com"
+	GoogleIssuerShort = "accounts.google.com"
+	GoogleKeys        = "https://www.googleapis.com/oauth2/v3/certs"
 )
+
+// Apple checks Sign in with Apple identity tokens issued to audiences: the app's bundle ids and
+// the web Services ID.
+func Apple(audiences []string) *Verifier {
+	return &Verifier{Issuers: []string{AppleIssuer}, KeysURL: AppleKeys, Audiences: audiences}
+}
+
+// Google checks Sign in with Google ID tokens issued to audiences: the iOS and web OAuth client
+// ids.
+func Google(audiences []string) *Verifier {
+	return &Verifier{Issuers: []string{GoogleIssuer, GoogleIssuerShort}, KeysURL: GoogleKeys, Audiences: audiences}
+}
 
 // ErrInvalid is any token that fails a check. The caller answers 401 and says no more: which
 // check failed is no business of someone presenting a forged token.
@@ -39,22 +60,24 @@ var ErrInvalid = errors.New("invalid identity token")
 
 // Identity is what a verified token says about the person.
 type Identity struct {
-	// Subject is Apple's stable id for the person across this team's apps. Accounts are keyed
-	// on it, never on Email.
+	// Subject is the provider's stable id for the person. Accounts are keyed on it, never on
+	// Email.
 	Subject string
-	// Email as Apple shares it: the real address or a private relay one. Empty if the token
-	// carries none.
+	// Email as the provider shares it; with Apple, possibly a private relay address. Empty if
+	// the token carries none.
 	Email string
-	// EmailVerified is Apple's word that the address is the person's. Apple marks every email
-	// it shares verified; the flag is still checked before an email claims an existing user.
+	// EmailVerified is the provider's word that the address is the person's. Checked before an
+	// email claims an existing user.
 	EmailVerified bool
 }
 
-// Verifier checks identity tokens. Audiences are the client ids accepted: the app's bundle id
-// and, for the web, its Services ID.
+// Verifier checks ID tokens from one provider; Apple and Google build one. Audiences are the
+// client ids accepted.
 type Verifier struct {
 	Audiences []string
-	// KeysURL defaults to Keys; tests point it at a stub.
+	// Issuers are the iss values accepted.
+	Issuers []string
+	// KeysURL is where the provider publishes its keys; tests point it at a stub.
 	KeysURL string
 	Client  *http.Client
 	// Now defaults to time.Now; tests move it.
@@ -65,9 +88,10 @@ type Verifier struct {
 	fetched time.Time
 }
 
-// keyTTL is how long Apple's key set is trusted before it is fetched again. Apple rotates keys
-// rarely; a kid not in the cached set triggers a fetch sooner (refetchFloor apart, so a stream
-// of forged kids cannot make us hammer Apple).
+// keyTTL is how long a provider's key set is trusted before it is fetched again. Apple rotates
+// keys rarely; Google every few days, publishing the next key before signing with it. A kid not
+// in the cached set triggers a fetch sooner (refetchFloor apart, so a stream of forged kids
+// cannot make us hammer the provider).
 const (
 	keyTTL       = 6 * time.Hour
 	refetchFloor = time.Minute
@@ -78,7 +102,7 @@ const (
 func (v *Verifier) Configured() bool { return v != nil && len(v.Audiences) > 0 }
 
 // Verify checks token and that its nonce is the SHA-256 (hex) of rawNonce, the random string
-// the client generated and sent Apple hashed. That binds the token to this one sign-in, so a
+// the client generated and sent the provider hashed. That binds the token to this one sign-in, so a
 // token lifted from elsewhere cannot be replayed here.
 func (v *Verifier) Verify(ctx context.Context, token, rawNonce string) (Identity, error) {
 	parts := strings.Split(token, ".")
@@ -118,7 +142,7 @@ func (v *Verifier) Verify(ctx context.Context, token, rawNonce string) (Identity
 		return Identity{}, ErrInvalid
 	}
 	now := v.now()
-	if claims.Iss != Issuer || claims.Sub == "" || !claims.Aud.any(v.Audiences) {
+	if !slices.Contains(v.Issuers, claims.Iss) || claims.Sub == "" || !claims.Aud.any(v.Audiences) {
 		return Identity{}, ErrInvalid
 	}
 	if claims.Exp == 0 || now.After(time.Unix(int64(claims.Exp), 0).Add(leeway)) {
@@ -142,8 +166,9 @@ func (v *Verifier) now() time.Time {
 	return time.Now()
 }
 
-// key returns the public key for kid, fetching Apple's set when the cache is old or lacks it.
-// A failed fetch is an error, not ErrInvalid: the token may be fine and Apple unreachable.
+// key returns the public key for kid, fetching the provider's set when the cache is old or lacks
+// it. A failed fetch is an error, not ErrInvalid: the token may be fine and the provider
+// unreachable.
 func (v *Verifier) key(ctx context.Context, kid string) (*rsa.PublicKey, error) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -158,7 +183,7 @@ func (v *Verifier) key(ctx context.Context, kid string) (*rsa.PublicKey, error) 
 	keys, err := v.fetch(ctx)
 	if err != nil {
 		if k, ok := v.keys[kid]; ok {
-			return k, nil // Apple unreachable: a key we already trusted still verifies.
+			return k, nil // Provider unreachable: a key we already trusted still verifies.
 		}
 		return nil, err
 	}
@@ -171,9 +196,6 @@ func (v *Verifier) key(ctx context.Context, kid string) (*rsa.PublicKey, error) 
 
 func (v *Verifier) fetch(ctx context.Context) (map[string]*rsa.PublicKey, error) {
 	url := v.KeysURL
-	if url == "" {
-		url = Keys
-	}
 	client := v.Client
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
@@ -184,11 +206,11 @@ func (v *Verifier) fetch(ctx context.Context) (map[string]*rsa.PublicKey, error)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("apple keys: %w", err)
+		return nil, fmt.Errorf("id token keys: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("apple keys: status %d", resp.StatusCode)
+		return nil, fmt.Errorf("id token keys: status %d", resp.StatusCode)
 	}
 	var set struct {
 		Keys []struct {
@@ -199,7 +221,7 @@ func (v *Verifier) fetch(ctx context.Context) (map[string]*rsa.PublicKey, error)
 		} `json:"keys"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&set); err != nil {
-		return nil, fmt.Errorf("apple keys: %w", err)
+		return nil, fmt.Errorf("id token keys: %w", err)
 	}
 	keys := map[string]*rsa.PublicKey{}
 	for _, k := range set.Keys {
@@ -214,7 +236,7 @@ func (v *Verifier) fetch(ctx context.Context) (map[string]*rsa.PublicKey, error)
 		keys[k.Kid] = &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: int(new(big.Int).SetBytes(e).Int64())}
 	}
 	if len(keys) == 0 {
-		return nil, errors.New("apple keys: no usable key")
+		return nil, errors.New("id token keys: no usable key")
 	}
 	return keys, nil
 }
@@ -227,7 +249,7 @@ func decodeSegment(seg string, v any) error {
 	return json.Unmarshal(b, v)
 }
 
-// audience is aud as a string or a list of strings; Apple sends a string.
+// audience is aud as a string or a list of strings; Apple and Google send a string.
 type audience []string
 
 func (a *audience) UnmarshalJSON(data []byte) error {
@@ -255,7 +277,7 @@ func (a audience) any(allowed []string) bool {
 	return false
 }
 
-// boolOrString: Apple sends some booleans as true and some as "true".
+// boolOrString: Apple sends some booleans as true and some as "true"; Google sends true.
 type boolOrString bool
 
 func (b *boolOrString) UnmarshalJSON(data []byte) error {
