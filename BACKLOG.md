@@ -70,6 +70,20 @@ so far and introduces none: anything still undecided is marked **OPEN** and wait
   git-ignored and a CDN decided when deploy lands. BRD-001. `brand/README.md` records the
   exception.
 
+## Decisions recorded 2026-11-16
+
+- **Each person connects their own accounts; the platform apps are Postitheka's** (owner
+  question, recorded as the design already built). The LinkedIn, Meta, X and TikTok developer
+  apps belong to Postitheka, and their client ids and secrets are server configuration. A person
+  presses a stamp, signs in on that platform, and Postitheka keeps that account's token sealed
+  (OAUTH-001); Discord takes the person's own webhook. Nobody brings an API key. A post is text,
+  images and/or video, sent to the accounts the person chose. What still stops a stranger: no
+  sign-up (AUTH-001, IOS-002), Meta apps in development mode until review (META-001, needs
+  PRV-001), TikTok private-only until its audit (TT-002). X bills the owner's developer account
+  for every user's posts, which needs a decision before X opens to strangers (OPEN).
+- **Spaces and a first comment are wanted** (owner): BRAND-002 and POST-002. Neither is on a
+  gate, and the strangers count is 0.
+
 ## Waiting on the owner
 
 Nothing below blocks building; it blocks shipping. Each is an account, a decision or a key that
@@ -129,7 +143,9 @@ Strangers who have published a post: **0**.
 | X-002 | Built, unverified | `publisher.Refresher`, `PublishWorker.refresh` (row lock, re-check, seal, then publish); `TestTokenRefresh` (three concurrent posts refresh once and publish with the new token, revoked grant fails asking for reconnect, transient failure stays pending); mutation-checked; Threads implements it | Never run against a real platform |
 | ACC-001 | Built, unverified | `migrations/20261114150000_account_needs_reconnect.sql`, `publisher.Reconnect`, `needs_reconnect` on Account; `TestRefusedCredentialsMarkTheAccount` (a 401 marks only that account, a rejected post does not, queued targets fail without a request, a new post is refused at the door), revoked refresh in `TestTokenRefresh`, reconnect clears it in `TestOAuthConnect`; web stamp and Accounts looked at in a browser at desktop and 375 px with seeded accounts; iOS kit test | Never against a real platform: which answers mean dead credentials is read from each platform's docs. Marks after the first refusal; nothing warns before a token expires. iOS views built, not looked at on a simulator. Web Reconnect button seen, not pressed (it leaves for the platform) |
 | POST-001 | Built, unverified | `PATCH` and `DELETE /v1/posts/{id}`; `TestCancelPostRemovesAnUnsentPost`, `TestReschedulePostMovesAnUnsentPost` (the old job posts nothing, the new one posts once), `TestAPostThatStartedSendingCannotBeCancelledOrMoved`; web Sent checked in a browser at desktop and 375 px against a local server with seeded posts; iOS kit `APITests` | iOS swipe actions and the reschedule sheet built, not looked at on a simulator. Not run against a job firing at the same moment outside a test |
+| POST-002 | Open | | Platform research first |
 | BRAND-001 | Built, unverified | `migrations/20261114120000_account_brand.sql`, `PATCH /v1/accounts/{id}`; `TestAccountBrand`; web `brands.test.ts`, kit `BrandsTests`; web looked at in a browser at desktop and 375 px against a local server | iOS built and kit-tested, not looked at in a simulator |
+| BRAND-002 | Open | | Name and storage are OPEN (owner) |
 | LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
 | DSC-001 | Built, unverified | `internal/publisher/discord`: a refusal with Discord's error 220001 is answered by sending the message again with `thread_name`; `TestPublishToAForumChannelNamesTheThread`, `TestPublishMediaToAForumChannelSendsTheFilesAgain`, `TestANormalChannelGetsNoThreadName`, `TestOtherRefusalsAreNotSentAgain`, `TestThreadName` | Never posted to a real forum channel: the error code and the 100-character name limit are from Discord's docs. A forum that requires a tag still fails (40067), with Discord's message |
 | META-001 | Open | | Owner |
@@ -355,6 +371,28 @@ accounts" stays out of scope.
 the filter is not published to, and another user's account cannot be labelled (tests and a
 browser check).
 
+### BRAND-002 · Spaces: a brand's own posts and defaults · M
+**Needs:** BRAND-001 verified. Asked by the owner 2026-11-16: a Space for each thing promoted
+(Khepri, LuminaVault, Norviq, AI), holding that subject's posts. BRAND-001 already labels
+accounts and filters the composer by brand; this takes the label from accounts to posts:
+
+- A post records the brand it was written under. Sent filters by brand the way the composer does.
+- A brand can hold defaults applied when composing under it: the first comment (POST-002), and
+  later hashtags or a link.
+- Still a label, not a tenant: no sharing, no members ("Teams and shared accounts" stays deferred).
+
+**OPEN:** the name. The owner calls these Spaces; the code, API and screens say brand. The rule
+in `~/.claude/CLAUDE.md` holds renames until 10 strangers have used the current version, so the
+screens keep "brand" until then unless the owner decides otherwise.
+
+**OPEN:** whether a brand becomes its own record (a table with defaults) or stays free text on
+accounts with defaults keyed by the text. Defaults need somewhere to live, which points to a
+record; decide before the migration.
+
+**Done when:** a post written under a brand shows only under that brand in Sent on web and iOS,
+and a brand's default first comment is filled in when composing under it (tests and a browser
+check at desktop and phone width).
+
 ### ACC-001 · Accounts that need reconnecting · S
 **Needs:** OAUTH-001. A token that has expired and cannot be refreshed (LinkedIn after 60 days,
 Threads and Instagram after 60 days unused, any revoked grant) fails every target until the user
@@ -374,6 +412,26 @@ or media of a scheduled post is not part of this.
 
 **Done when:** a cancelled post's job posts nothing, a moved post is sent once at the new time,
 and both are refused once sending has started (tests and a browser check).
+
+### POST-002 · First comment: hashtags and links under the post · M
+**Needs:** research first. Asked by the owner 2026-11-16: the post carries the text, images and
+video; a reply posted under it right after carries the hashtags and the link to the app, so the
+post itself stays clean.
+
+Before any code, check each platform's current docs and record the answer, dated, in
+`docs/platform-research.md`: can the API reply to or comment on the post it just made, with
+which permission or scope, and does that permission add to an app review. To check: Discord
+(a second webhook message, or a message in the forum thread), LinkedIn, X (a reply), Threads
+(a reply), Instagram, a Facebook Page, TikTok. WhatsApp and Reddit are handed off by hand, so
+the comment is handed over with the post, for the person to paste.
+
+Then, per platform that allows it: a per-post "first comment" field (a per-target option,
+OPT-001), posted after the post succeeds, as its own step with its own retry, so a failed
+comment never re-sends the post. Sent shows the comment's own outcome.
+
+**Done when:** a post with a first comment publishes to Discord and one OAuth platform from
+production, and the comment appears under each; a platform that cannot take one says so on its
+stamp before publishing.
 
 ### LI-001 · LinkedIn publisher · M
 **Needs:** OAUTH-001. Personal profile through "Share on LinkedIn" (`w_member_social`,
