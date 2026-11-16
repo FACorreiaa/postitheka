@@ -43,7 +43,7 @@ so far and introduces none: anything still undecided is marked **OPEN** and wait
 - **Google sign-in too** (owner, 2026-11-16: "we need to work on the google auth"). Same shape
   as Apple: ID token checked against Google's keys, no client secret. A Google sign-in with a
   verified email joins the account with that email (made by the CLI or by Apple), so one person
-  is one account; built that way pending the owner's word.
+  is one account (owner, 2026-11-16: "Yes, join accounts").
 - **Sign-in is Sign in with Apple** (owner, 2026-10-22). Email sign-in was not chosen. App ID
   `com.fernandocorreia.postitheka` (team `84X9WYBF36`) is registered with the capability enabled
   as a primary App ID. The web Services ID waits for the hostname (REL-004); the owner creates
