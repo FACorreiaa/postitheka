@@ -81,12 +81,44 @@ export function putFile(
   });
 }
 
-/** The 3D mascot's model URL from `GET /client-config` (BRD-001), or null: unset, or the
- * server did not answer. Outside the spec, since every spec route needs a token; nothing in
- * it is secret, and nothing in it is worth delaying sign-in for. */
-export function fetchMascot3dModelUrl(): Promise<string | null> {
-  return fetch("/client-config")
+/** What `GET /client-config` says: the 3D mascot's model URL (BRD-001) and the web Services ID
+ * for Sign in with Apple (AUTH-001), each null when unset. Outside the spec, since every spec
+ * route needs a token; nothing in it is secret. Fetched once per page; a server that does not
+ * answer reads as everything unset, since nothing in it is worth delaying sign-in for. */
+export type ClientConfig = { mascot3dModelUrl: string | null; appleWebClientId: string | null };
+
+let clientConfig: Promise<ClientConfig> | null = null;
+
+export function fetchClientConfig(): Promise<ClientConfig> {
+  clientConfig ??= fetch("/client-config")
     .then((response) => response.json())
-    .then((body: { mascot3dModelUrl?: string | null }) => body.mascot3dModelUrl || null)
-    .catch(() => null);
+    .then((body: Partial<ClientConfig>) => ({
+      mascot3dModelUrl: body.mascot3dModelUrl || null,
+      appleWebClientId: body.appleWebClientId || null,
+    }))
+    .catch(() => ({ mascot3dModelUrl: null, appleWebClientId: null }));
+  return clientConfig;
+}
+
+export function fetchMascot3dModelUrl(): Promise<string | null> {
+  return fetchClientConfig().then((c) => c.mascot3dModelUrl);
+}
+
+/** Trades an Apple identity token for an API token at `POST /auth/apple` (AUTH-001), outside the
+ * spec for the same reason as `/client-config`. `nonce` is the raw one; Apple was given its hash.
+ * Resolves to the token, or rejects with a message written for people. */
+export async function exchangeAppleToken(identityToken: string, nonce: string): Promise<string> {
+  let response: Response;
+  try {
+    response = await fetch("/auth/apple", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identity_token: identityToken, nonce, client: "web" }),
+    });
+  } catch {
+    throw new Error("The server did not respond. Check your connection.");
+  }
+  const body = (await response.json().catch(() => ({}))) as { token?: string; message?: string };
+  if (response.ok && body.token) return body.token;
+  throw new Error(body.message || `Sign in with Apple failed (${response.status}). Try again.`);
 }

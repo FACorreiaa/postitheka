@@ -7,10 +7,12 @@ outcome shown per destination. The name is post + *-theka*, a collection.
 This file is the working contract for anyone, human or agent, changing the repo. Read
 `ARCHITECTURE.md` before changing a boundary, and work from `BACKLOG.md` in order.
 
-## Where it stands (2026-10-23)
+## Where it stands (2026-11-16)
 
-- Built: the Go API, Discord publishing, the web composer, the iOS app (composer, Sent, accounts,
-  WhatsApp handoff). Not deployed. **Strangers: 0.**
+- Built: the Go API, the publishers, the web composer, the iOS app (composer, Sent, accounts,
+  assisted handoff). Live at https://postitheka.facorreia.com since 2026-11-16 (REL-004); the iOS
+  app is on TestFlight. Sign in with Apple is built (AUTH-001, IOS-002), not yet used for real.
+  **Strangers: 0.**
 - Postitheka is not on the owner's active-projects list (`~/.claude/CLAUDE.md`), but on
   2026-10-23 the owner said to build it out (API, web, iOS) regardless of the strangers count,
   as with Aaru. Do not flag supply-side work here. What waits on the owner is listed in
@@ -85,6 +87,7 @@ postitheka/
       tiktok/
       x/
     secretbox/              # credential encryption
+    appleid/                # Sign in with Apple: identity tokens checked against Apple's keys
     analytics/              # product events (PostHog); empty key sends nothing
     service/                # application behaviour: accounts, uploads, posts, tokens
   migrations/               # goose SQL; never edit one that has been applied

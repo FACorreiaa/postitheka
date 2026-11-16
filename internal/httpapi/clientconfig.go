@@ -10,18 +10,24 @@ import (
 type clientConfig struct {
 	// Mascot3DModelURL is null when unset, and the page shows the flat mascot.
 	Mascot3DModelURL *string `json:"mascot3dModelUrl"`
+	// AppleWebClientID is the Services ID the page signs in to Apple with (AUTH-001). Null
+	// hides the Sign in with Apple button.
+	AppleWebClientID *string `json:"appleWebClientId"`
 }
 
 // ClientConfig serves GET /client-config. It is outside the spec because auth
 // wraps every spec route and the sign-in page has no token yet.
-func ClientConfig(mascot3DModelURL string) http.HandlerFunc {
+func ClientConfig(mascot3DModelURL, appleWebClientID string) http.HandlerFunc {
 	var body clientConfig
 	if mascot3DModelURL != "" {
 		body.Mascot3DModelURL = &mascot3DModelURL
 	}
+	if appleWebClientID != "" {
+		body.AppleWebClientID = &appleWebClientID
+	}
 	encoded, err := json.Marshal(body)
 	if err != nil {
-		// A struct of one string pointer always marshals.
+		// A struct of string pointers always marshals.
 		panic(err)
 	}
 	return func(w http.ResponseWriter, _ *http.Request) {

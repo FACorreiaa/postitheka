@@ -36,6 +36,10 @@ so far and introduces none: anything still undecided is marked **OPEN** and wait
 - **Local S3 is RustFS**, because MinIO no longer publishes images.
 - **Sign-in is a CLI-minted token until AUTH-001.** That is acceptable for the owner and not for
   strangers, so AUTH-001 is on the path to the P1 gate.
+- **Sign in with Apple needs no key** (owner, 2026-11-16: "Khepri way, no key"). The server
+  checks Apple's identity token against Apple's public keys; a .p8 is only for exchanging codes
+  and revoking tokens. One is needed when in-app account deletion is built, since Apple asks
+  apps to revoke the user's token then.
 - **Sign-in is Sign in with Apple** (owner, 2026-10-22). Email sign-in was not chosen. App ID
   `com.fernandocorreia.postitheka` (team `84X9WYBF36`) is registered with the capability enabled
   as a primary App ID. The web Services ID waits for the hostname (REL-004); the owner creates
@@ -97,7 +101,8 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | --- | --- | --- |
 | R2 bucket + API token | REL-003, REL-004 | Agent writes the CORS rule |
 | Public hostname | REL-004, AUTH-001 (web Services ID) | Deferred 2026-10-22 |
-| Sign in with Apple key (.p8) | AUTH-001 | One-time download, straight into a sealed secret |
+| Sign in with Apple web Services ID | AUTH-001 on the web | Identifier (e.g. `com.fernandocorreia.postitheka.web`), domain `postitheka.facorreia.com`, return URL `https://postitheka.facorreia.com/`; its identifier goes in `APPLE_WEB_CLIENT_ID`. Not a secret. Until set, the web shows no Apple button |
+| Sign in with Apple key (.p8) | Token revocation on account deletion (later) | Not needed for sign-in (2026-11-16). One-time download, straight into a sealed secret |
 | PostHog project key | OPS-001 seen working | Sealed secret `POSTHOG_API_KEY` |
 | LinkedIn developer app with "Share on LinkedIn" and "Sign In with LinkedIn using OpenID Connect" | LI-001 used for real | **To do (owner, 2026-11-16).** Self-serve. `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` in `.env`; redirect `http://localhost:8095/oauth/linkedin/callback` locally, `PUBLIC_URL/oauth/linkedin/callback` in production |
 | X developer app + credits | X-001 used for real | **To do (owner, 2026-11-16).** Pay-per-use: $0.015 a post, $0.20 with a URL (2026-10-23) |
@@ -131,7 +136,7 @@ Strangers who have published a post: **0**.
 | REL-002 | Done | Image workflow run 39870125984 on `main` (38a1c3a) after PR #1 merged, 2026-10-22 | Package visibility not checked |
 | REL-003 | Done | R2 bucket `postitheka-production` (Western Europe, private) with the upload CORS rule; account token scoped to that bucket, sealed into `postitheka-env` (LuminaVaultInfra #651, #656), 2026-11-16 | |
 | REL-004 | Done | Live at https://postitheka.facorreia.com since 2026-11-16: promote by hand (LuminaVaultInfra #654, image `990fdcb`), migrations applied, `/healthz` `/health/live` `/health/ready` 200, TLS from Let's Encrypt, R2 preflight 204 from the app origin and 403 from others. Promotes are manual by the owner's choice; `INFRA_TOKEN` is not set. The owner published a post with an image to a real Discord channel from production on 2026-11-16 | |
-| AUTH-001 | Open | App ID `com.fernandocorreia.postitheka` registered | Needs hostname and the key (Owner) |
+| AUTH-001 | Built, unverified | `internal/appleid` (token verified against Apple's keys: signature, iss, aud, exp, nonce), `Service.SignInWithApple`, `POST /auth/apple`, `migrations/20261116150000_users_apple_sub.sql`; `appleid_test.go` (stub key server), `TestSignInWithApple*`, `TestAppleSignInAnswers`; web button seen in a browser with a placeholder Services ID | Never signed in with a real Apple ID. Production needs `APPLE_BUNDLE_IDS` in the infra values; the web needs the Services ID (Owner) |
 | API-001 | Done | `migrations/20261022190000_post_idempotency.sql`; `TestCreatePostIsIdempotent` (incl. 8 concurrent requests, one post) | Web retry path checked by typecheck only, not in a browser |
 | MED-002 | Built, unverified | `Service.DeleteUser`, `media.Store.DeletePrefix`, `server user delete EMAIL` (`task user:delete`); `TestDeleteUserRemovesTheirUploadsFromStorage` (objects with and without a row, another user's untouched, storage down leaves the user in place, queued job posts nothing); live run against RustFS removed two objects and left another prefix alone | Not run against R2. No route or button yet: a signed-in user cannot delete their own account until AUTH-001. An upload URL issued before the deletion still works for its 30 minutes |
 | MED-001 | Done | `internal/jobs/sweep.go`; `TestSweepDeletesOnlyOldUnattachedUploads` in CI; live run against RustFS removed row and object | |
@@ -161,7 +166,7 @@ Strangers who have published a post: **0**.
 | VID-001 | Built, unverified | Length, shape and width limits in `Rules`, checked against what the client read from the file: `video_rules_test.go`, `web/src/rules.test.ts`, the kit's `RulesTests.swift` (the same cases three times), `TestReserveUploadKeepsWhatTheClientReadFromAVideo`. No codec check. Not seen with a real video file in a browser or on a device | |
 | OPT-001 | Built, unverified | `options` on `post_targets`, `Rules.Options`, `POST /v1/posts` `options` by account id; first use is Discord's forum post title. `options_test.go`, `TestTargetOptionsReachThePublisher`, `TestCreatePostRefusesOptionsItCannotUse`, `TestOptionsChangeTheIdempotencyDigestOnlyWhenSet`, `TestAForumPostTakesTheTitleTheAuthorGaveIt`, `web/src/rules.test.ts`, the kit's `RulesTests.swift` and `ComposerTests.swift`. Web field seen in a browser; iOS field built, not looked at on a device; never sent to a real forum channel | |
 | IOS-001 | Done | `ios/`: Xcode project + `PostithekaKit`, client generated by swift-openapi-generator 1.14.0; `task ios:check` green locally and in CI (PR #2, run 39951558861, 2026-10-23) | |
-| IOS-002 | Open | | Needs AUTH-001; a pasted token stands in |
+| IOS-002 | Built, unverified | `SignInWithAppleButton` in `SignInView`, `Postitheka.entitlements`, kit `AppleSignIn` (`AppleSignInTests`); the pasted token stays as the operator's way in | Not tried on a device or TestFlight build |
 | IOS-003 | Built, unverified | `ComposerView`, `Composer` (kit, tested); `PublishFlowTests` UI test published to a local server and saw the outcome in Sent | Photos path not exercised by the UI test |
 | IOS-004, IOS-005 | Open | | |
 | BRD-001 | Gate 1 passed, waiting on the device check | Branch `brd-001-mascot-3d`. `build_mascot3d.py` builds `mascot.glb` and `Mascot.usdz`; since 2026-11-15 from the tablet model with a drawn smile (1544 KB, 876 KB gzip, 20 draw calls, 129k triangles; `Mascot.usdz` 1640 KB, passes `usdchecker --arkit`), before that without the tablet (1047 KB, 616 KB gzip, 15 draw calls, 87k triangles; 1144 KB). Seen rendering in Chrome (model in ~1.4 s from the dev server, canvas swaps in, turns and floats) and in the iOS 26 simulator on a Beta build; flat mascot kept with a broken URL. Headless Chrome (software WebGL, dev and production builds, 2026-11-13): live in 0.9–1.3 s; one WebGL context left (the probe's is released); 15 draws a frame, none while the tab is hidden or the mascot is scrolled off, resumes after; reduced motion and Save-Data send no request and keep the flat mascot; no WebGL fetches the config only, never three. In the first ~5 runs the scene chunk's fetch was aborted (`net::ERR_ABORTED`, cause not found) and the flat mascot stayed, as designed; not seen again in 36 runs. Both drivers' tests, `task check` and `task ios:check` (Release proof with the model present) green | Entry budget raised 1 KiB to 80896 B (owner, 2026-11-13: Vite's preload wrapper). Gate 1 (the recolour) passed: owner, 2026-11-13. Waiting on the owner's device check: fps, memory, Low Power Mode and Reduce Motion on iOS, a real GPU |
@@ -255,7 +260,8 @@ production to a real Discord channel.
 
 ### AUTH-001 · Sign in with Apple · M
 **Needs:** the hostname (REL-004) for the web Services ID and its return URL; **Owner** creates
-the Sign in with Apple key. Decided 2026-10-22: Sign in with Apple. The App ID is registered.
+the Services ID. Decided 2026-10-22: Sign in with Apple. The App ID is registered. No .p8 key
+(2026-11-16): the identity token is checked against Apple's public keys.
 The server verifies Apple's identity token, finds or creates the user by Apple's stable `sub`,
 and issues the same bearer token the API already accepts, so the rest of the system does not
 change. The web uses Sign in with Apple JS; iOS uses `AuthenticationServices` (IOS-002).
@@ -667,7 +673,8 @@ committed; `task check` fails if it is stale.
 **Done when:** the app builds in CI and lists `GET /v1/platforms` from a local server.
 
 ### IOS-002 · Sign in · S
-**Needs:** AUTH-001. The iOS side of whatever sign-in was chosen.
+**Needs:** AUTH-001. The iOS side of whatever sign-in was chosen: `SignInWithAppleButton`, a
+nonce per sign-in, and the token traded at `POST /auth/apple`.
 
 **Done when:** a fresh install signs in and reaches the composer.
 

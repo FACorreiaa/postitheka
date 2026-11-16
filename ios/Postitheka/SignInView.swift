@@ -1,9 +1,13 @@
+import AuthenticationServices
+import PostithekaKit
 import SwiftUI
 
-/// Until Sign in with Apple (AUTH-001), a token minted with
-/// `server user create` is pasted here, as on the web.
+/// Sign in with Apple (AUTH-001), or paste a token minted with `server user create`: the
+/// operator's way in, kept for when Apple sign-in is off on a server.
 struct SignInView: View {
     @Environment(AppModel.self) private var model
+    /// The raw nonce of the Apple sign-in in flight; Apple gets its hash.
+    @State private var nonce = ""
     @State private var token = ""
     @State private var error: String?
     @State private var busy = false
@@ -19,6 +23,15 @@ struct SignInView: View {
                 .listRowSeparator(.hidden)
 
                 Section {
+                    SignInWithAppleButton(.signIn, onRequest: requestApple, onCompletion: finishApple)
+                        .signInWithAppleButtonStyle(.white)
+                        .frame(height: 48)
+                        .disabled(busy)
+                }
+                .listRowBackground(Color.clear)
+                .listRowInsets(EdgeInsets())
+
+                Section {
                     SecureField("pk_…", text: $token)
                         .textContentType(.password)
                         .autocorrectionDisabled()
@@ -27,7 +40,7 @@ struct SignInView: View {
                         .submitLabel(.go)
                         .onSubmit(signIn)
                 } header: {
-                    Text("API token")
+                    Text("Or an API token")
                 } footer: {
                     if let error {
                         Text(error).foregroundStyle(.red)
@@ -65,6 +78,35 @@ struct SignInView: View {
             .brandBackdrop()
             .scrollDismissesKeyboard(.interactively)
             .animation(.easeOut(duration: 0.2), value: typing)
+        }
+    }
+
+    private func requestApple(_ request: ASAuthorizationAppleIDRequest) {
+        nonce = AppleSignIn.makeNonce()
+        request.requestedScopes = [.email]
+        request.nonce = AppleSignIn.hashed(nonce)
+    }
+
+    private func finishApple(_ result: Result<ASAuthorization, any Error>) {
+        switch result {
+        case .success(let authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let data = credential.identityToken,
+                  let identityToken = String(data: data, encoding: .utf8)
+            else {
+                error = "Apple did not return a sign-in. Try again."
+                return
+            }
+            Task {
+                busy = true
+                error = await model.signInWithApple(identityToken: identityToken, nonce: nonce)
+                busy = false
+            }
+        case .failure(let failure):
+            // Closing Apple's sheet is not an error to show.
+            if (failure as? ASAuthorizationError)?.code != .canceled {
+                error = failure.localizedDescription
+            }
         }
     }
 

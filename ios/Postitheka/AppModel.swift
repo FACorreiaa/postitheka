@@ -51,6 +51,20 @@ final class AppModel {
         }
     }
 
+    /// Trades the identity token Apple gave the sign-in button for an API token, and keeps it.
+    /// `nonce` is the raw one; Apple was given its hash. Returns why it failed, if it did.
+    func signInWithApple(identityToken: String, nonce: String) async -> String? {
+        guard let baseURL else { return "This build has no server address." }
+        do {
+            let session = try await AppleSignIn.exchange(baseURL: baseURL, identityToken: identityToken, nonce: nonce)
+            tokens.write(session.token)
+            signedIn = true
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
     func signOut() {
         tokens.write(nil)
         signedIn = false

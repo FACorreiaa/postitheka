@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/FACorreiaa/postitheka/internal/analytics"
+	"github.com/FACorreiaa/postitheka/internal/appleid"
 	"github.com/FACorreiaa/postitheka/internal/db"
 )
 
@@ -25,8 +26,8 @@ var ErrUnauthenticated = errors.New("unauthenticated")
 // CreateUserWithToken creates a user, or finds an existing one by email, and
 // mints a new API token for it. The token is returned once and never stored.
 //
-// This is the stand-in for sign-up until Sign in with Apple exists: run
-// `postitheka user create <email>` and paste the token into the client.
+// The operator's path (`server user create EMAIL`): people sign in with Apple
+// (SignInWithApple), which claims a user made here by its email.
 func (s *Service) CreateUserWithToken(ctx context.Context, email, tokenName string) (uuid.UUID, string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if !strings.Contains(email, "@") {
@@ -46,18 +47,83 @@ func (s *Service) CreateUserWithToken(ctx context.Context, email, tokenName stri
 		s.events.Capture(analytics.Event{Name: analytics.EventSignedUp, DistinctID: user.ID.String()})
 	}
 
+	token, err := s.mintToken(ctx, user.ID, tokenName)
+	if err != nil {
+		return uuid.Nil, "", err
+	}
+	return user.ID, token, nil
+}
+
+// mintToken creates an API token for userID. The token is returned once and only its hash is
+// stored.
+func (s *Service) mintToken(ctx context.Context, userID uuid.UUID, name string) (string, error) {
 	secret := make([]byte, 32)
 	_, _ = rand.Read(secret)
 	token := tokenPrefix + base64.RawURLEncoding.EncodeToString(secret)
-
 	if err := s.q.CreateAPIToken(ctx, db.CreateAPITokenParams{
-		UserID:    user.ID,
+		UserID:    userID,
 		TokenHash: hashToken(token),
-		Name:      tokenName,
+		Name:      name,
 	}); err != nil {
-		return uuid.Nil, "", fmt.Errorf("token: %w", err)
+		return "", fmt.Errorf("token: %w", err)
 	}
-	return user.ID, token, nil
+	return token, nil
+}
+
+// AppleVerifier checks a Sign in with Apple identity token; appleid.Verifier is the real one.
+type AppleVerifier interface {
+	Configured() bool
+	Verify(ctx context.Context, identityToken, rawNonce string) (appleid.Identity, error)
+}
+
+// ErrAppleOff is Apple sign-in asked for on a server with no Apple client id configured.
+var ErrAppleOff = errors.New("sign in with Apple is not configured")
+
+// SignInWithApple signs a person in with an identity token from Apple, creating their user on
+// the first sign-in, and returns a new API token: the same bearer token the rest of the API
+// already takes (AUTH-001). client names the token ("apple-ios", "apple-web").
+//
+// The user is found by Apple's subject, never by email. A user made before Apple sign-in (by
+// `server user create`) is claimed by the first Apple sign-in whose verified email matches, so
+// the owner's existing account carries over. An Apple id with no user yet and no email to
+// create one with is refused: an account needs an address to be reached at.
+func (s *Service) SignInWithApple(ctx context.Context, identityToken, rawNonce, client string) (string, bool, error) {
+	if s.apple == nil || !s.apple.Configured() {
+		return "", false, ErrAppleOff
+	}
+	id, err := s.apple.Verify(ctx, identityToken, rawNonce)
+	if errors.Is(err, appleid.ErrInvalid) {
+		return "", false, ErrUnauthenticated
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("sign in with apple: %w", err)
+	}
+
+	created := false
+	user, err := s.q.GetUserByAppleSub(ctx, &id.Subject)
+	if errors.Is(err, pgx.ErrNoRows) && id.Email != "" && id.EmailVerified {
+		user, err = s.q.ClaimUserForApple(ctx, db.ClaimUserForAppleParams{Email: id.Email, AppleSub: &id.Subject})
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		if id.Email == "" {
+			return "", false, &BadRequest{Message: "Apple did not share an email address; sign in again and allow it"}
+		}
+		user, err = s.q.CreateAppleUser(ctx, db.CreateAppleUserParams{Email: id.Email, AppleSub: &id.Subject})
+		created = err == nil
+	}
+	if err != nil {
+		// An email already held by another Apple id (a unique violation) lands here too; it
+		// cannot happen with Apple's own addresses, which are unique to one Apple id.
+		return "", false, fmt.Errorf("sign in with apple: user: %w", err)
+	}
+	if created {
+		s.events.Capture(analytics.Event{Name: analytics.EventSignedUp, DistinctID: user.ID.String()})
+	}
+	token, err := s.mintToken(ctx, user.ID, client)
+	if err != nil {
+		return "", false, err
+	}
+	return token, created, nil
 }
 
 // Authenticate resolves a bearer token to its user.

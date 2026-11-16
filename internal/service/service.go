@@ -58,6 +58,7 @@ type Service struct {
 	storage  Storage
 	discord  DiscordConnector
 	events   analytics.Client
+	apple    AppleVerifier
 	// publicURL is where platforms redirect back to after their consent
 	// screen.
 	publicURL string
@@ -75,6 +76,9 @@ type Deps struct {
 	Analytics analytics.Client
 	// PublicURL is the server's external base URL, for OAuth redirects.
 	PublicURL string
+	// Apple checks Sign in with Apple identity tokens. Nil, or one with no client id, turns
+	// Apple sign-in off.
+	Apple AppleVerifier
 }
 
 func New(d Deps) *Service {
@@ -91,6 +95,7 @@ func New(d Deps) *Service {
 		registry:  d.Registry,
 		storage:   d.Storage,
 		discord:   d.Discord,
+		apple:     d.Apple,
 		publicURL: d.PublicURL,
 		now:       time.Now,
 	}

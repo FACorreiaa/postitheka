@@ -5,6 +5,19 @@ RETURNING *;
 -- name: GetUserByEmail :one
 SELECT * FROM users WHERE email = $1;
 
+-- name: GetUserByAppleSub :one
+SELECT * FROM users WHERE apple_sub = $1;
+
+-- name: CreateAppleUser :one
+INSERT INTO users (email, apple_sub) VALUES ($1, $2)
+RETURNING *;
+
+-- Claims a user made before Apple sign-in for the Apple id with the same email. Only a row
+-- with no Apple id yet: one already claimed belongs to someone else's Apple id.
+-- name: ClaimUserForApple :one
+UPDATE users SET apple_sub = $2 WHERE email = $1 AND apple_sub IS NULL
+RETURNING *;
+
 -- Everything a user owns goes with the row: tokens, accounts, posts, targets,
 -- media rows, OAuth states. The objects in the bucket do not; DeleteUser in
 -- the service removes those.
