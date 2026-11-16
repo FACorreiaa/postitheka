@@ -64,14 +64,14 @@ a job cut off mid-request leaves its target `publishing`, and the next attempt f
 | `jobs` | Running one target: load, decrypt, claim, publish, record. Sweeping unattached uploads | Validate posts (already done at the door) |
 | `media` | Storage calls, presigned URLs, stable filenames | Decide what a platform accepts |
 | `secretbox` | Sealing and opening credentials | Know what the credentials are |
-| `appleid` | Verifying Sign in with Apple identity tokens against Apple's public keys | Touch the database or issue tokens |
+| `idtoken` | Verifying Apple and Google ID tokens against the provider's public keys | Touch the database or issue tokens |
 | `analytics` | Product events to PostHog, queued and dropped rather than blocking | Capture anything a person wrote |
 | `db` | Generated queries | Be edited by hand |
 
 ## Data model
 
 ```text
-users ─┬─< api_tokens       token_hash (sha256), last_used_at   (users.apple_sub: Apple's id, unique)
+users ─┬─< api_tokens       token_hash (sha256), last_used_at   (users.apple_sub, google_sub: unique)
        ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id, brand, needs_reconnect_at
        ├─< oauth_states     state_hash (sha256), platform, verifier (sealed, AAD = hash), client
        ├─< media            object_key, content_type, size_bytes, verified_at
@@ -306,16 +306,20 @@ deletion stays valid for its 30 minutes, and a file sent to it afterwards has no
 Bearer tokens: `pk_` + 32 random bytes, base64url. Only the SHA-256 is stored; lookup is by hash
 and records `last_used_at`. The middleware runs before the request body is decoded.
 
-A person gets one by signing in with Apple (AUTH-001). The client asks Apple for an identity
-token with a nonce it made (Apple gets the nonce's SHA-256 hex), then sends the token and the raw
-nonce to `POST /auth/apple`, which is outside the spec because auth wraps every spec route.
-`appleid.Verifier` checks the RS256 signature against Apple's published keys (cached for six
-hours, fetched again at most once a minute for an unknown key id), the issuer, the audience
-(`APPLE_BUNDLE_IDS` for the app, `APPLE_WEB_CLIENT_ID` for the web), expiry and the nonce. No
-private key is involved. The user is found by `users.apple_sub`; failing that, a user the CLI made
-with the same verified email is claimed; failing that, one is created. The answer is a fresh API
-token named `apple-ios` or `apple-web`. With no client id configured the route answers 503 and
-the clients show only the token field.
+A person gets one by signing in with Apple (AUTH-001) or Google (AUTH-002). The client asks the
+provider for an ID token with a nonce it made (the provider gets the nonce's SHA-256 hex), then
+sends the token and the raw nonce to `POST /auth/apple` or `POST /auth/google`, which are outside
+the spec because auth wraps every spec route. `idtoken.Verifier` checks the RS256 signature
+against the provider's published keys (cached for six hours, fetched again at most once a minute
+for an unknown key id), the issuer, the audience (`APPLE_BUNDLE_IDS` and `APPLE_WEB_CLIENT_ID`;
+`GOOGLE_IOS_CLIENT_IDS` and `GOOGLE_WEB_CLIENT_ID`), expiry and the nonce. No private key or
+client secret is involved. The user is found by `users.apple_sub` or `users.google_sub`; failing
+that, a user with the same email is claimed when the provider has verified it (one the CLI
+made, or one the other provider made: Apple then Google with one address is one account);
+failing that, one is created, which also needs a verified email. An email already tied to
+another id at the same provider is refused. The answer is a fresh API token named
+`apple-ios`, `apple-web`, `google-ios` or `google-web`. With no client id configured for a
+provider its route answers 503 and the clients hide its button.
 
 The operator still mints tokens with `server user create`; the token field stays on both sign-in
 screens for that. A .p8 key comes in only with in-app account deletion, to revoke Apple's token.
@@ -324,7 +328,8 @@ screens for that. A .p8 key comes in only with in-app account deletion, to revok
 
 All routes need `Authorization: Bearer`. The spec is `api/openapi.yaml`. Outside it:
 `GET /healthz`, `GET /oauth/{platform}/callback` and `GET /client-config`. The last is what the
-web app needs before anyone signs in (`{mascot3dModelUrl}`, null when unset); it is outside the
+web app needs before anyone signs in (`{mascot3dModelUrl, appleWebClientId, googleWebClientId}`,
+each null when unset); it is outside the
 spec because auth wraps every spec route, and it holds nothing secret.
 
 | Route | Does |

@@ -40,6 +40,10 @@ so far and introduces none: anything still undecided is marked **OPEN** and wait
   checks Apple's identity token against Apple's public keys; a .p8 is only for exchanging codes
   and revoking tokens. One is needed when in-app account deletion is built, since Apple asks
   apps to revoke the user's token then.
+- **Google sign-in too** (owner, 2026-11-16: "we need to work on the google auth"). Same shape
+  as Apple: ID token checked against Google's keys, no client secret. A Google sign-in with a
+  verified email joins the account with that email (made by the CLI or by Apple), so one person
+  is one account; built that way pending the owner's word.
 - **Sign-in is Sign in with Apple** (owner, 2026-10-22). Email sign-in was not chosen. App ID
   `com.fernandocorreia.postitheka` (team `84X9WYBF36`) is registered with the capability enabled
   as a primary App ID. The web Services ID waits for the hostname (REL-004); the owner creates
@@ -101,6 +105,7 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | --- | --- | --- |
 | R2 bucket + API token | REL-003, REL-004 | Agent writes the CORS rule |
 | Public hostname | REL-004, AUTH-001 (web Services ID) | Deferred 2026-10-22 |
+| Google Cloud project "Postitheka": OAuth consent screen (app name, privacy and terms URLs, scopes `openid email profile`), an iOS OAuth client for `com.fernandocorreia.postitheka`, a web OAuth client with JavaScript origin `https://postitheka.facorreia.com` | AUTH-002 | Client ids go in `GOOGLE_IOS_CLIENT_IDS` and `GOOGLE_WEB_CLIENT_ID`. Not secrets; no client secret is used |
 | Sign in with Apple web Services ID | AUTH-001 on the web | Identifier (e.g. `com.fernandocorreia.postitheka.web`), domain `postitheka.facorreia.com`, return URL `https://postitheka.facorreia.com/`; its identifier goes in `APPLE_WEB_CLIENT_ID`. Not a secret. Until set, the web shows no Apple button |
 | Sign in with Apple key (.p8) | Token revocation on account deletion (later) | Not needed for sign-in (2026-11-16). One-time download, straight into a sealed secret |
 | PostHog project key | OPS-001 seen working | Sealed secret `POSTHOG_API_KEY` |
@@ -137,6 +142,7 @@ Strangers who have published a post: **0**.
 | REL-003 | Done | R2 bucket `postitheka-production` (Western Europe, private) with the upload CORS rule; account token scoped to that bucket, sealed into `postitheka-env` (LuminaVaultInfra #651, #656), 2026-11-16 | |
 | REL-004 | Done | Live at https://postitheka.facorreia.com since 2026-11-16: promote by hand (LuminaVaultInfra #654, image `990fdcb`), migrations applied, `/healthz` `/health/live` `/health/ready` 200, TLS from Let's Encrypt, R2 preflight 204 from the app origin and 403 from others. Promotes are manual by the owner's choice; `INFRA_TOKEN` is not set. The owner published a post with an image to a real Discord channel from production on 2026-11-16 | |
 | AUTH-001 | Built, unverified | `internal/appleid` (token verified against Apple's keys: signature, iss, aud, exp, nonce), `Service.SignInWithApple`, `POST /auth/apple`, `migrations/20261116150000_users_apple_sub.sql`; `appleid_test.go` (stub key server), `TestSignInWithApple*`, `TestAppleSignInAnswers`; web button seen in a browser with a placeholder Services ID | Never signed in with a real Apple ID. Production needs `APPLE_BUNDLE_IDS` in the infra values; the web needs the Services ID (Owner) |
+| AUTH-002 | In progress | Server: `internal/idtoken` (Apple's verifier generalised: `idtoken.Google`), `Service.SignInWithGoogle`, `POST /auth/google`, `migrations/20261116170000_users_google_sub.sql`, `googleWebClientId` in `/client-config`; `TestGoogleTokensAreCheckedTheSameWay`, `TestSignInWithGoogle*`, `TestSignInAnswers` | iOS and web buttons not built; privacy page to name Google when they are. Needs the Google Cloud clients (Owner) |
 | API-001 | Done | `migrations/20261022190000_post_idempotency.sql`; `TestCreatePostIsIdempotent` (incl. 8 concurrent requests, one post) | Web retry path checked by typecheck only, not in a browser |
 | MED-002 | Built, unverified | `Service.DeleteUser`, `media.Store.DeletePrefix`, `server user delete EMAIL` (`task user:delete`); `TestDeleteUserRemovesTheirUploadsFromStorage` (objects with and without a row, another user's untouched, storage down leaves the user in place, queued job posts nothing); live run against RustFS removed two objects and left another prefix alone | Not run against R2. No route or button yet: a signed-in user cannot delete their own account until AUTH-001. An upload URL issued before the deletion still works for its 30 minutes |
 | MED-001 | Done | `internal/jobs/sweep.go`; `TestSweepDeletesOnlyOldUnattachedUploads` in CI; live run against RustFS removed row and object | |
@@ -268,6 +274,18 @@ change. The web uses Sign in with Apple JS; iOS uses `AuthenticationServices` (I
 
 **Done when:** a new person creates an account and reaches the composer on production without
 anyone running a command for them.
+
+### AUTH-002 · Sign in with Google · M
+**Needs:** AUTH-001 (the shared verifier and sign-in path); **Owner** creates the Google Cloud
+OAuth clients. Same shape as Apple: the client gets an ID token from Google with the SHA-256 of
+its nonce, the server checks it against Google's published keys at `POST /auth/google`, keys the
+user on Google's `sub` (`users.google_sub`), and returns the usual API token. No client secret.
+iOS uses the GoogleSignIn SDK (custom nonce since 9.0); the web uses Google Identity Services
+(`google.accounts.id.initialize` takes a `nonce`). Apple stays offered alongside, as the App
+Store requires when another third-party sign-in is.
+
+**Done when:** a new person signs in with Google on the web and on iOS and reaches the composer
+on production.
 
 ### API-001 · Idempotent post creation · S
 A network retry of `POST /v1/posts` today creates a second post, and so a second publish.

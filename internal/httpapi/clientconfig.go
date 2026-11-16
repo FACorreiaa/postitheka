@@ -13,17 +13,23 @@ type clientConfig struct {
 	// AppleWebClientID is the Services ID the page signs in to Apple with (AUTH-001). Null
 	// hides the Sign in with Apple button.
 	AppleWebClientID *string `json:"appleWebClientId"`
+	// GoogleWebClientID is the OAuth client id the page signs in to Google with (AUTH-002).
+	// Null hides the Sign in with Google button.
+	GoogleWebClientID *string `json:"googleWebClientId"`
 }
 
 // ClientConfig serves GET /client-config. It is outside the spec because auth
 // wraps every spec route and the sign-in page has no token yet.
-func ClientConfig(mascot3DModelURL, appleWebClientID string) http.HandlerFunc {
+func ClientConfig(mascot3DModelURL, appleWebClientID, googleWebClientID string) http.HandlerFunc {
 	var body clientConfig
 	if mascot3DModelURL != "" {
 		body.Mascot3DModelURL = &mascot3DModelURL
 	}
 	if appleWebClientID != "" {
 		body.AppleWebClientID = &appleWebClientID
+	}
+	if googleWebClientID != "" {
+		body.GoogleWebClientID = &googleWebClientID
 	}
 	encoded, err := json.Marshal(body)
 	if err != nil {

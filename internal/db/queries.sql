@@ -18,6 +18,19 @@ RETURNING *;
 UPDATE users SET apple_sub = $2 WHERE email = $1 AND apple_sub IS NULL
 RETURNING *;
 
+-- name: GetUserByGoogleSub :one
+SELECT * FROM users WHERE google_sub = $1;
+
+-- name: CreateGoogleUser :one
+INSERT INTO users (email, google_sub) VALUES ($1, $2)
+RETURNING *;
+
+-- Claims a user with the same email for a Google id, as ClaimUserForApple does: one the CLI
+-- made, or one made by Apple sign-in. Only a row with no Google id yet.
+-- name: ClaimUserForGoogle :one
+UPDATE users SET google_sub = $2 WHERE email = $1 AND google_sub IS NULL
+RETURNING *;
+
 -- Everything a user owns goes with the row: tokens, accounts, posts, targets,
 -- media rows, OAuth states. The objects in the bucket do not; DeleteUser in
 -- the service removes those.

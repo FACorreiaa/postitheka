@@ -30,7 +30,7 @@ func (q *Queries) AddPostMedia(ctx context.Context, arg AddPostMediaParams) erro
 
 const claimUserForApple = `-- name: ClaimUserForApple :one
 UPDATE users SET apple_sub = $2 WHERE email = $1 AND apple_sub IS NULL
-RETURNING id, email, created_at, apple_sub
+RETURNING id, email, created_at, apple_sub, google_sub
 `
 
 type ClaimUserForAppleParams struct {
@@ -48,6 +48,32 @@ func (q *Queries) ClaimUserForApple(ctx context.Context, arg ClaimUserForApplePa
 		&i.Email,
 		&i.CreatedAt,
 		&i.AppleSub,
+		&i.GoogleSub,
+	)
+	return i, err
+}
+
+const claimUserForGoogle = `-- name: ClaimUserForGoogle :one
+UPDATE users SET google_sub = $2 WHERE email = $1 AND google_sub IS NULL
+RETURNING id, email, created_at, apple_sub, google_sub
+`
+
+type ClaimUserForGoogleParams struct {
+	Email     string
+	GoogleSub *string
+}
+
+// Claims a user with the same email for a Google id, as ClaimUserForApple does: one the CLI
+// made, or one made by Apple sign-in. Only a row with no Google id yet.
+func (q *Queries) ClaimUserForGoogle(ctx context.Context, arg ClaimUserForGoogleParams) (User, error) {
+	row := q.db.QueryRow(ctx, claimUserForGoogle, arg.Email, arg.GoogleSub)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.CreatedAt,
+		&i.AppleSub,
+		&i.GoogleSub,
 	)
 	return i, err
 }
@@ -163,7 +189,7 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 
 const createAppleUser = `-- name: CreateAppleUser :one
 INSERT INTO users (email, apple_sub) VALUES ($1, $2)
-RETURNING id, email, created_at, apple_sub
+RETURNING id, email, created_at, apple_sub, google_sub
 `
 
 type CreateAppleUserParams struct {
@@ -179,6 +205,7 @@ func (q *Queries) CreateAppleUser(ctx context.Context, arg CreateAppleUserParams
 		&i.Email,
 		&i.CreatedAt,
 		&i.AppleSub,
+		&i.GoogleSub,
 	)
 	return i, err
 }
@@ -210,6 +237,29 @@ func (q *Queries) CreateAssistedTarget(ctx context.Context, arg CreateAssistedTa
 		&i.Interrupted,
 		&i.Retries,
 		&i.Options,
+	)
+	return i, err
+}
+
+const createGoogleUser = `-- name: CreateGoogleUser :one
+INSERT INTO users (email, google_sub) VALUES ($1, $2)
+RETURNING id, email, created_at, apple_sub, google_sub
+`
+
+type CreateGoogleUserParams struct {
+	Email     string
+	GoogleSub *string
+}
+
+func (q *Queries) CreateGoogleUser(ctx context.Context, arg CreateGoogleUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createGoogleUser, arg.Email, arg.GoogleSub)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.CreatedAt,
+		&i.AppleSub,
+		&i.GoogleSub,
 	)
 	return i, err
 }
@@ -343,7 +393,7 @@ func (q *Queries) CreatePostTarget(ctx context.Context, arg CreatePostTargetPara
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email) VALUES ($1)
-RETURNING id, email, created_at, apple_sub
+RETURNING id, email, created_at, apple_sub, google_sub
 `
 
 func (q *Queries) CreateUser(ctx context.Context, email string) (User, error) {
@@ -354,6 +404,7 @@ func (q *Queries) CreateUser(ctx context.Context, email string) (User, error) {
 		&i.Email,
 		&i.CreatedAt,
 		&i.AppleSub,
+		&i.GoogleSub,
 	)
 	return i, err
 }
@@ -725,7 +776,7 @@ func (q *Queries) GetTargetForUser(ctx context.Context, arg GetTargetForUserPara
 }
 
 const getUserByAppleSub = `-- name: GetUserByAppleSub :one
-SELECT id, email, created_at, apple_sub FROM users WHERE apple_sub = $1
+SELECT id, email, created_at, apple_sub, google_sub FROM users WHERE apple_sub = $1
 `
 
 func (q *Queries) GetUserByAppleSub(ctx context.Context, appleSub *string) (User, error) {
@@ -736,12 +787,13 @@ func (q *Queries) GetUserByAppleSub(ctx context.Context, appleSub *string) (User
 		&i.Email,
 		&i.CreatedAt,
 		&i.AppleSub,
+		&i.GoogleSub,
 	)
 	return i, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, created_at, apple_sub FROM users WHERE email = $1
+SELECT id, email, created_at, apple_sub, google_sub FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
@@ -752,6 +804,24 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Email,
 		&i.CreatedAt,
 		&i.AppleSub,
+		&i.GoogleSub,
+	)
+	return i, err
+}
+
+const getUserByGoogleSub = `-- name: GetUserByGoogleSub :one
+SELECT id, email, created_at, apple_sub, google_sub FROM users WHERE google_sub = $1
+`
+
+func (q *Queries) GetUserByGoogleSub(ctx context.Context, googleSub *string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByGoogleSub, googleSub)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.CreatedAt,
+		&i.AppleSub,
+		&i.GoogleSub,
 	)
 	return i, err
 }

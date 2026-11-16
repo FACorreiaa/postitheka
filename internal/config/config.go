@@ -98,6 +98,13 @@ type Config struct {
 	AppleBundleIDs   []string
 	AppleWebClientID string
 
+	// Sign in with Google (AUTH-002). GoogleIOSClientIDs are the iOS OAuth client ids, comma
+	// separated (Google binds one to a bundle id); GoogleWebClientID is the web one. Client ids
+	// an ID token's audience may name, not secrets. Both empty turns Google sign-in off. No
+	// client secret: verifying a token needs only Google's published keys.
+	GoogleIOSClientIDs []string
+	GoogleWebClientID  string
+
 	LogLevel  string
 	LogFormat string
 
@@ -149,6 +156,8 @@ func load(serving bool) (Config, error) {
 		Mascot3DModelURL:     env("MASCOT_3D_MODEL_URL", ""),
 		AppleBundleIDs:       envList("APPLE_BUNDLE_IDS"),
 		AppleWebClientID:     env("APPLE_WEB_CLIENT_ID", ""),
+		GoogleIOSClientIDs:   envList("GOOGLE_IOS_CLIENT_IDS"),
+		GoogleWebClientID:    env("GOOGLE_WEB_CLIENT_ID", ""),
 		LogLevel:             env("LOG_LEVEL", "info"),
 		LogFormat:            env("LOG_FORMAT", ""),
 	}
@@ -237,6 +246,15 @@ func (c Config) AppleAudiences() []string {
 	out := append([]string{}, c.AppleBundleIDs...)
 	if c.AppleWebClientID != "" {
 		out = append(out, c.AppleWebClientID)
+	}
+	return out
+}
+
+// GoogleAudiences are every client id a Google ID token may be issued to.
+func (c Config) GoogleAudiences() []string {
+	out := append([]string{}, c.GoogleIOSClientIDs...)
+	if c.GoogleWebClientID != "" {
+		out = append(out, c.GoogleWebClientID)
 	}
 	return out
 }
