@@ -182,6 +182,39 @@ channels need `thread_name`.
 No posting API: the Business API only messages people who opted in, paid per message. The iOS
 app hands the post to WhatsApp through the share sheet and the user taps Send (built).
 
+## First comment (checked 2026-11-16, for POST-002)
+
+Can the API post a comment or reply under the post the same account just made? Meta moved its
+docs to `developers.facebook.com/documentation/...` (the `.md` pages are readable); two Meta
+review points come from search summaries of `/docs/permissions`, not a direct read.
+
+| Platform | Can comment | Endpoint | Permission | Adds review | Limits |
+|---|---|---|---|---|---|
+| Discord | Yes, as a second message (no true reply) | Post with `?wait=true`, then `POST {webhook}?thread_id=<id>` in a forum thread (a thread's id is its first message's id); in a plain channel, a second message | None beyond the webhook | No | 2,000 characters; links allowed; free |
+| LinkedIn | Yes | `POST /rest/socialActions/{post urn}/comments`, `{actor, object, message: {text}}`; images in comments refused (403) | **Unconfirmed:** the Comments API page lists `w_member_social_feed` (Community Management API); Getting Access says `w_member_social` covers "Post, comment and like" | Only if `w_member_social_feed` is needed: a vetted product, Development tier on a new app with no other products | Per-member one-minute throttle (429 "Comment create throttled"); length unconfirmed |
+| X | **Unconfirmed** | `POST /2/tweets` with `reply.in_reply_to_tweet_id` | `tweet.write` (held) | No | Self-serve pay-per-use may reply only when the original author summoned the replying account; whether one's own post counts is not stated. Create $0.015, with a URL $0.20, summoned $0.010; 280 characters; 100 per 15 min per user |
+| Threads | Yes | `POST /me/threads` with `media_type=TEXT`, `text`, `reply_to_id`, then `threads_publish`; wait about 30 s between the two | `threads_manage_replies` (new) | Yes: App Review and Business Verification for people without a role | 1,000 replies per 24 h; 500 characters; more than 5 links fails |
+| Instagram | Yes | `POST /{ig-media-id}/comments?message=` | `instagram_business_manage_comments` (new) | Yes: Advanced Access, App Review, Business Verification | Rate limit by account impressions; length and link handling unconfirmed |
+| Facebook Page | Yes, as the Page | `POST /{page-post-id}/comments` with `message` | `pages_manage_engagement` (new), Page token with the MODERATE task | Yes: Advanced Access, App Review, Business Verification | Length and link handling unconfirmed |
+| TikTok | **No** | No comment scope in TikTok for Developers; inbox drafts are not published, so there is nothing to comment on | — | — | TikTok API for Business may have a comment reply endpoint (third-party sources only, unconfirmed) |
+| WhatsApp, Reddit | By hand | Handed off with the post | — | — | — |
+
+Sources:
+- Discord: `discord-api-docs` `resources/webhook.mdx` (Execute Webhook), `topics/threads.mdx`.
+- LinkedIn: learn.microsoft.com/linkedin `community-management/shares/comments-api`,
+  `shared/authentication/getting-access`, `marketing/increasing-access`.
+- X: docs.x.com `x-api/posts/create-post`, `posts/manage-tweets/integrate` (post creation
+  restrictions), `getting-started/pricing`.
+- Threads: `documentation/threads/retrieve-and-manage-replies/create-replies.md`, `overview.md`,
+  `posts.md`.
+- Instagram: `documentation/instagram-platform/instagram-graph-api/reference/ig-media/comments.md`,
+  `comment-moderation.md`, `overview.md`.
+- Facebook: `docs/graph-api/reference/object/comments`, `documentation/pages-api/comments-mentions.md`.
+- TikTok: developers.tiktok.com `doc/tiktok-api-scopes`, `content-posting-api-reference-upload-video`.
+
+Two answers need one real call each before code: whether LinkedIn's `w_member_social` can
+comment, and whether X lets an account reply to its own post on pay-per-use.
+
 ## Why Go for the backend
 
 Compared with Hummingbird (Swift), considered because the iOS app is Swift:

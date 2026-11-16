@@ -144,7 +144,7 @@ Strangers who have published a post: **0**.
 | X-002 | Built, unverified | `publisher.Refresher`, `PublishWorker.refresh` (row lock, re-check, seal, then publish); `TestTokenRefresh` (three concurrent posts refresh once and publish with the new token, revoked grant fails asking for reconnect, transient failure stays pending); mutation-checked; Threads implements it | Never run against a real platform |
 | ACC-001 | Built, unverified | `migrations/20261114150000_account_needs_reconnect.sql`, `publisher.Reconnect`, `needs_reconnect` on Account; `TestRefusedCredentialsMarkTheAccount` (a 401 marks only that account, a rejected post does not, queued targets fail without a request, a new post is refused at the door), revoked refresh in `TestTokenRefresh`, reconnect clears it in `TestOAuthConnect`; web stamp and Accounts looked at in a browser at desktop and 375 px with seeded accounts; iOS kit test | Never against a real platform: which answers mean dead credentials is read from each platform's docs. Marks after the first refusal; nothing warns before a token expires. iOS views built, not looked at on a simulator. Web Reconnect button seen, not pressed (it leaves for the platform) |
 | POST-001 | Built, unverified | `PATCH` and `DELETE /v1/posts/{id}`; `TestCancelPostRemovesAnUnsentPost`, `TestReschedulePostMovesAnUnsentPost` (the old job posts nothing, the new one posts once), `TestAPostThatStartedSendingCannotBeCancelledOrMoved`; web Sent checked in a browser at desktop and 375 px against a local server with seeded posts; iOS kit `APITests` | iOS swipe actions and the reschedule sheet built, not looked at on a simulator. Not run against a job firing at the same moment outside a test |
-| POST-002 | Open | | Platform research first |
+| POST-002 | Open | Research 2026-11-16 in `docs/platform-research.md` | LinkedIn and X each need one real test call |
 | BRAND-001 | Built, unverified | `migrations/20261114120000_account_brand.sql`, `PATCH /v1/accounts/{id}`; `TestAccountBrand`; web `brands.test.ts`, kit `BrandsTests`; web looked at in a browser at desktop and 375 px against a local server | iOS built and kit-tested, not looked at in a simulator |
 | BRAND-002 | Open | | Name and storage are OPEN (owner) |
 | LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
@@ -421,12 +421,20 @@ On P2's gate (MVP, owner 2026-11-16). **Needs:** research first. Asked by the ow
 video; a reply posted under it right after carries the hashtags and the link to the app, so the
 post itself stays clean.
 
-Before any code, check each platform's current docs and record the answer, dated, in
-`docs/platform-research.md`: can the API reply to or comment on the post it just made, with
-which permission or scope, and does that permission add to an app review. To check: Discord
-(a second webhook message, or a message in the forum thread), LinkedIn, X (a reply), Threads
-(a reply), Instagram, a Facebook Page, TikTok. WhatsApp and Reddit are handed off by hand, so
-the comment is handed over with the post, for the person to paste.
+Research done 2026-11-16: "First comment" in `docs/platform-research.md`.
+- **Discord:** yes, as a second webhook message (into the forum thread by `thread_id`). No new
+  permission. Build first.
+- **Threads, Instagram, Facebook:** yes, each with one new permission (`threads_manage_replies`,
+  `instagram_business_manage_comments`, `pages_manage_engagement`) that joins META-001's App
+  Review. Works now for accounts with a role on the app; reconnecting is needed to grant it.
+- **LinkedIn:** the endpoint exists; whether `w_member_social` is enough is unconfirmed. One real
+  call with the owner's account decides it before code. If it needs the Community Management API,
+  that is a separate vetted app (OPEN).
+- **X:** self-serve accounts may reply only when "summoned"; whether one's own post counts is
+  unconfirmed. One real call decides it. A reply with a link likely costs $0.20.
+- **TikTok:** no comment API, and drafts are not published. Not offered; the stamp says so.
+- **WhatsApp, Reddit:** handed off by hand, so the comment goes with the post for the person to
+  paste.
 
 Then, per platform that allows it: a per-post "first comment" field (a per-target option,
 OPT-001), posted after the post succeeds, as its own step with its own retry, so a failed
