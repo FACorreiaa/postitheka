@@ -219,19 +219,26 @@ label {
   }
 }
 
-/* Sign in with Apple (AUTH-001): Apple's script draws the button inside #appleid-signin. */
-.signin .apple {
+/* Sign in with Apple and Google (AUTH-001, AUTH-002): each provider's script draws its button. */
+.signin .providers {
   display: grid;
   gap: 0.75rem;
   margin-bottom: 1.25rem;
 }
 
-.signin .apple #appleid-signin {
-  height: 44px;
+/* Apple draws its button at most 375px wide; Google's is held to the same. */
+.signin .providers #appleid-signin {
+  max-width: 375px;
+  height: 40px;
   cursor: pointer;
 }
 
-.signin .apple .divider {
+.signin .providers .google {
+  max-width: 375px;
+  min-height: 40px;
+}
+
+.signin .providers .divider {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -240,8 +247,8 @@ label {
   font-size: var(--s-1);
 }
 
-.signin .apple .divider::before,
-.signin .apple .divider::after {
+.signin .providers .divider::before,
+.signin .providers .divider::after {
   content: "";
   flex: 1;
   height: 1px;

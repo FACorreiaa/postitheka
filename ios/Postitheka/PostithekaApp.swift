@@ -1,3 +1,4 @@
+import GoogleSignIn
 import PostithekaKit
 import SwiftUI
 
@@ -10,6 +11,8 @@ struct PostithekaApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
+                // Google's sign-in returns through the app's URL scheme (AUTH-002).
+                .onOpenURL { GIDSignIn.sharedInstance.handle($0) }
         }
     }
 }

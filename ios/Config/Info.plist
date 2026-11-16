@@ -5,6 +5,18 @@
 	<!-- Merged with the generated Info.plist (GENERATE_INFOPLIST_FILE). Only what build settings cannot express. -->
 	<key>PostithekaAPIBaseURL</key>
 	<string>$(API_BASE_URL)</string>
+	<!-- Sign in with Google (AUTH-002): GoogleSignIn reads GIDClientID; Google returns to the reversed id. -->
+	<key>GIDClientID</key>
+	<string>$(GOOGLE_IOS_CLIENT_ID)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>$(GOOGLE_IOS_URL_SCHEME)</string>
+			</array>
+		</dict>
+	</array>
 	<!-- Only to tell the user whether WhatsApp or Reddit is installed before they choose it. -->
 	<key>LSApplicationQueriesSchemes</key>
 	<array>

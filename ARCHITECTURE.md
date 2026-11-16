@@ -394,6 +394,11 @@ checked by `task ios:check`), the rules mirror, the Keychain token store, upload
 (`API_BASE_URL` in `ios/Config/*.xcconfig`); the app holds no secret but the user's token, in
 the Keychain.
 
+Sign-in (AUTH-001, AUTH-002): Apple through `AuthenticationServices`, Google through the
+GoogleSignIn package (10.1.0, pinned exactly; the app target's only third-party dependency, kept
+out of the kit so `swift test` stays light). Its client id and return URL scheme come from
+`GOOGLE_IOS_CLIENT_ID` and `GOOGLE_IOS_URL_SCHEME` in the xcconfigs, through `Config/Info.plist`.
+
 Build configurations: Debug (local server), **Beta** (Release optimisations plus the `BETA`
 compilation condition, for TestFlight) and Release (the App Store). The 3D mascot (BRD-001)
 compiles into Debug and Beta only: `SignInView` picks it under `#if DEBUG || BETA`, and

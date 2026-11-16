@@ -1,12 +1,14 @@
 import AuthenticationServices
+import GoogleSignIn
+import GoogleSignInSwift
 import PostithekaKit
 import SwiftUI
 
-/// Sign in with Apple (AUTH-001), or paste a token minted with `server user create`: the
-/// operator's way in, kept for when Apple sign-in is off on a server.
+/// Sign in with Apple (AUTH-001) or Google (AUTH-002), or paste a token minted with
+/// `server user create`: the operator's way in, kept for when both are off on a server.
 struct SignInView: View {
     @Environment(AppModel.self) private var model
-    /// The raw nonce of the Apple sign-in in flight; Apple gets its hash.
+    /// The raw nonce of the sign-in in flight; the provider gets its hash.
     @State private var nonce = ""
     @State private var token = ""
     @State private var error: String?
@@ -23,10 +25,18 @@ struct SignInView: View {
                 .listRowSeparator(.hidden)
 
                 Section {
-                    SignInWithAppleButton(.signIn, onRequest: requestApple, onCompletion: finishApple)
-                        .signInWithAppleButtonStyle(.white)
-                        .frame(height: 48)
-                        .disabled(busy)
+                    VStack(spacing: 12) {
+                        // Pills, like the rest of the form; the Form's row mask otherwise rounds
+                        // the first button's top corners and the last one's bottom ones only.
+                        SignInWithAppleButton(.signIn, onRequest: requestApple, onCompletion: finishApple)
+                            .signInWithAppleButtonStyle(.white)
+                            .frame(height: 48)
+                            .clipShape(.capsule)
+                        // Google's own button, so its logo and wording follow Google's rules.
+                        GoogleSignInButton(scheme: .light, style: .wide, state: busy ? .disabled : .normal, action: signInWithGoogle)
+                            .clipShape(.capsule)
+                    }
+                    .disabled(busy)
                 }
                 .listRowBackground(Color.clear)
                 .listRowInsets(EdgeInsets())
@@ -82,9 +92,44 @@ struct SignInView: View {
     }
 
     private func requestApple(_ request: ASAuthorizationAppleIDRequest) {
-        nonce = AppleSignIn.makeNonce()
+        nonce = ProviderSignIn.makeNonce()
         request.requestedScopes = [.email]
-        request.nonce = AppleSignIn.hashed(nonce)
+        request.nonce = ProviderSignIn.hashed(nonce)
+    }
+
+    private func signInWithGoogle() {
+        guard !busy, let presenter = Self.topViewController() else { return }
+        let nonce = ProviderSignIn.makeNonce()
+        Task {
+            busy = true
+            defer { busy = false }
+            do {
+                // The default scopes are openid, email and profile: all the server reads.
+                let result = try await GIDSignIn.sharedInstance.signIn(
+                    withPresenting: presenter, hint: nil, additionalScopes: nil, nonce: ProviderSignIn.hashed(nonce)
+                )
+                guard let idToken = result.user.idToken?.tokenString else {
+                    error = "Google did not return a sign-in. Try again."
+                    return
+                }
+                error = await model.signIn(with: .google, idToken: idToken, nonce: nonce)
+                // Postitheka keeps its own token; Google's session is not needed after this.
+                GIDSignIn.sharedInstance.signOut()
+            } catch let failure as GIDSignInError where failure.code == .canceled {
+                // Closing Google's sheet is not an error to show.
+            } catch let failure {
+                error = failure.localizedDescription
+            }
+        }
+    }
+
+    /// GoogleSignIn presents from a view controller; SwiftUI has none to hand.
+    private static func topViewController() -> UIViewController? {
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        var top = scene?.keyWindow?.rootViewController
+        while let presented = top?.presentedViewController { top = presented }
+        return top
     }
 
     private func finishApple(_ result: Result<ASAuthorization, any Error>) {
@@ -99,7 +144,7 @@ struct SignInView: View {
             }
             Task {
                 busy = true
-                error = await model.signInWithApple(identityToken: identityToken, nonce: nonce)
+                error = await model.signIn(with: .apple, idToken: identityToken, nonce: nonce)
                 busy = false
             }
         case .failure(let failure):

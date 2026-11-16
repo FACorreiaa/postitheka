@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		A10000000000000000000032 /* PostithekaKit in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000031 /* PostithekaKit */; };
+		A10000000000000000000063 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000061 /* GoogleSignIn */; };
+		A10000000000000000000064 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000062 /* GoogleSignInSwift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +50,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000032 /* PostithekaKit in Frameworks */,
+				A10000000000000000000063 /* GoogleSignIn in Frameworks */,
+				A10000000000000000000064 /* GoogleSignInSwift in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +116,8 @@
 			name = Postitheka;
 			packageProductDependencies = (
 				A10000000000000000000031 /* PostithekaKit */,
+				A10000000000000000000061 /* GoogleSignIn */,
+				A10000000000000000000062 /* GoogleSignInSwift */,
 			);
 			productName = Postitheka;
 			productReference = A10000000000000000000004 /* Postitheka.app */;
@@ -168,6 +174,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				A10000000000000000000030 /* XCLocalSwiftPackageReference "PostithekaKit" */,
+				A10000000000000000000060 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A10000000000000000000003 /* Products */;
@@ -493,10 +500,31 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		A10000000000000000000060 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = exactVersion;
+				version = 10.1.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		A10000000000000000000031 /* PostithekaKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PostithekaKit;
+		};
+		A10000000000000000000061 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000060 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		A10000000000000000000062 /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000060 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
