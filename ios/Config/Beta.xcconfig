@@ -7,6 +7,4 @@ EXCLUDED_SOURCE_FILE_NAMES =
 
 SWIFT_ACTIVE_COMPILATION_CONDITIONS = BETA $(inherited)
 
-// As Debug until the public hostname exists (REL-004): the simulator reaches the Mac's
-// localhost; a device needs the Mac's .local name.
-API_BASE_URL = http:/$()/localhost:8095
+// API_BASE_URL comes from Release: a TestFlight build talks to production.
