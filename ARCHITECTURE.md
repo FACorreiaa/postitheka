@@ -375,6 +375,11 @@ compiles into Debug and Beta only: `SignInView` picks it under `#if DEBUG || BET
 `ios/tools/release-proof.sh` builds Release and fails if any of them got in. The motion driver
 is `MascotMotion` in PostithekaKit, tested with the web's numbers.
 
+Beta and Release talk to production; Debug talks to the local server. TestFlight builds come
+from `ios/tools/testflight.sh`: an archive of Beta through the shared `Postitheka` scheme,
+build number from the UTC time, exported and uploaded with `ios/tools/ExportOptions.plist`. The
+privacy manifest is `ios/Postitheka/PrivacyInfo.xcprivacy`.
+
 WhatsApp and Reddit: after the server accepts a post with `assisted`, the app opens the share
 sheet with the text and media and reports the outcome through the handoff route. Sent means
 `completed` on that platform's own share extension: WhatsApp's by its exact identifier,

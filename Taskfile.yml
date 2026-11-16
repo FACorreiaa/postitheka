@@ -199,6 +199,18 @@ tasks:
         xcodebuild build -project ios/Postitheka.xcodeproj -scheme Postitheka -configuration Beta
         -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO -quiet
 
+  ios:archive:
+    desc: Archive the Beta configuration for devices, signed, without uploading (checks signing)
+    platforms: [darwin]
+    cmds:
+      - sh ios/tools/testflight.sh archive
+
+  ios:testflight:
+    desc: Archive Beta and upload it to App Store Connect for TestFlight (needs the app record and upload access)
+    platforms: [darwin]
+    cmds:
+      - sh ios/tools/testflight.sh upload
+
   ios:release-proof:
     desc: Build Release and fail if the 3D mascot's model, motion file or view got into it (BRD-001)
     platforms: [darwin]

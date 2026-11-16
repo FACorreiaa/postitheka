@@ -1,6 +1,6 @@
-// Empty until the public hostname exists (REL-004). The app then says it has
-// no server rather than guessing one.
-API_BASE_URL =
+// Production, live since 2026-11-16 (REL-004). Beta inherits it. The $() stops
+// xcconfig reading the // as a comment.
+API_BASE_URL = https:/$()/postitheka.facorreia.com
 
 // The 3D mascot (BRD-001) is a beta experiment: its view, model and motion file are in Debug
 // and Beta builds only. The app target is a synchronized folder, so this setting, not a target

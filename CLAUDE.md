@@ -112,6 +112,8 @@ task secrets                        # gitleaks over the history, as CI runs it
 task generate                       # api:gen (Go + TS + Swift) and sqlc
 task ios:check                      # the iOS gate: Swift client current, kit tests, Debug + Beta build, Release proof
 task ios:release-proof              # Release build holds no 3D mascot model, motion file or view (BRD-001)
+task ios:archive                    # signed Beta archive for devices, no upload (checks signing)
+task ios:testflight                 # archive Beta and upload to App Store Connect (owner-approved only)
 task build                          # web build, then one binary with the web app inside
 ```
 

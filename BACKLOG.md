@@ -149,6 +149,7 @@ Strangers who have published a post: **0**.
 | IOS-004, IOS-005 | Open | | |
 | BRD-001 | Gate 1 passed, waiting on the device check | Branch `brd-001-mascot-3d`. `build_mascot3d.py` builds `mascot.glb` and `Mascot.usdz`; since 2026-11-15 from the tablet model with a drawn smile (1544 KB, 876 KB gzip, 20 draw calls, 129k triangles; `Mascot.usdz` 1640 KB, passes `usdchecker --arkit`), before that without the tablet (1047 KB, 616 KB gzip, 15 draw calls, 87k triangles; 1144 KB). Seen rendering in Chrome (model in ~1.4 s from the dev server, canvas swaps in, turns and floats) and in the iOS 26 simulator on a Beta build; flat mascot kept with a broken URL. Headless Chrome (software WebGL, dev and production builds, 2026-11-13): live in 0.9–1.3 s; one WebGL context left (the probe's is released); 15 draws a frame, none while the tab is hidden or the mascot is scrolled off, resumes after; reduced motion and Save-Data send no request and keep the flat mascot; no WebGL fetches the config only, never three. In the first ~5 runs the scene chunk's fetch was aborted (`net::ERR_ABORTED`, cause not found) and the flat mascot stayed, as designed; not seen again in 36 runs. Both drivers' tests, `task check` and `task ios:check` (Release proof with the model present) green | Entry budget raised 1 KiB to 80896 B (owner, 2026-11-13: Vite's preload wrapper). Gate 1 (the recolour) passed: owner, 2026-11-13. Waiting on the owner's device check: fps, memory, Low Power Mode and Reduce Motion on iOS, a real GPU |
 | IOS-006 | Built, unverified | `POST /v1/targets/{id}/handoff`; `TestAssistedHandoff` (incl. expiry after an hour, `internal/jobs/handoffs.go`); kit `aWhatsAppHandoffOpensAfterPublishingAndIsReported`; UI test `testWhatsAppHandoffClosedWithoutSending` recorded the cancel as failed | WhatsApp is not on the simulator: the share sheet opened and was dismissed, but a real send was never tried. Needs a device |
+| IOS-007 | Built, unverified | Release/Beta `API_BASE_URL`, shared scheme, `PrivacyInfo.xcprivacy`, `ios/tools/testflight.sh`; `task ios:check` green | Waiting on the owner: App Store Connect record and upload access |
 
 **Known gaps no item owns yet:** deleting a user removes their media rows by cascade but leaves the objects in the bucket. No route deletes a user yet; whichever item adds one must delete the objects too.
 
@@ -625,6 +626,23 @@ a target in `handing_off` that the phone completes, so Sent records it as handed
 published. A handoff the phone never reports fails after an hour.
 
 **Done when:** the post opens in WhatsApp ready to send, and Sent shows it as handed off.
+
+### IOS-007 · TestFlight builds · S
+Beta and Release talk to production (`Release.xcconfig`; Beta inherits it). The shared
+`Postitheka` scheme archives Beta. `ios/tools/testflight.sh` (`task ios:archive`,
+`task ios:testflight`) archives for devices with automatic signing, numbers the build from the
+UTC time, and exports with `ios/tools/ExportOptions.plist` straight to App Store Connect. Upload
+signs in with an App Store Connect API key when `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_PATH`
+are set, otherwise with the Apple ID in Xcode. `PrivacyInfo.xcprivacy` declares no tracking,
+UserDefaults (reason CA92.1), and the post text and photos or videos the person sends as
+collected for the app's function.
+
+**Owner:** the App Store Connect app record for `com.fernandocorreia.postitheka`, and upload
+access (Xcode signed in, or an API key). External testers also need a privacy policy URL
+(PRV-001) and Beta App Review.
+
+**Done when:** a build uploaded by `task ios:testflight` installs from TestFlight on the owner's
+phone and talks to production.
 
 ---
 
