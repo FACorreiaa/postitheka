@@ -81,8 +81,9 @@ so far and introduces none: anything still undecided is marked **OPEN** and wait
   sign-up (AUTH-001, IOS-002), Meta apps in development mode until review (META-001, needs
   PRV-001), TikTok private-only until its audit (TT-002). X bills the owner's developer account
   for every user's posts, which needs a decision before X opens to strangers (OPEN).
-- **Spaces and a first comment are wanted** (owner): BRAND-002 and POST-002. Neither is on a
-  gate, and the strangers count is 0.
+- **Spaces and a first comment are part of the MVP** (owner): BRAND-002 and POST-002 are on
+  P2's gate. Flagged that neither brings a stranger in while the strangers count is 0; the owner
+  decided they belong in the MVP anyway.
 
 ## Waiting on the owner
 
@@ -111,7 +112,7 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | --- | --- | --- | --- |
 | **P0 · Foundations** | 6/6 | **Met** | Nothing |
 | **P1 · First stranger** | 4/12 (2 built, unverified) | Not met | Not deployed; no real sign-in |
-| **P2 · Platforms** | 0/15 (13 built, unverified; RDT-001 dropped) | Not met | Needs P1 deployed; X needs credits; Meta and TikTok need review |
+| **P2 · Platforms** | 0/17 (13 built, unverified; RDT-001 dropped; BRAND-002 and POST-002 open) | Not met | Needs P1 deployed; X needs credits; Meta and TikTok need review; Spaces and first comment not built |
 | **P3 · iOS** | 1/6 (2 built, unverified) | Not met | IOS-002 needs AUTH-001; nothing tested on a device |
 
 Strangers who have published a post: **0**.
@@ -327,7 +328,9 @@ on unauthenticated requests.
 # P2 · Platforms
 
 **Gate:** the same post reaches Discord and at least two of LinkedIn, X, Threads, Instagram,
-TikTok and Facebook from production, for a user who is not the owner.
+TikTok and Facebook from production, for a user who is not the owner. The post is written in a
+Space (BRAND-002) and carries a first comment, which lands under the post on every one of those
+platforms that allows one (POST-002). Added to the gate by the owner 2026-11-16: part of the MVP.
 
 What each platform allows, with sources and the date checked, is in
 `docs/platform-research.md` (re-checked 2026-10-23). Every platform below except Discord connects
@@ -372,7 +375,7 @@ the filter is not published to, and another user's account cannot be labelled (t
 browser check).
 
 ### BRAND-002 · Spaces: a brand's own posts and defaults · M
-**Needs:** BRAND-001 verified. Asked by the owner 2026-11-16: a Space for each thing promoted
+On P2's gate (MVP, owner 2026-11-16). **Needs:** BRAND-001 verified. Asked by the owner 2026-11-16: a Space for each thing promoted
 (Khepri, LuminaVault, Norviq, AI), holding that subject's posts. BRAND-001 already labels
 accounts and filters the composer by brand; this takes the label from accounts to posts:
 
@@ -414,7 +417,7 @@ or media of a scheduled post is not part of this.
 and both are refused once sending has started (tests and a browser check).
 
 ### POST-002 · First comment: hashtags and links under the post · M
-**Needs:** research first. Asked by the owner 2026-11-16: the post carries the text, images and
+On P2's gate (MVP, owner 2026-11-16). **Needs:** research first. Asked by the owner 2026-11-16: the post carries the text, images and
 video; a reply posted under it right after carries the hashtags and the link to the app, so the
 post itself stays clean.
 
