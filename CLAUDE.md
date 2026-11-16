@@ -240,6 +240,12 @@ for its author, and gets no postmark.
   and leaves two drafts.
 - **TikTok answers 200 with an error inside.** The token endpoint puts `error` in a 200 body, and
   the API wraps every answer in `{"data", "error": {"code": "ok"}}`. Read the code, not the status.
+- **Production's Content-Security-Policy lives in the infra repo**, not here
+  (`apps/postitheka/api/values-production.yaml`, `securityHeaders`). Locally there is none, so
+  a new third-party script works on a laptop and is blocked in production: Google's sign-in
+  button failed with "Sign-in could not be reached" until LuminaVaultInfra #667 allowed
+  `accounts.google.com/gsi/`. Anything the page loads from another origin needs that file
+  changed in the same release.
 - **Platform research agents can be wrong.** Limits that came back unconfirmed from research
   (LinkedIn's text length, image size) were checked against the platform's own pages before
   going into `Rules()`.
