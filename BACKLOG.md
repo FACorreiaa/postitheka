@@ -104,7 +104,7 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | TikTok developer app | TT-001 used for real, TT-002 | **To do (owner, 2026-11-16).** Photos also need a domain verified with TikTok |
 | Meta app with the Threads API use case, owner as Threads Tester | THR-001 used before review | **To do (owner, 2026-11-16).** `THREADS_APP_ID` / `THREADS_APP_SECRET` (the Threads ones, not the main app's) in `.env`; redirect `PUBLIC_URL/oauth/threads/callback`. Instagram is the same app with the Instagram use case: `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` from "API setup with Instagram login", redirect `PUBLIC_URL/oauth/instagram/callback`, and a professional account with a role on the app. Facebook Pages use the Meta app's own id and secret: `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET`, redirect `PUBLIC_URL/oauth/facebook/callback` under Facebook Login. Meta may refuse a plain-http redirect (not checked); then `PUBLIC_URL` must be an https tunnel to the local server |
 | Meta app, Business Verification, App Review | THR-001, IG-001, FB-001 for strangers | **To do (owner, 2026-11-16).** Weeks; needs PRV-001 live. Not needed for accounts with a role on the app (Standard Access, checked 2026-11-05) |
-| Approve privacy policy and terms text | PRV-001 | Agent drafts |
+| Approve privacy policy and terms text | PRV-001 | Done | Live 2026-11-16 at https://postitheka.facorreia.com/privacy/ and /terms/ (PR #34, promote LuminaVaultInfra #663, image `fe53fde`), linked from web and iOS sign-in; deletion instructions at `/privacy/#delete`. Operator Fernando Correia, contact fernando@facorreia.com, Portuguese law (owner) | |
 
 ## Status (2026-10-23)
 
