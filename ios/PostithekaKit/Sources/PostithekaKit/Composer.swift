@@ -118,6 +118,18 @@ public final class Composer {
             && !(!handTo.isEmpty && scheduledAt != nil) // a handoff happens now, on this device
     }
 
+    /// Why Publish is disabled, in the order a person would fix it; nil when
+    /// it is enabled. The web composer shows the same lines.
+    public var waitingFor: String? {
+        if busy || canPublish { return nil }
+        if attachments.contains(where: \.isUploading) { return "Publish unlocks when uploads finish." }
+        if attachments.contains(where: { $0.error != nil }) { return "Remove the file that failed to upload." }
+        if isEmpty { return "Write something or add a photo or video." }
+        if !handTo.isEmpty && scheduledAt != nil { return "A post handed to another app cannot be scheduled." }
+        if chosen.isEmpty && handTo.isEmpty { return "Tap a stamp to choose where it goes." }
+        return "Fix what a chosen stamp objects to."
+    }
+
     public func toggle(_ account: Account) {
         guard !account.needsReconnect else { return }
         if selected.contains(account.id) { selected.remove(account.id) } else { selected.insert(account.id) }
