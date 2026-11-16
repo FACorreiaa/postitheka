@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Accounts, type ConnectOutcome } from "./Accounts";
+import { AppleSignIn } from "./AppleSignIn";
 import { type Account, api, messageOf, type PlatformInfo, type Post, readToken, setUnauthorizedHandler, writeToken } from "./api";
 import lockup from "./assets/lockup-horizontal-on-dark.svg";
 import { Mascot3D } from "./components/Mascot3D";
@@ -46,6 +47,7 @@ function SignIn({ onSignIn }: { onSignIn: (token: string) => void }) {
           <Logo />
         </h1>
         <p className="lede">Write once. Publish everywhere.</p>
+        <AppleSignIn onSignIn={onSignIn} />
         <form
           onSubmit={async (e) => {
             e.preventDefault();

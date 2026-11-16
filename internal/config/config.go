@@ -91,6 +91,13 @@ type Config struct {
 	// means the flat mascot. Not a secret; the page reads it from GET /client-config.
 	Mascot3DModelURL string
 
+	// Sign in with Apple (AUTH-001). AppleBundleIDs are the iOS app's bundle ids, comma
+	// separated; AppleWebClientID is the web Services ID. Both are client ids an identity
+	// token's audience may name, and neither is secret. Both empty turns Apple sign-in off. No
+	// private key: verifying a token needs only Apple's published keys.
+	AppleBundleIDs   []string
+	AppleWebClientID string
+
 	LogLevel  string
 	LogFormat string
 
@@ -140,6 +147,8 @@ func load(serving bool) (Config, error) {
 		PostHogAPIKey:        env("POSTHOG_API_KEY", ""),
 		PostHogHost:          strings.TrimSuffix(env("POSTHOG_HOST", "https://eu.i.posthog.com"), "/"),
 		Mascot3DModelURL:     env("MASCOT_3D_MODEL_URL", ""),
+		AppleBundleIDs:       envList("APPLE_BUNDLE_IDS"),
+		AppleWebClientID:     env("APPLE_WEB_CLIENT_ID", ""),
 		LogLevel:             env("LOG_LEVEL", "info"),
 		LogFormat:            env("LOG_FORMAT", ""),
 	}
@@ -221,6 +230,26 @@ func load(serving bool) (Config, error) {
 	}
 
 	return c, nil
+}
+
+// AppleAudiences are every client id an Apple identity token may be issued to.
+func (c Config) AppleAudiences() []string {
+	out := append([]string{}, c.AppleBundleIDs...)
+	if c.AppleWebClientID != "" {
+		out = append(out, c.AppleWebClientID)
+	}
+	return out
+}
+
+// envList reads a comma-separated list, dropping blanks.
+func envList(key string) []string {
+	var out []string
+	for _, v := range strings.Split(os.Getenv(key), ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
 
 func env(key, fallback string) string {

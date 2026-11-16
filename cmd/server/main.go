@@ -26,6 +26,7 @@ import (
 	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 
 	"github.com/FACorreiaa/postitheka/internal/analytics"
+	"github.com/FACorreiaa/postitheka/internal/appleid"
 	"github.com/FACorreiaa/postitheka/internal/config"
 	"github.com/FACorreiaa/postitheka/internal/database"
 	"github.com/FACorreiaa/postitheka/internal/db"
@@ -190,6 +191,7 @@ func serve(cfg config.Config) error {
 		Discord:   discordPub,
 		Analytics: events,
 		PublicURL: cfg.PublicURL,
+		Apple:     &appleid.Verifier{Audiences: cfg.AppleAudiences()},
 	})
 
 	srv := &http.Server{
@@ -264,7 +266,11 @@ func routes(cfg config.Config, pool *pgxpool.Pool, svc *service.Service) http.Ha
 	r.With(public).Get("/oauth/{platform}/callback", httpapi.OAuthCallback(svc, slog.Default()))
 
 	// Outside the spec too: the sign-in page reads it before there is a token.
-	r.With(public).Get("/client-config", httpapi.ClientConfig(cfg.Mascot3DModelURL))
+	r.With(public).Get("/client-config", httpapi.ClientConfig(cfg.Mascot3DModelURL, cfg.AppleWebClientID))
+
+	// Outside the spec too: this is how a person gets their first token (AUTH-001). Limited by
+	// address like the routes above; a body is a few kilobytes at most.
+	r.With(public).Post("/auth/apple", httpapi.AppleSignIn(svc, slog.Default()))
 
 	r.Group(func(api chi.Router) {
 		// Every API body is JSON: media goes straight to object storage, so

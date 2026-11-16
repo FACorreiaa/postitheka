@@ -28,6 +28,30 @@ func (q *Queries) AddPostMedia(ctx context.Context, arg AddPostMediaParams) erro
 	return err
 }
 
+const claimUserForApple = `-- name: ClaimUserForApple :one
+UPDATE users SET apple_sub = $2 WHERE email = $1 AND apple_sub IS NULL
+RETURNING id, email, created_at, apple_sub
+`
+
+type ClaimUserForAppleParams struct {
+	Email    string
+	AppleSub *string
+}
+
+// Claims a user made before Apple sign-in for the Apple id with the same email. Only a row
+// with no Apple id yet: one already claimed belongs to someone else's Apple id.
+func (q *Queries) ClaimUserForApple(ctx context.Context, arg ClaimUserForAppleParams) (User, error) {
+	row := q.db.QueryRow(ctx, claimUserForApple, arg.Email, arg.AppleSub)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.CreatedAt,
+		&i.AppleSub,
+	)
+	return i, err
+}
+
 const completeHandoff = `-- name: CompleteHandoff :one
 UPDATE post_targets t
 SET status = $1,
@@ -133,6 +157,28 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 		&i.CreatedAt,
 		&i.Brand,
 		&i.NeedsReconnectAt,
+	)
+	return i, err
+}
+
+const createAppleUser = `-- name: CreateAppleUser :one
+INSERT INTO users (email, apple_sub) VALUES ($1, $2)
+RETURNING id, email, created_at, apple_sub
+`
+
+type CreateAppleUserParams struct {
+	Email    string
+	AppleSub *string
+}
+
+func (q *Queries) CreateAppleUser(ctx context.Context, arg CreateAppleUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, createAppleUser, arg.Email, arg.AppleSub)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.CreatedAt,
+		&i.AppleSub,
 	)
 	return i, err
 }
@@ -297,13 +343,18 @@ func (q *Queries) CreatePostTarget(ctx context.Context, arg CreatePostTargetPara
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email) VALUES ($1)
-RETURNING id, email, created_at
+RETURNING id, email, created_at, apple_sub
 `
 
 func (q *Queries) CreateUser(ctx context.Context, email string) (User, error) {
 	row := q.db.QueryRow(ctx, createUser, email)
 	var i User
-	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.CreatedAt,
+		&i.AppleSub,
+	)
 	return i, err
 }
 
@@ -673,14 +724,35 @@ func (q *Queries) GetTargetForUser(ctx context.Context, arg GetTargetForUserPara
 	return i, err
 }
 
+const getUserByAppleSub = `-- name: GetUserByAppleSub :one
+SELECT id, email, created_at, apple_sub FROM users WHERE apple_sub = $1
+`
+
+func (q *Queries) GetUserByAppleSub(ctx context.Context, appleSub *string) (User, error) {
+	row := q.db.QueryRow(ctx, getUserByAppleSub, appleSub)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.CreatedAt,
+		&i.AppleSub,
+	)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, created_at FROM users WHERE email = $1
+SELECT id, email, created_at, apple_sub FROM users WHERE email = $1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
 	var i User
-	err := row.Scan(&i.ID, &i.Email, &i.CreatedAt)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.CreatedAt,
+		&i.AppleSub,
+	)
 	return i, err
 }
 

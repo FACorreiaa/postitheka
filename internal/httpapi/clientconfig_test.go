@@ -8,14 +8,14 @@ import (
 
 func TestClientConfig(t *testing.T) {
 	for _, tc := range []struct {
-		name, url, want string
+		name, url, apple, want string
 	}{
-		{"unset means the flat mascot", "", `{"mascot3dModelUrl":null}`},
-		{"set is passed through", "https://cdn.example/mascot3d/v1/mascot.glb", `{"mascot3dModelUrl":"https://cdn.example/mascot3d/v1/mascot.glb"}`},
+		{"unset means the flat mascot and no Apple button", "", "", `{"mascot3dModelUrl":null,"appleWebClientId":null}`},
+		{"set is passed through", "https://cdn.example/mascot3d/v1/mascot.glb", "com.example.web", `{"mascot3dModelUrl":"https://cdn.example/mascot3d/v1/mascot.glb","appleWebClientId":"com.example.web"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			ClientConfig(tc.url)(rec, httptest.NewRequest(http.MethodGet, "/client-config", nil))
+			ClientConfig(tc.url, tc.apple)(rec, httptest.NewRequest(http.MethodGet, "/client-config", nil))
 			if rec.Code != http.StatusOK {
 				t.Fatalf("status %d", rec.Code)
 			}

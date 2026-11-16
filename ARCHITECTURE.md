@@ -64,13 +64,14 @@ a job cut off mid-request leaves its target `publishing`, and the next attempt f
 | `jobs` | Running one target: load, decrypt, claim, publish, record. Sweeping unattached uploads | Validate posts (already done at the door) |
 | `media` | Storage calls, presigned URLs, stable filenames | Decide what a platform accepts |
 | `secretbox` | Sealing and opening credentials | Know what the credentials are |
+| `appleid` | Verifying Sign in with Apple identity tokens against Apple's public keys | Touch the database or issue tokens |
 | `analytics` | Product events to PostHog, queued and dropped rather than blocking | Capture anything a person wrote |
 | `db` | Generated queries | Be edited by hand |
 
 ## Data model
 
 ```text
-users ─┬─< api_tokens       token_hash (sha256), last_used_at
+users ─┬─< api_tokens       token_hash (sha256), last_used_at   (users.apple_sub: Apple's id, unique)
        ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id, brand, needs_reconnect_at
        ├─< oauth_states     state_hash (sha256), platform, verifier (sealed, AAD = hash), client
        ├─< media            object_key, content_type, size_bytes, verified_at
@@ -303,8 +304,21 @@ deletion stays valid for its 30 minutes, and a file sent to it afterwards has no
 ## Auth
 
 Bearer tokens: `pk_` + 32 random bytes, base64url. Only the SHA-256 is stored; lookup is by hash
-and records `last_used_at`. Today tokens are minted with `server user create`. Strangers need a
-real sign-in first (AUTH-001). The middleware runs before the request body is decoded.
+and records `last_used_at`. The middleware runs before the request body is decoded.
+
+A person gets one by signing in with Apple (AUTH-001). The client asks Apple for an identity
+token with a nonce it made (Apple gets the nonce's SHA-256 hex), then sends the token and the raw
+nonce to `POST /auth/apple`, which is outside the spec because auth wraps every spec route.
+`appleid.Verifier` checks the RS256 signature against Apple's published keys (cached for six
+hours, fetched again at most once a minute for an unknown key id), the issuer, the audience
+(`APPLE_BUNDLE_IDS` for the app, `APPLE_WEB_CLIENT_ID` for the web), expiry and the nonce. No
+private key is involved. The user is found by `users.apple_sub`; failing that, a user the CLI made
+with the same verified email is claimed; failing that, one is created. The answer is a fresh API
+token named `apple-ios` or `apple-web`. With no client id configured the route answers 503 and
+the clients show only the token field.
+
+The operator still mints tokens with `server user create`; the token field stays on both sign-in
+screens for that. A .p8 key comes in only with in-app account deletion, to revoke Apple's token.
 
 ## API
 
