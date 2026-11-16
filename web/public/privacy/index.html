@@ -37,10 +37,12 @@
         </thead>
         <tbody>
           <tr>
-            <td>Your email address, and Apple's id for you if you sign in with Apple</td>
+            <td>Your email address, and Apple's or Google's id for you if you sign in with them</td>
             <td>
               To identify your Postitheka account. With Sign in with Apple, the address is the one
-              Apple shares, which can be a private relay address if you chose to hide yours.
+              Apple shares, which can be a private relay address if you chose to hide yours. If you
+              sign in with Apple and with Google using the same address, both lead to the same
+              account.
             </td>
             <td>Until you delete your account.</td>
           </tr>
@@ -111,6 +113,11 @@
         <li>
           <strong>Apple</strong>, if you sign in with Apple: Apple confirms who you are to us. We
           receive Apple's id for you and the email address it shares, nothing else.
+        </li>
+        <li>
+          <strong>Google</strong>, if you sign in with Google: Google confirms who you are to us.
+          We keep Google's id for you and your email address. Google also shares your name and
+          profile picture with sign-in; we do not keep them.
         </li>
         <li><strong>Cloudflare R2</strong> (Western Europe) stores the photos and videos you upload.</li>
         <li><strong>PostHog</strong> (EU region) receives the usage events described above.</li>

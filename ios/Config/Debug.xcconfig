@@ -5,3 +5,9 @@ API_BASE_URL = http:/$()/localhost:8095
 
 // Sign in with Apple (AUTH-001). Beta inherits it from Release.
 CODE_SIGN_ENTITLEMENTS = Postitheka/Postitheka.entitlements
+
+// Sign in with Google (AUTH-002): the iOS OAuth client id, and the URL scheme Google returns to
+// (the id reversed). Not secrets: a client id identifies the app, and an iOS client has no
+// secret. One client covers every build, since Google binds it to the bundle id. Beta inherits it.
+GOOGLE_IOS_CLIENT_ID = 957729758170-ohgdohbfmlj2pq85nh6eue1vkdn6ikgg.apps.googleusercontent.com
+GOOGLE_IOS_URL_SCHEME = com.googleusercontent.apps.957729758170-ohgdohbfmlj2pq85nh6eue1vkdn6ikgg

@@ -1,14 +1,19 @@
 import CryptoKit
 import Foundation
 
-/// Sign in with Apple (AUTH-001), the part that is not a view: the nonce, and trading Apple's
-/// identity token for a Postitheka API token at `POST /auth/apple`.
+/// Sign in with Apple (AUTH-001) and Google (AUTH-002), the part that is not a view: the nonce,
+/// and trading the provider's ID token for a Postitheka API token at `POST /auth/apple` or
+/// `POST /auth/google`.
 ///
-/// That route is outside `api/openapi.yaml` (auth wraps every spec route, and this is how a
-/// person gets their first token), so it is called with plain HTTP, not the generated client.
-public enum AppleSignIn {
-    /// A fresh random string for one sign-in. Apple is given its hash (`hashed`), the server
-    /// the string itself, so a token taken from another sign-in does not verify here.
+/// Those routes are outside `api/openapi.yaml` (auth wraps every spec route, and this is how a
+/// person gets their first token), so they are called with plain HTTP, not the generated client.
+public enum ProviderSignIn {
+    public enum Provider: String, Sendable {
+        case apple, google
+    }
+
+    /// A fresh random string for one sign-in. The provider is given its hash (`hashed`), the
+    /// server the string itself, so a token taken from another sign-in does not verify here.
     public static func makeNonce() -> String {
         var generator = SystemRandomNumberGenerator()
         let bytes = (0 ..< 32).map { _ in UInt8.random(in: .min ... .max, using: &generator) }
@@ -18,7 +23,7 @@ public enum AppleSignIn {
             .replacingOccurrences(of: "=", with: "")
     }
 
-    /// SHA-256 of the nonce, as lowercase hex: what goes in the Apple request, and what the
+    /// SHA-256 of the nonce, as lowercase hex: what goes in the provider's request, and what the
     /// server compares the token's `nonce` claim with.
     public static func hashed(_ nonce: String) -> String {
         SHA256.hash(data: Data(nonce.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -34,18 +39,19 @@ public enum AppleSignIn {
     /// Sends one request and returns the answer; tests pass a stub, never a real server.
     public typealias Send = @Sendable (URLRequest) async throws -> (Data, URLResponse)
 
-    /// Trades Apple's identity token for an API token.
+    /// Trades the provider's ID token for an API token.
     public static func exchange(
+        _ provider: Provider,
         baseURL: URL,
-        identityToken: String,
+        idToken: String,
         nonce: String,
         send: Send = { try await URLSession.shared.data(for: $0) }
     ) async throws(APIError) -> Session {
-        var request = URLRequest(url: baseURL.appending(path: "auth/apple"))
+        var request = URLRequest(url: baseURL.appending(path: "auth/\(provider.rawValue)"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONEncoder().encode(
-            ["identity_token": identityToken, "nonce": nonce, "client": "ios"]
+            ["id_token": idToken, "nonce": nonce, "client": "ios"]
         )
 
         let data: Data
@@ -63,7 +69,7 @@ public enum AppleSignIn {
         if let message = try? JSONDecoder().decode(Message.self, from: data).message, !message.isEmpty {
             throw .message(message)
         }
-        throw .message("Sign in with Apple failed (\(status)). Try again.")
+        throw .message("Sign-in failed (\(status)). Try again.")
     }
 
     private struct Body: Decodable {
