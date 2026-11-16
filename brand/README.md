@@ -12,8 +12,8 @@ the owner keeps the visual verdict.
 | Splash, About, marketing | `svg/lockup-stacked-on-{light,dark}.svg`, `mascot/mascot.png` |
 | Mark alone (nav, loaders) | `svg/mark-on-{light,dark}.svg`; `svg/mark-mono.svg` takes `currentColor` |
 | Wordmark alone | `svg/wordmark-on-{light,dark}.svg`, `svg/wordmark-mono.svg` |
-| Browser tab | `svg/favicon.svg` with `icons/favicon.ico` as fallback |
-| PWA manifest | `icons/icon-{192,512}.png` (`any`), `icons/icon-maskable-{192,512}.png` (`maskable`) |
+| Browser tab | `icons/favicon.ico` (16, 32, 48) and `icons/favicon-32.png` |
+| PWA manifest, link preview | `icons/icon-{192,512}.png` (`any`, transparent outside the tile; 512 is the `og:image`), `icons/icon-maskable-{192,512}.png` (`maskable`) |
 | iOS home screen (web) | `icons/apple-touch-icon.png` (180, no alpha) |
 | iOS app icon | `icons/ios-appicon-1024.png` (no alpha, square: iOS applies the mask) |
 | iOS sign-in lockup | `Lockup.imageset`: `svg/lockup-stacked-on-dark.svg` rendered to PNG at 3x, since the catalog's SVG support is not trusted with this mark's masks |
@@ -21,8 +21,13 @@ the owner keeps the visual verdict.
 | Mascot in UI (empty states, onboarding) | `mascot/mascot-{256,512}.{png,webp}`, transparent |
 | Mascot as avatar | `mascot/mascot-avatar{,-256}.png`, circular |
 
-`favicon.svg` is not the mark shrunk: at 16 px the arc and arrows are noise, so it is the stamp and
-one postcard. The mark is rebuilt as geometry measured from the art rather than traced, so it stays
+**App and browser icons** (owner, 2026-11-16) come from the emblem in
+`source/postitheka-app-icon-emblem.png`: the P in a postman's cap, on the night tile. They replace
+the stamp icons in the tab, the PWA, the home screen and the iOS app icon; the stamp mark,
+wordmark and mascot stay everywhere else. `tools/build_app_icon.py` cuts them: full bleed past the
+rim where the platform applies its own mask (iOS, apple-touch-icon, maskable), the tile with a
+transparent outside where the picture is shown as is. At 16 px the emblem is a P on a tile and
+little more. `svg/favicon.svg`, the stamp and one postcard, is kept but no longer served. The mark is rebuilt as geometry measured from the art rather than traced, so it stays
 crisp at every size. The wordmark is a potrace trace of the key art's lettering.
 
 The mascot is a cutout of a 1672 px render, so `mascot.png` (718x646) is the largest it gets without
@@ -66,6 +71,15 @@ python tools/build_mark.py svg
 rsvg-convert -w 3732 -h 642 tools/wordmark-trace.svg -o /tmp/word.png
 python tools/build_word.py tools/wordmark-trace.svg /tmp/word.png svg
 python tools/build_raster.py source/mascot-cutout-raw.png .
+```
+
+The app and browser icons, from the emblem:
+
+```sh
+# From the repo root.
+uv run --with pillow python3 brand/tools/build_app_icon.py brand/source/postitheka-app-icon-emblem.png brand
+cp brand/icons/{favicon.ico,favicon-32.png,apple-touch-icon.png,icon-192.png,icon-512.png,icon-maskable-192.png,icon-maskable-512.png} web/public/
+cp brand/icons/ios-appicon-1024.png ios/Postitheka/Assets.xcassets/AppIcon.appiconset/AppIcon.png
 ```
 
 ## 3D mascot (beta only, BRD-001)
