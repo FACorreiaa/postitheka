@@ -1,0 +1,57 @@
+{
+	"$schema": "./node_modules/oxlint/configuration_schema.json",
+	// Profile: "bug-finding". Every rule in the correctness, suspicious and perf
+	// categories, plus the type-aware rules from pedantic that catch real
+	// defects. pedantic/style/restriction as whole categories stay off: they are
+	// mostly taste. Run with `npm run lint` (oxlint --type-aware; the type-aware
+	// rules come from oxlint-tsgolint).
+	"plugins": ["typescript", "unicorn", "oxc", "import", "promise", "react", "vitest"],
+	"categories": {
+		"correctness": "error",
+		"suspicious": "error",
+		"perf": "error"
+	},
+	"env": { "browser": true, "es2022": true },
+	// schema.d.ts is generated from api/openapi.yaml (npm run api:gen).
+	"ignorePatterns": ["dist/**", "src/schema.d.ts"],
+	"rules": {
+		// Type-aware bug rules that oxlint files under pedantic.
+		"typescript/only-throw-error": "error",
+		"typescript/prefer-promise-reject-errors": "error",
+		"typescript/return-await": "error",
+		"typescript/no-mixed-enums": "error",
+		// Non-type-aware pedantic rules that catch defects rather than style.
+		"eqeqeq": ["error", "always", { "null": "ignore" }],
+		"array-callback-return": "error",
+		"no-self-compare": "error",
+		"no-constructor-return": "error",
+
+		"no-unused-vars": [
+			"error",
+			{ "argsIgnorePattern": "^_", "varsIgnorePattern": "^_", "caughtErrorsIgnorePattern": "^_" }
+		],
+
+		// Not a backlog item: tsconfig sets "jsx": "react-jsx", the automatic
+		// runtime, so React never has to be in scope. The rule is wrong here.
+		"react/react-in-jsx-scope": "off",
+		// Stylesheets and font packages are imported for their side effect.
+		"import/no-unassigned-import": ["error", { "allow": ["**/*.css", "@fontsource-variable/**"] }],
+
+		// BACKLOG. Rules of this profile that the existing code still breaks
+		// (count as of 2026-11-17, with --type-aware). They report as warnings so
+		// CI stays green while every clean rule above is already enforced. To
+		// retire one: fix its hits, then delete the line. Never add a rule here.
+		"typescript/no-unsafe-type-assertion": "warn", // 8
+		"unicorn/prefer-add-event-listener": "warn", // 7
+		"no-shadow": "warn", // 3
+		"no-await-in-loop": "warn", // 3
+		"typescript/consistent-return": "warn", // 2
+		"react/refs": "warn", // 2
+		"promise/always-return": "warn", // 2
+		"no-misleading-character-class": "warn", // 2
+		"unicorn/no-array-sort": "warn", // 1
+		"unicorn/consistent-function-scoping": "warn", // 1
+		"react/set-state-in-effect": "warn", // 1
+		"typescript/no-unnecessary-boolean-literal-compare": "warn" // 1
+	}
+}

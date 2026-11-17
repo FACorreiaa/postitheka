@@ -145,8 +145,22 @@ tasks:
     cmds:
       - go test ./... -count=1
 
+  web:check:
+    desc: The web gate — lint (oxlint), typecheck (tsgo), tests. CI runs these three as separate parallel jobs
+    dir: web
+    cmds:
+      - npm run lint
+      - npm run typecheck
+      - npm test
+
   check:
-    desc: The gate — generated code is current, formatting, vet, web tests and size budget, brand guard, tests, build
+    desc: The gate — web lint, typecheck and tests, then generated code is current, formatting, vet, size budget, brand guard, tests, build
+    cmds:
+      - task: web:check
+      - task: check:server
+
+  check:server:
+    desc: Everything in `task check` except web:check. What CI's `task check` job runs, next to the web-lint, web-typecheck and web-test jobs
     vars:
       GENERATED: internal/httpapi/api.gen.go internal/db/*.go web/src/schema.d.ts ios/PostithekaKit/Sources/PostithekaAPI/Generated/*.swift
       # Hashed before the generators run, and compared after: if generating
@@ -160,9 +174,8 @@ tasks:
       - 'test "$(shasum {{.GENERATED}})" = "{{.BEFORE}}" || (echo "generated code was stale; review and commit the regenerated files" >&2 && exit 1)'
       - 'test -z "$(go tool gofumpt -l .)" || (go tool gofumpt -l . && echo "run: task fmt" >&2 && exit 1)'
       - task: vet
-      - cd web && npm run typecheck
-      - cd web && npm test
       # Built here so the size budget measures what ships; the binary embeds this dist.
+      # `npm run build` does not typecheck: web:check does.
       - cd web && npm run build
       - node scripts/size-budget.mjs
       - sh scripts/brand-guard.sh
