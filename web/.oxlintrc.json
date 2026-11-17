@@ -44,7 +44,7 @@
 		"typescript/no-unsafe-type-assertion": "warn", // 8
 		"unicorn/prefer-add-event-listener": "warn", // 7
 		"no-shadow": "error",
-		"no-await-in-loop": "warn", // 3
+		"no-await-in-loop": "error",
 		"typescript/consistent-return": "error",
 		"react/refs": "warn", // 2
 		"promise/always-return": "warn", // 2
