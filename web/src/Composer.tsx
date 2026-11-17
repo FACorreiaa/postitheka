@@ -141,7 +141,8 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
         await putFile(data.upload_url, data.headers, file, (p) => patch(item.localId, { progress: p }));
         patch(item.localId, { mediaId: data.media_id, progress: 1 });
       } catch (e) {
-        patch(item.localId, { error: (e as Error).message });
+        // putFile rejects with an Error, whose message is written for people.
+        patch(item.localId, { error: messageOf(e) });
       }
     }
   }

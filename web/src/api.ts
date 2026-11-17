@@ -126,7 +126,7 @@ export async function exchangeIdToken(provider: "apple" | "google", idToken: str
   } catch {
     throw new Error("The server did not respond. Check your connection.");
   }
-  const body = (await response.json().catch(() => ({}))) as { token?: string; message?: string };
+  const body: { token?: string; message?: string } = await response.json().catch(() => ({}));
   if (response.ok && body.token) return body.token;
   throw new Error(body.message || `Sign-in failed (${response.status}). Try again.`);
 }
