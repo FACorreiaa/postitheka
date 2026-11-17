@@ -43,7 +43,7 @@
 		// retire one: fix its hits, then delete the line. Never add a rule here.
 		"typescript/no-unsafe-type-assertion": "warn", // 8
 		"unicorn/prefer-add-event-listener": "warn", // 7
-		"no-shadow": "warn", // 3
+		"no-shadow": "error",
 		"no-await-in-loop": "warn", // 3
 		"typescript/consistent-return": "warn", // 2
 		"react/refs": "warn", // 2
