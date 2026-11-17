@@ -110,7 +110,7 @@ task dev                            # API + workers on :8095, migrates on boot
 task web:dev                        # composer on :5173, proxies /v1 to :8095
 task user:create -- you@example.com # prints an API token (stand-in for sign-in)
 task test                           # Go tests; DB tests skip without DATABASE_URL
-task check                          # the gate: codegen current, gofumpt, vet, typecheck, web tests, size budget, brand guard, tests, build
+task check                          # the gate: web lint + typecheck + tests (web:check), then codegen current, gofumpt, vet, size budget, brand guard, tests, build
 task secrets                        # gitleaks over the history, as CI runs it
 task generate                       # api:gen (Go + TS + Swift) and sqlc
 task ios:check                      # the iOS gate: Swift client current, kit tests, Debug + Beta build, Release proof
@@ -188,7 +188,8 @@ for its author, and gets no postmark.
 - **`ON DELETE RESTRICT` is checked immediately**, before sibling cascades run. It broke user
   deletion once; `TestDeletingAUserRemovesEverything` guards it.
 - **`openapi-typescript` needs TypeScript 5's JS API.** TypeScript 7 is the native port without
-  it; `web/` is pinned to 5.9.
+  it; `web/` is pinned to 5.9. `npm run typecheck` does run the native port (`tsgo`, from
+  `@typescript/native-preview`), installed next to 5.9, not instead of it.
 - **`web/dist` is embedded at compile time.** After `npm run build`, rebuild the Go binary or the
   server keeps serving the old app.
 - **A Taskfile command containing `: ` must be quoted.** Unquoted, YAML reads it as a mapping
