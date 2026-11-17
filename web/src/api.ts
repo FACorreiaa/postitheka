@@ -71,12 +71,13 @@ export function putFile(
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
-    xhr.upload.onprogress = (e) => {
+    xhr.upload.addEventListener("progress", (e) => {
       if (e.lengthComputable) onProgress(e.loaded / e.total);
-    };
-    xhr.onload = () =>
-      xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`));
-    xhr.onerror = () => reject(new Error("Upload failed: storage could not be reached"));
+    });
+    xhr.addEventListener("load", () =>
+      xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed (${xhr.status})`)),
+    );
+    xhr.addEventListener("error", () => reject(new Error("Upload failed: storage could not be reached")));
     xhr.send(file);
   });
 }
