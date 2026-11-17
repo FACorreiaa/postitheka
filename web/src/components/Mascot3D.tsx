@@ -2,12 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { fetchMascot3dModelUrl } from "../api";
 import mascot from "../assets/mascot.webp";
 
+declare global {
+  // The Network Information API, where a browser has it (not Safari, not Firefox); lib.dom
+  // leaves it out.
+  interface Navigator {
+    connection?: { saveData?: boolean };
+  }
+}
+
 /** The visitor asked for less motion or less data: the flat mascot, and no request at all. */
 function prefersFlat(): boolean {
-  return (
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-    (navigator as { connection?: { saveData?: boolean } }).connection?.saveData === true
-  );
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches || navigator.connection?.saveData === true;
 }
 
 /** Whether WebGL 2 exists, asked before three downloads. The probe's context is released at
@@ -30,7 +35,7 @@ export function Mascot3D() {
 
   useEffect(() => {
     const box = host.current;
-    if (!box || prefersFlat()) return;
+    if (!box || prefersFlat()) return undefined;
 
     let gone = false;
     let stop: (() => void) | undefined;

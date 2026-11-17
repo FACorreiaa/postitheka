@@ -111,6 +111,7 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
     setFiles((prev) => prev.map((f) => (f.localId === localId ? { ...f, ...change } : f)));
   }
 
+  // One file at a time, in the order chosen: each `await` in this loop is meant to wait.
   async function attach(list: FileList | null) {
     for (const file of Array.from(list ?? [])) {
       const item: Attachment = {
@@ -123,9 +124,11 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
 
       // Read before reserving: the server takes these with the upload and
       // cannot measure the file itself.
+      // oxlint-disable-next-line no-await-in-loop -- one file at a time
       const video = file.type.startsWith("video/") ? await readVideoFacts(item.preview) : {};
       patch(item.localId, { video });
 
+      // oxlint-disable-next-line no-await-in-loop -- one file at a time
       const { data, error: err } = await api.POST("/v1/media", {
         body: { content_type: file.type, size_bytes: file.size, duration_ms: video.durationMs, width: video.width, height: video.height },
       });
@@ -134,10 +137,12 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
         continue;
       }
       try {
+        // oxlint-disable-next-line no-await-in-loop -- one file at a time
         await putFile(data.upload_url, data.headers, file, (p) => patch(item.localId, { progress: p }));
         patch(item.localId, { mediaId: data.media_id, progress: 1 });
       } catch (e) {
-        patch(item.localId, { error: (e as Error).message });
+        // putFile rejects with an Error, whose message is written for people.
+        patch(item.localId, { error: messageOf(e) });
       }
     }
   }

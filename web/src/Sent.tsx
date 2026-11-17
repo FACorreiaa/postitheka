@@ -94,7 +94,7 @@ function Unsent({
   async function move() {
     setBusy(true);
     setError("");
-    const { data, error } = await api.PATCH("/v1/posts/{postId}", {
+    const { data, error: err } = await api.PATCH("/v1/posts/{postId}", {
       ...path,
       body: { scheduled_at: new Date(at).toISOString() },
     });
@@ -103,18 +103,18 @@ function Unsent({
       setMode("idle");
       onChanged(data);
     } else {
-      setError(messageOf(error));
+      setError(messageOf(err));
     }
   }
 
   async function cancel() {
     setBusy(true);
     setError("");
-    const { error, response } = await api.DELETE("/v1/posts/{postId}", path);
+    const { error: err, response } = await api.DELETE("/v1/posts/{postId}", path);
     setBusy(false);
     // Already gone is what was asked for.
     if (response.ok || response.status === 404) onRemoved(post.id);
-    else setError(messageOf(error));
+    else setError(messageOf(err));
   }
 
   return (
@@ -195,7 +195,7 @@ function TargetRow({
   async function sendAgain() {
     setSending(true);
     setError("");
-    const { data, error } = await api.POST("/v1/targets/{targetId}/retry", {
+    const { data, error: err } = await api.POST("/v1/targets/{targetId}/retry", {
       params: { path: { targetId: t.id } },
     });
     setSending(false);
@@ -203,7 +203,7 @@ function TargetRow({
       setWarning(false);
       onChanged(data);
     } else {
-      setError(messageOf(error));
+      setError(messageOf(err));
     }
   }
 

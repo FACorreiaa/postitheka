@@ -124,6 +124,7 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
   }, []);
 
   useEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- the first fetch; state is set after the await
     void loadAccounts();
     void loadPosts();
     void api.GET("/v1/platforms").then(({ data }) => data && setPlatforms(data));
@@ -135,7 +136,7 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
   // polling for it would never stop.
   const inFlight = posts?.some((p) => p.targets.some((t) => t.status === "pending" || t.status === "publishing"));
   useEffect(() => {
-    if (!inFlight) return;
+    if (!inFlight) return undefined;
     const id = setInterval(() => void loadPosts(), 2000);
     return () => clearInterval(id);
   }, [inFlight, loadPosts]);

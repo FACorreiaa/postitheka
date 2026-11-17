@@ -43,7 +43,17 @@ export interface Pose {
   scale: number;
 }
 
-export const MOTION = data as Motion;
+/** The file types `property` and `easing` as any string; this holds them to the two each. */
+function isTrack(track: Omit<Track, "property" | "easing"> & { property: string; easing: string }): track is Track {
+  return (
+    (track.property === "translateY" || track.property === "rotateYDegrees") &&
+    (track.easing === "sine" || track.easing === "linear")
+  );
+}
+
+if (!data.idle.every(isTrack)) throw new Error("mascot-motion.json: unknown property or easing");
+
+export const MOTION: Motion = { ...data, idle: data.idle };
 
 /** 0 to 1 along one span between two keyframes. */
 export function ease(easing: Easing, u: number): number {

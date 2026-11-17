@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { type ClientConfig, exchangeIdToken, fetchClientConfig } from "./api";
 
 // Each provider's own script draws its button, so the logo and wording follow its rules. A
@@ -19,28 +19,43 @@ type GoogleID = {
   };
 };
 
-function loadScript<T>(src: string, global: string): Promise<T> {
-  const ready = () => (window as unknown as Record<string, T | undefined>)[global];
+declare global {
+  // What each provider's script leaves on the page: its global, and Apple's two events.
+  interface Window {
+    AppleID?: AppleAuth;
+    google?: GoogleID;
+  }
+  interface DocumentEventMap {
+    AppleIDSignInOnSuccess: AppleSuccess;
+    AppleIDSignInOnFailure: AppleFailure;
+  }
+}
+
+/** Loads a provider's script once. `ready` reads the global the script sets. */
+function loadScript<T>(src: string, ready: () => T | undefined): Promise<T> {
   return new Promise((resolve, reject) => {
     const existing = ready();
     if (existing) return resolve(existing);
     const script = document.createElement("script");
     script.src = src;
     script.async = true;
-    script.onload = () => {
+    script.addEventListener("load", () => {
       const loaded = ready();
       if (loaded) resolve(loaded);
       else reject(new Error("Sign-in did not load."));
-    };
-    script.onerror = () => reject(new Error("Sign-in could not be reached."));
+    });
+    script.addEventListener("error", () => reject(new Error("Sign-in could not be reached.")));
     document.head.append(script);
   });
+}
+
+function hex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** A random string for one sign-in, and its SHA-256 as lowercase hex. The provider gets the hash,
  * the server the string, so a token taken from another sign-in does not verify here. */
 async function makeNonce(): Promise<{ raw: string; hashed: string }> {
-  const hex = (bytes: Uint8Array) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
   const raw = hex(crypto.getRandomValues(new Uint8Array(32)));
   return { raw, hashed: hex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw)))) };
 }
@@ -49,38 +64,38 @@ type Props = { onSignIn: (token: string) => void; onError: (message: string) => 
 
 /** Sign in with Apple (AUTH-001). */
 function AppleButton({ clientId, onSignIn, onError }: Props & { clientId: string }) {
-  const handlers = useRef({ onSignIn, onError });
-  handlers.current = { onSignIn, onError };
+  // The parent's callbacks as they are now, without making the effect run again for them.
+  const signedIn = useEffectEvent(onSignIn);
+  const failed = useEffectEvent(onError);
 
   useEffect(() => {
     let raw = "";
-    const success = (e: Event) => {
-      exchangeIdToken("apple", (e as AppleSuccess).detail.authorization.id_token, raw).then(
-        (token) => handlers.current.onSignIn(token),
-        (err: Error) => handlers.current.onError(err.message),
+    const success = (e: AppleSuccess) => {
+      exchangeIdToken("apple", e.detail.authorization.id_token, raw).then(
+        signedIn,
+        (err: Error) => failed(err.message),
       );
     };
-    const failure = (e: Event) => {
+    const failure = (e: AppleFailure) => {
       // Closing Apple's window is not an error to show.
-      if ((e as AppleFailure).detail?.error !== "popup_closed_by_user")
-        handlers.current.onError("Apple sign-in did not finish. Try again.");
+      if (e.detail?.error !== "popup_closed_by_user") failed("Apple sign-in did not finish. Try again.");
     };
     document.addEventListener("AppleIDSignInOnSuccess", success);
     document.addEventListener("AppleIDSignInOnFailure", failure);
-    void Promise.all([loadScript<AppleAuth>(APPLE_JS, "AppleID"), makeNonce()])
-      .then(([apple, nonce]) => {
-        raw = nonce.raw;
-        // Draws the button into #appleid-signin. The popup returns to this page; the Services
-        // ID lists this origin's "/" as a return URL.
-        apple.auth.init({
-          clientId,
-          scope: "email",
-          redirectURI: `${window.location.origin}/`,
-          nonce: nonce.hashed,
-          usePopup: true,
-        });
-      })
-      .catch((err: Error) => handlers.current.onError(err.message));
+    const start = async () => {
+      const [apple, nonce] = await Promise.all([loadScript(APPLE_JS, () => window.AppleID), makeNonce()]);
+      raw = nonce.raw;
+      // Draws the button into #appleid-signin. The popup returns to this page; the Services
+      // ID lists this origin's "/" as a return URL.
+      apple.auth.init({
+        clientId,
+        scope: "email",
+        redirectURI: `${window.location.origin}/`,
+        nonce: nonce.hashed,
+        usePopup: true,
+      });
+    };
+    start().catch((err: Error) => failed(err.message));
     return () => {
       document.removeEventListener("AppleIDSignInOnSuccess", success);
       document.removeEventListener("AppleIDSignInOnFailure", failure);
@@ -92,36 +107,36 @@ function AppleButton({ clientId, onSignIn, onError }: Props & { clientId: string
 
 /** Sign in with Google (AUTH-002), through Google Identity Services. */
 function GoogleButton({ clientId, onSignIn, onError }: Props & { clientId: string }) {
-  const handlers = useRef({ onSignIn, onError });
-  handlers.current = { onSignIn, onError };
+  const signedIn = useEffectEvent(onSignIn);
+  const failed = useEffectEvent(onError);
   const slot = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    void Promise.all([loadScript<GoogleID>(GOOGLE_JS, "google"), makeNonce()])
-      .then(([google, nonce]) => {
-        google.accounts.id.initialize({
-          client_id: clientId,
-          nonce: nonce.hashed,
-          callback: (response: { credential: string }) => {
-            exchangeIdToken("google", response.credential, nonce.raw).then(
-              (token) => handlers.current.onSignIn(token),
-              (err: Error) => handlers.current.onError(err.message),
-            );
-          },
+    const start = async () => {
+      const [google, nonce] = await Promise.all([loadScript(GOOGLE_JS, () => window.google), makeNonce()]);
+      google.accounts.id.initialize({
+        client_id: clientId,
+        nonce: nonce.hashed,
+        callback: (response: { credential: string }) => {
+          exchangeIdToken("google", response.credential, nonce.raw).then(
+            signedIn,
+            (err: Error) => failed(err.message),
+          );
+        },
+      });
+      if (slot.current) {
+        // Google takes a width in pixels; 375 at most, as wide as Apple's button gets.
+        const width = Math.min(375, Math.round(slot.current.getBoundingClientRect().width));
+        // Google's defaults are the ones wanted: standard, outline (white like Apple's), large,
+        // "Sign in with Google", rectangular.
+        google.accounts.id.renderButton(slot.current, {
+          width,
+          // English, as Apple's script is and the rest of the page.
+          locale: "en",
         });
-        if (slot.current) {
-          // Google takes a width in pixels; 375 at most, as wide as Apple's button gets.
-          const width = Math.min(375, Math.round(slot.current.getBoundingClientRect().width));
-          // Google's defaults are the ones wanted: standard, outline (white like Apple's), large,
-          // "Sign in with Google", rectangular.
-          google.accounts.id.renderButton(slot.current, {
-            width,
-            // English, as Apple's script is and the rest of the page.
-            locale: "en",
-          });
-        }
-      })
-      .catch((err: Error) => handlers.current.onError(err.message));
+      }
+    };
+    start().catch((err: Error) => failed(err.message));
   }, [clientId]);
 
   return <div className="google" ref={slot} />;

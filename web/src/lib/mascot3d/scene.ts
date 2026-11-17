@@ -35,7 +35,7 @@ const MAX_PIXEL_RATIO = 2;
 const MAX_STEP_SECONDS = 0.1;
 
 function isMesh(node: Object3D): node is Mesh {
-  return (node as Mesh).isMesh === true;
+  return "isMesh" in node;
 }
 
 /** A colour token from `styles.css`, so the lights stay in the palette. */

@@ -29,8 +29,10 @@ export function readVideoFacts(url: string, timeoutMs = 8000): Promise<VideoFact
     const timer = setTimeout(() => finish({}), timeoutMs);
     video.preload = "metadata";
     video.muted = true;
-    video.onloadedmetadata = () => finish(factsFrom(video.duration, video.videoWidth, video.videoHeight));
-    video.onerror = () => finish({});
+    video.addEventListener("loadedmetadata", () =>
+      finish(factsFrom(video.duration, video.videoWidth, video.videoHeight)),
+    );
+    video.addEventListener("error", () => finish({}));
     video.src = url;
   });
 }
