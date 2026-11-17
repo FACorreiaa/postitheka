@@ -54,7 +54,7 @@
 		"no-misleading-character-class": ["error", { "allowEscape": true }],
 		"unicorn/no-array-sort": "error",
 		"unicorn/consistent-function-scoping": "warn", // 1
-		"react/set-state-in-effect": "warn", // 1
+		"react/set-state-in-effect": "error",
 		"typescript/no-unnecessary-boolean-literal-compare": "error"
 	}
 }
