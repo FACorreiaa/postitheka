@@ -46,14 +46,14 @@
 		"no-shadow": "error",
 		"no-await-in-loop": "error",
 		"typescript/consistent-return": "error",
-		"react/refs": "warn", // 2
-		"promise/always-return": "warn", // 2
+		"react/refs": "error",
+		"promise/always-return": "error",
 		// allowEscape: a class written as \u escapes lists code points on purpose
 		// (rules.ts tests one code point at a time). A literal combined character
 		// in a class is still an error.
 		"no-misleading-character-class": ["error", { "allowEscape": true }],
 		"unicorn/no-array-sort": "error",
-		"unicorn/consistent-function-scoping": "warn", // 1
+		"unicorn/consistent-function-scoping": "error",
 		"react/set-state-in-effect": "error",
 		"typescript/no-unnecessary-boolean-literal-compare": "error"
 	}
