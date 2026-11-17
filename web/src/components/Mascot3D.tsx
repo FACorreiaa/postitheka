@@ -30,7 +30,7 @@ export function Mascot3D() {
 
   useEffect(() => {
     const box = host.current;
-    if (!box || prefersFlat()) return;
+    if (!box || prefersFlat()) return undefined;
 
     let gone = false;
     let stop: (() => void) | undefined;
