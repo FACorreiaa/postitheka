@@ -52,7 +52,7 @@
 		// (rules.ts tests one code point at a time). A literal combined character
 		// in a class is still an error.
 		"no-misleading-character-class": ["error", { "allowEscape": true }],
-		"unicorn/no-array-sort": "warn", // 1
+		"unicorn/no-array-sort": "error",
 		"unicorn/consistent-function-scoping": "warn", // 1
 		"react/set-state-in-effect": "warn", // 1
 		"typescript/no-unnecessary-boolean-literal-compare": "warn" // 1

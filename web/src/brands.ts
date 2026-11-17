@@ -9,6 +9,7 @@ export const ALL_BRANDS: BrandFilter = { kind: "all" };
 export function brandsOf(accounts: Account[]): string[] {
   const seen = new Set<string>();
   for (const a of accounts) if (a.brand) seen.add(a.brand);
+  // oxlint-disable-next-line unicorn/no-array-sort -- sorts the copy made here; toSorted() is ES2023, lib is ES2022
   return [...seen].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
 }
 
