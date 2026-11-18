@@ -133,6 +133,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Rules/max_video_width`.
             public var max_video_width: Swift.Int
+            /// Longest first comment the platform takes, measured as text_counting says. 0 means the platform takes no first comment: a post to it goes out without one.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Rules/max_comment_length`.
+            public var max_comment_length: Swift.Int
             /// What an author can set for one destination of a post, beyond the post itself. Sent per account in a post's options.
             ///
             ///
@@ -157,6 +161,7 @@ extension Components {
             ///   - min_video_aspect: Smallest width divided by height a video may have. 0 means no limit.
             ///   - max_video_aspect: Largest width divided by height a video may have. 0 means no limit.
             ///   - max_video_width: Widest video accepted, in pixels. 0 means no limit.
+            ///   - max_comment_length: Longest first comment the platform takes, measured as text_counting says. 0 means the platform takes no first comment: a post to it goes out without one.
             ///   - options: What an author can set for one destination of a post, beyond the post itself. Sent per account in a post's options.
             public init(
                 max_text_length: Swift.Int,
@@ -175,6 +180,7 @@ extension Components {
                 min_video_aspect: Swift.Double,
                 max_video_aspect: Swift.Double,
                 max_video_width: Swift.Int,
+                max_comment_length: Swift.Int,
                 options: [Components.Schemas.PostOption]
             ) {
                 self.max_text_length = max_text_length
@@ -193,6 +199,7 @@ extension Components {
                 self.min_video_aspect = min_video_aspect
                 self.max_video_aspect = max_video_aspect
                 self.max_video_width = max_video_width
+                self.max_comment_length = max_comment_length
                 self.options = options
             }
             public enum CodingKeys: String, CodingKey {
@@ -212,6 +219,7 @@ extension Components {
                 case min_video_aspect
                 case max_video_aspect
                 case max_video_width
+                case max_comment_length
                 case options
             }
         }
@@ -574,6 +582,11 @@ extension Components {
             public var options: Components.Schemas.CreatePostRequest.optionsPayload?
             /// - Remark: Generated from `#/components/schemas/CreatePostRequest/text`.
             public var text: Swift.String?
+            /// Posted under the post, as a reply from the same account, once the post is out: hashtags and links that would crowd the post itself. Only destinations whose rules have a max_comment_length get it; the others publish the post alone. Blank is the same as none.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/CreatePostRequest/first_comment`.
+            public var first_comment: Swift.String?
             /// In display order.
             ///
             /// - Remark: Generated from `#/components/schemas/CreatePostRequest/media_ids`.
@@ -594,6 +607,7 @@ extension Components {
             /// - Parameters:
             ///   - options: Options per destination, keyed by account id. Each account must also be in account_ids, and each key must be one its platform's rules list. An empty value is the same as leaving the key out.
             ///   - text:
+            ///   - first_comment: Posted under the post, as a reply from the same account, once the post is out: hashtags and links that would crowd the post itself. Only destinations whose rules have a max_comment_length get it; the others publish the post alone. Blank is the same as none.
             ///   - media_ids: In display order.
             ///   - account_ids:
             ///   - assisted: Platforms the client will hand the post to itself (WhatsApp and Reddit, from iOS). Each gets a target in handing_off and no publish job; the client reports the outcome with POST /v1/targets/{targetId}/handoff. Not allowed with a future scheduled_at: a handoff happens now, on the device.
@@ -601,6 +615,7 @@ extension Components {
             public init(
                 options: Components.Schemas.CreatePostRequest.optionsPayload? = nil,
                 text: Swift.String? = nil,
+                first_comment: Swift.String? = nil,
                 media_ids: [Swift.String]? = nil,
                 account_ids: [Swift.String],
                 assisted: [Components.Schemas.Platform]? = nil,
@@ -608,6 +623,7 @@ extension Components {
             ) {
                 self.options = options
                 self.text = text
+                self.first_comment = first_comment
                 self.media_ids = media_ids
                 self.account_ids = account_ids
                 self.assisted = assisted
@@ -616,6 +632,7 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case options
                 case text
+                case first_comment
                 case media_ids
                 case account_ids
                 case assisted
@@ -645,6 +662,10 @@ extension Components {
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/Post/text`.
             public var text: Swift.String
+            /// Absent when the post has none.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Post/first_comment`.
+            public var first_comment: Swift.String?
             /// - Remark: Generated from `#/components/schemas/Post/media_ids`.
             public var media_ids: [Swift.String]
             /// - Remark: Generated from `#/components/schemas/Post/scheduled_at`.
@@ -658,6 +679,7 @@ extension Components {
             /// - Parameters:
             ///   - id:
             ///   - text:
+            ///   - first_comment: Absent when the post has none.
             ///   - media_ids:
             ///   - scheduled_at:
             ///   - created_at:
@@ -665,6 +687,7 @@ extension Components {
             public init(
                 id: Swift.String,
                 text: Swift.String,
+                first_comment: Swift.String? = nil,
                 media_ids: [Swift.String],
                 scheduled_at: Foundation.Date,
                 created_at: Foundation.Date,
@@ -672,6 +695,7 @@ extension Components {
             ) {
                 self.id = id
                 self.text = text
+                self.first_comment = first_comment
                 self.media_ids = media_ids
                 self.scheduled_at = scheduled_at
                 self.created_at = created_at
@@ -680,6 +704,7 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case text
+                case first_comment
                 case media_ids
                 case scheduled_at
                 case created_at
@@ -727,6 +752,27 @@ extension Components {
             public var published_at: Foundation.Date?
             /// - Remark: Generated from `#/components/schemas/Target/options`.
             public var options: Components.Schemas.TargetOptions?
+            /// The first comment's own progress, absent when this target gets none. It waits (pending) until the post is published, then goes out as its own step: a comment that fails never sends the post again. posting means the request is in flight.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Target/comment_status`.
+            @frozen public enum comment_statusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case pending = "pending"
+                case posting = "posting"
+                case posted = "posted"
+                case failed = "failed"
+            }
+            /// The first comment's own progress, absent when this target gets none. It waits (pending) until the post is published, then goes out as its own step: a comment that fails never sends the post again. posting means the request is in flight.
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Target/comment_status`.
+            public var comment_status: Components.Schemas.Target.comment_statusPayload?
+            /// Why the comment failed, or why it is waiting to be tried again.
+            ///
+            /// - Remark: Generated from `#/components/schemas/Target/comment_error`.
+            public var comment_error: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Target/comment_url`.
+            public var comment_url: Swift.String?
             /// Creates a new `Target`.
             ///
             /// - Parameters:
@@ -739,6 +785,9 @@ extension Components {
             ///   - remote_url:
             ///   - published_at:
             ///   - options:
+            ///   - comment_status: The first comment's own progress, absent when this target gets none. It waits (pending) until the post is published, then goes out as its own step: a comment that fails never sends the post again. posting means the request is in flight.
+            ///   - comment_error: Why the comment failed, or why it is waiting to be tried again.
+            ///   - comment_url:
             public init(
                 id: Swift.String,
                 account_id: Swift.String? = nil,
@@ -748,7 +797,10 @@ extension Components {
                 interrupted: Swift.Bool? = nil,
                 remote_url: Swift.String? = nil,
                 published_at: Foundation.Date? = nil,
-                options: Components.Schemas.TargetOptions? = nil
+                options: Components.Schemas.TargetOptions? = nil,
+                comment_status: Components.Schemas.Target.comment_statusPayload? = nil,
+                comment_error: Swift.String? = nil,
+                comment_url: Swift.String? = nil
             ) {
                 self.id = id
                 self.account_id = account_id
@@ -759,6 +811,9 @@ extension Components {
                 self.remote_url = remote_url
                 self.published_at = published_at
                 self.options = options
+                self.comment_status = comment_status
+                self.comment_error = comment_error
+                self.comment_url = comment_url
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -770,6 +825,9 @@ extension Components {
                 case remote_url
                 case published_at
                 case options
+                case comment_status
+                case comment_error
+                case comment_url
             }
         }
         /// - Remark: Generated from `#/components/schemas/Error`.

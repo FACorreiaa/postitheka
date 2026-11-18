@@ -128,6 +128,7 @@ func (s *Server) ListPlatforms(ctx context.Context, _ ListPlatformsRequestObject
 				RequiresText:       r.RequiresText,
 				RequiresMedia:      r.RequiresMedia,
 				Options:            postOptions(r.Options),
+				MaxCommentLength:   r.MaxCommentLength,
 			},
 		})
 	}
@@ -250,6 +251,9 @@ func (s *Server) CreatePost(ctx context.Context, req CreatePostRequestObject) (C
 	}
 	if req.Body.Text != nil {
 		in.Text = *req.Body.Text
+	}
+	if req.Body.FirstComment != nil {
+		in.FirstComment = *req.Body.FirstComment
 	}
 	if req.Body.MediaIds != nil {
 		in.MediaIDs = *req.Body.MediaIds
@@ -376,12 +380,13 @@ func toAccount(a service.Account) Account {
 
 func toPost(v service.PostView) Post {
 	p := Post{
-		Id:          v.Post.ID,
-		Text:        v.Post.Text,
-		MediaIds:    v.MediaIDs,
-		ScheduledAt: v.Post.ScheduledAt,
-		CreatedAt:   v.Post.CreatedAt,
-		Targets:     []Target{},
+		Id:           v.Post.ID,
+		Text:         v.Post.Text,
+		FirstComment: v.Post.FirstComment,
+		MediaIds:     v.MediaIDs,
+		ScheduledAt:  v.Post.ScheduledAt,
+		CreatedAt:    v.Post.CreatedAt,
+		Targets:      []Target{},
 	}
 	for _, t := range v.Targets {
 		p.Targets = append(p.Targets, toTarget(t))
@@ -405,6 +410,12 @@ func toTarget(t db.PostTarget) Target {
 	}
 	if t.PublishedAt.Valid {
 		out.PublishedAt = &t.PublishedAt.Time
+	}
+	if t.CommentStatus != nil {
+		status := TargetCommentStatus(*t.CommentStatus)
+		out.CommentStatus = &status
+		out.CommentError = t.CommentError
+		out.CommentUrl = t.CommentUrl
 	}
 	var options TargetOptions
 	if json.Unmarshal(t.Options, &options) == nil && len(options) > 0 {

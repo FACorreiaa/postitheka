@@ -46,6 +46,12 @@ type Rules struct {
 	// each mode is written three times: here, web/src/rules.ts and the iOS
 	// kit's Rules.swift.
 	TextCounting TextCounting
+
+	// MaxCommentLength is the longest first comment the platform takes
+	// (POST-002), counted as TextCounting says. Zero means it takes none:
+	// a post with a comment still goes there, alone, and the clients say so
+	// on the stamp before it is sent. Non-zero only on a Commenter.
+	MaxCommentLength int
 }
 
 // Option is one value an author can set per destination: the title of a
@@ -211,6 +217,12 @@ func Validate(rules Rules, post Post) []Issue {
 	if rules.MaxLinks > 0 {
 		if n := CountLinks(post.Text); n > rules.MaxLinks {
 			add("text", "%d links, limit is %d", n, rules.MaxLinks)
+		}
+	}
+
+	if rules.MaxCommentLength > 0 {
+		if n := rules.count(post.Comment); n > rules.MaxCommentLength {
+			add("first_comment", "%d characters, limit is %d", n, rules.MaxCommentLength)
 		}
 	}
 

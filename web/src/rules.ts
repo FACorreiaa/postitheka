@@ -5,6 +5,8 @@ export interface Draft {
   media: { contentType: string; size: number; durationMs?: number; width?: number; height?: number }[];
   /** What was set for this destination alone, by the keys in its rules' options. */
   options?: Record<string, string>;
+  /** The post's first comment (POST-002), the same for every destination. */
+  comment?: string;
 }
 
 // An emoji part, as publisher.isEmojiPart in Go defines it: any symbol (So)
@@ -78,6 +80,12 @@ export function problems(rules: Rules, draft: Draft): string[] {
   if (rules.max_links > 0) {
     const links = countLinks(draft.text);
     if (links > rules.max_links) out.push(`At most ${rules.max_links} link${rules.max_links === 1 ? "" : "s"}`);
+  }
+
+  // Only where the platform takes a comment: elsewhere the post goes alone.
+  const comment = countText((draft.comment ?? "").trim(), rules.text_counting);
+  if (rules.max_comment_length > 0 && comment > rules.max_comment_length) {
+    out.push(`First comment is ${comment - rules.max_comment_length} characters over`);
   }
 
   // Mirrors Rules.optionIssues in Go, less the unknown key: a form built from

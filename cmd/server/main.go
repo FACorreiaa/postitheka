@@ -165,7 +165,9 @@ func serve(cfg config.Config) error {
 
 	workers := river.NewWorkers()
 	events := analytics.New(cfg.PostHogAPIKey, cfg.PostHogHost, slog.Default())
-	river.AddWorker(workers, jobs.NewPublishWorker(pool, box, registry, store, events, slog.Default()))
+	publishWorker := jobs.NewPublishWorker(pool, box, registry, store, events, slog.Default())
+	river.AddWorker(workers, publishWorker)
+	river.AddWorker(workers, jobs.NewCommentWorker(publishWorker))
 	river.AddWorker(workers, jobs.NewSweepMediaWorker(pool, store, slog.Default()))
 	river.AddWorker(workers, jobs.NewExpireHandoffsWorker(db.New(pool), slog.Default()))
 

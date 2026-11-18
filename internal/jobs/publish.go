@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 
 	"github.com/FACorreiaa/postitheka/internal/analytics"
 	"github.com/FACorreiaa/postitheka/internal/db"
@@ -57,6 +58,17 @@ type PublishWorker struct {
 	events   analytics.Client
 	log      *slog.Logger
 	now      func() time.Time
+
+	// Inserter queues the first comment's job in the transaction that marks
+	// the post published. River puts its client in a job's context, and that
+	// is what is used; tests that call Work directly set this instead.
+	Inserter TxInserter
+}
+
+// TxInserter is the part of River's client that queues a job in a
+// transaction of the caller's.
+type TxInserter interface {
+	InsertTx(ctx context.Context, tx pgx.Tx, args river.JobArgs, opts *river.InsertOpts) (*rivertype.JobInsertResult, error)
 }
 
 // NewPublishWorker builds the worker. events may be nil, which records nothing.
@@ -223,12 +235,7 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 
 	if pubErr == nil {
 		w.log.Info("published", slog.String("target", id.String()), slog.String("platform", row.Platform))
-		if err := w.q.MarkTargetPublished(ctx, db.MarkTargetPublishedParams{
-			ID:        id,
-			RemoteID:  nilIfEmpty(res.RemoteID),
-			RemoteUrl: nilIfEmpty(res.URL),
-			Draft:     res.Draft,
-		}); err != nil {
+		if err := w.published(ctx, id, res); err != nil {
 			return err
 		}
 		w.capture(row, analytics.EventTargetPublished, "attempt", job.Attempt)
@@ -265,6 +272,56 @@ func (w *PublishWorker) Work(ctx context.Context, job *river.Job[PublishArgs]) e
 		}
 		return pubErr
 	}
+}
+
+// published records the post as out and, when a first comment waits for it,
+// queues the comment's job in the same transaction: there is no moment where
+// the post is published and its comment has no job to send it.
+//
+// A post the platform holds as a draft (TikTok) has nothing public to
+// comment under, so its comment fails here with the reason.
+func (w *PublishWorker) published(ctx context.Context, id uuid.UUID, res publisher.Result) error {
+	tx, err := w.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	qtx := w.q.WithTx(tx)
+
+	comment, err := qtx.MarkTargetPublished(ctx, db.MarkTargetPublishedParams{
+		ID:        id,
+		RemoteID:  nilIfEmpty(res.RemoteID),
+		RemoteUrl: nilIfEmpty(res.URL),
+		Draft:     res.Draft,
+	})
+	if err != nil {
+		return err
+	}
+	if comment != nil && *comment == "pending" {
+		if res.Draft {
+			err = qtx.MarkCommentFailed(ctx, db.MarkCommentFailedParams{ID: id, CommentError: new("the platform holds the post as a draft, so there is nothing to comment under yet")})
+		} else {
+			err = w.queueComment(ctx, tx, id)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func (w *PublishWorker) queueComment(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
+	var ins TxInserter = w.Inserter
+	if client, err := river.ClientFromContextSafely[pgx.Tx](ctx); err == nil {
+		ins = client
+	}
+	if ins == nil {
+		return errors.New("queue comment: no River client")
+	}
+	if _, err := ins.InsertTx(ctx, tx, CommentArgs{TargetID: id}, nil); err != nil {
+		return fmt.Errorf("queue comment: %w", err)
+	}
+	return nil
 }
 
 // refresh renews an account's credentials when its publisher says they need

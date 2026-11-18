@@ -21,6 +21,7 @@ const rules: Rules = {
   max_video_aspect: 2,
   max_video_width: 1920,
   options: [],
+  max_comment_length: 0,
 };
 
 const video = (durationMs?: number, width?: number, height?: number) =>
@@ -113,5 +114,17 @@ describe("x_weighted counting", () => {
     ["🙋🏽", 4],
   ])("%j counts %i", (text, want) => {
     expect(countText(text, "x_weighted")).toBe(want);
+  });
+});
+
+describe("first comment", () => {
+  it("is held to the platform's limit, trimmed as the server trims it", () => {
+    const takes = { ...rules, max_comment_length: 5 };
+    expect(problems(takes, { text: "hi", media: [], comment: "  #abc  " })).toEqual([]);
+    expect(problems(takes, { text: "hi", media: [], comment: "#abcdefg" })).toEqual(["First comment is 3 characters over"]);
+  });
+
+  it("is no problem where the platform takes none", () => {
+    expect(problems(rules, { text: "hi", media: [], comment: "#".repeat(5000) })).toEqual([]);
   });
 });

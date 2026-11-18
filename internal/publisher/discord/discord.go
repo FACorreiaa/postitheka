@@ -80,6 +80,9 @@ func (p *Publisher) Rules() publisher.Rules {
 		// title is offered for every Discord account and used only where
 		// the channel turns out to be a forum.
 		Options: []publisher.Option{{Key: optionTitle, Label: "Forum post title", MaxLength: maxThreadName}},
+		// The first comment is a second webhook message, with the same
+		// 2,000-character limit (POST-002).
+		MaxCommentLength: 2000,
 	}
 }
 
@@ -226,16 +229,41 @@ func (p *Publisher) Publish(ctx context.Context, raw []byte, post publisher.Post
 		pl.Attachments = append(pl.Attachments, attachment{ID: i, Filename: m.Filename})
 	}
 
-	res, err := p.execute(ctx, creds, pl, post, media)
+	res, err := p.execute(ctx, creds, "", pl, post, media)
 	if code := (*codeError)(nil); errors.As(err, &code) && code.code == codeForumNeedsThread {
 		pl.ThreadName = threadName(post)
-		res, err = p.execute(ctx, creds, pl, post, media)
+		res, err = p.execute(ctx, creds, "", pl, post, media)
 	}
 	return res, err
 }
 
-// execute sends one webhook message and reads Discord's answer.
-func (p *Publisher) execute(ctx context.Context, creds credentials, pl payload, post publisher.Post, media publisher.MediaSource) (publisher.Result, error) {
+// Comment posts the first comment as the next message from the same webhook
+// (POST-002). A webhook message cannot reply to another, so in a text
+// channel the comment is the message right after the post.
+//
+// In a forum or media channel the post started a thread, and the comment
+// belongs inside it. As with Publish, the channel's kind is learnt from
+// Discord's refusal: a plain message to a forum fails with 220001, saving
+// nothing, and the comment is sent again into the post's thread. A forum
+// post's thread has the id of its first message, which is postID.
+func (p *Publisher) Comment(ctx context.Context, raw []byte, postID, text string) (publisher.Result, error) {
+	var creds credentials
+	if err := json.Unmarshal(raw, &creds); err != nil || creds.WebhookID == "" || creds.Token == "" {
+		return publisher.Result{}, publisher.Permanent(errors.New("discord: stored credentials are unreadable"))
+	}
+	pl := payload{Content: text}
+	pl.AllowedMentions.Parse = []string{}
+
+	res, err := p.execute(ctx, creds, "", pl, publisher.Post{}, nil)
+	if code := (*codeError)(nil); errors.As(err, &code) && code.code == codeForumNeedsThread && postID != "" {
+		res, err = p.execute(ctx, creds, postID, pl, publisher.Post{}, nil)
+	}
+	return res, err
+}
+
+// execute sends one webhook message and reads Discord's answer. thread, when
+// set, is the forum thread to post into.
+func (p *Publisher) execute(ctx context.Context, creds credentials, thread string, pl payload, post publisher.Post, media publisher.MediaSource) (publisher.Result, error) {
 	plJSON, err := json.Marshal(pl)
 	if err != nil {
 		return publisher.Result{}, err
@@ -252,7 +280,11 @@ func (p *Publisher) execute(ctx context.Context, creds credentials, pl payload, 
 		body, length, contentType = multipartBody(ctx, plJSON, post.Media, media)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, creds.endpoint()+"?wait=true", body)
+	query := url.Values{"wait": {"true"}}
+	if thread != "" {
+		query.Set("thread_id", thread)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, creds.endpoint()+"?"+query.Encode(), body)
 	if err != nil {
 		return publisher.Result{}, err
 	}
