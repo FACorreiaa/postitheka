@@ -62,6 +62,7 @@ type Post struct {
 	CreatedAt      time.Time
 	IdempotencyKey *string
 	RequestHash    []byte
+	FirstComment   *string
 }
 
 type PostMedium struct {
@@ -71,19 +72,23 @@ type PostMedium struct {
 }
 
 type PostTarget struct {
-	ID          uuid.UUID
-	PostID      uuid.UUID
-	AccountID   uuid.NullUUID
-	Platform    string
-	Status      string
-	LastError   *string
-	RemoteID    *string
-	RemoteUrl   *string
-	PublishedAt pgtype.Timestamptz
-	UpdatedAt   time.Time
-	Interrupted bool
-	Retries     int32
-	Options     []byte
+	ID              uuid.UUID
+	PostID          uuid.UUID
+	AccountID       uuid.NullUUID
+	Platform        string
+	Status          string
+	LastError       *string
+	RemoteID        *string
+	RemoteUrl       *string
+	PublishedAt     pgtype.Timestamptz
+	UpdatedAt       time.Time
+	Interrupted     bool
+	Retries         int32
+	Options         []byte
+	CommentStatus   *string
+	CommentRemoteID *string
+	CommentUrl      *string
+	CommentError    *string
 }
 
 type User struct {

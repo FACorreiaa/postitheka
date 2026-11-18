@@ -406,3 +406,69 @@ func TestPublishRejectsUnreadableCredentials(t *testing.T) {
 		t.Fatalf("got %v, want a permanent error", err)
 	}
 }
+
+func TestCommentIsTheNextMessage(t *testing.T) {
+	var got payload
+	p, seen := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = io.WriteString(w, `{"id":"m2","channel_id":"c1"}`)
+	})
+
+	res, err := p.Comment(context.Background(), testCreds(), "m1", "#launch https://example.com @here")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := (*seen)[0]
+	if len(*seen) != 1 || req.URL.Path != "/api/v10/webhooks/123/tok" || req.URL.Query().Get("wait") != "true" || req.URL.Query().Has("thread_id") {
+		t.Errorf("%d requests, first to %s", len(*seen), req.URL)
+	}
+	if got.Content != "#launch https://example.com @here" || got.AllowedMentions.Parse == nil || len(got.AllowedMentions.Parse) != 0 {
+		t.Errorf("payload %+v; want the text with mentions disabled", got)
+	}
+	if res.RemoteID != "m2" || res.URL != "https://discord.com/channels/g1/c1/m2" {
+		t.Errorf("result %+v", res)
+	}
+}
+
+// In a forum the post started a thread whose id is the post's message id; the
+// comment goes into it once the channel has said it is a forum.
+func TestCommentInAForumGoesIntoThePostsThread(t *testing.T) {
+	p, seen := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		thread := r.URL.Query().Get("thread_id")
+		if thread == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"message":"Webhooks posted to forum channels must have a thread_name or thread_id","code":220001}`)
+			return
+		}
+		_, _ = io.WriteString(w, `{"id":"m10","channel_id":"`+thread+`"}`)
+	})
+
+	res, err := p.Comment(context.Background(), testCreds(), "m9", "#tags")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*seen) != 2 || (*seen)[1].URL.Query().Get("thread_id") != "m9" {
+		t.Errorf("%d requests; want a plain one, then one into thread m9", len(*seen))
+	}
+	if res.URL != "https://discord.com/channels/g1/m9/m10" {
+		t.Errorf("url %q", res.URL)
+	}
+}
+
+func TestCommentRefusalsAreClassifiedAsPublishes(t *testing.T) {
+	p, seen := stub(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = io.WriteString(w, `{"message":"Unknown Webhook","code":10015}`)
+	})
+	_, err := p.Comment(context.Background(), testCreds(), "m1", "#tags")
+	if !publisher.NeedsReconnect(err) || len(*seen) != 1 {
+		t.Errorf("err %v after %d requests; want one request and a reconnect", err, len(*seen))
+	}
+}
+
+func TestDiscordTakesAFirstComment(t *testing.T) {
+	var p publisher.Publisher = New(nil)
+	if _, ok := p.(publisher.Commenter); !ok || p.Rules().MaxCommentLength != 2000 {
+		t.Errorf("Discord should comment, up to 2,000 characters")
+	}
+}

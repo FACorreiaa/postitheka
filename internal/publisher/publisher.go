@@ -59,6 +59,10 @@ type Post struct {
 	// keys its platform's Rules list. Never nil-checked: a missing key reads
 	// as "".
 	Options map[string]string
+	// Comment is the post's first comment (POST-002). Publish ignores it:
+	// it goes out later, through Commenter, once the post is live. It is
+	// here so Validate can check it with the rest of the post.
+	Comment string
 }
 
 // MediaSource is how a publisher reaches the files of a post.
@@ -118,6 +122,20 @@ type MultiConnector interface {
 // calls it before publishing, holding a lock on the account and asking
 // NeedsRefresh again once it has the lock, so a refresh token that rotates
 // is spent exactly once even when several posts go out together.
+// Commenter is a Publisher that can post a first comment under a post it
+// published (POST-002): the hashtags and links its author kept out of the
+// post. Its Rules set MaxCommentLength; a platform with no comment API
+// implements neither.
+//
+// The worker calls it in a job of its own after the post is published, so
+// a comment that fails is retried without the post being sent again.
+// Delivery is at least once, as for Publish.
+type Commenter interface {
+	// Comment posts text under the post the platform knows as postID (the
+	// RemoteID that Publish returned).
+	Comment(ctx context.Context, credentials []byte, postID, text string) (Result, error)
+}
+
 type Refresher interface {
 	// NeedsRefresh reports whether credentials should be renewed before they
 	// are used at now. It does no I/O.

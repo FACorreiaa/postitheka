@@ -23,9 +23,12 @@ import (
 )
 
 type CreatePostInput struct {
-	Text       string
-	MediaIDs   []uuid.UUID
-	AccountIDs []uuid.UUID
+	Text string
+	// FirstComment goes under the post once it is out (POST-002), on every
+	// destination whose platform takes one. Blank is none.
+	FirstComment string
+	MediaIDs     []uuid.UUID
+	AccountIDs   []uuid.UUID
 	// Options are what the author set per destination, by account. Every
 	// account here must also be in AccountIDs.
 	Options map[uuid.UUID]map[string]string
@@ -124,6 +127,8 @@ func (s *Service) CreatePost(ctx context.Context, userID uuid.UUID, in CreatePos
 	}
 	issues = append(issues, mediaIssues...)
 
+	comment := strings.TrimSpace(in.FirstComment)
+
 	options := cleanOptions(in.Options)
 	for id := range options {
 		if !slices.Contains(accountIDs, id) {
@@ -133,7 +138,7 @@ func (s *Service) CreatePost(ctx context.Context, userID uuid.UUID, in CreatePos
 
 	for _, a := range accounts {
 		accountID := a.ID
-		post := publisher.Post{Text: in.Text, Media: pubMedia, Options: options[a.ID]}
+		post := publisher.Post{Text: in.Text, Media: pubMedia, Options: options[a.ID], Comment: comment}
 		if a.NeedsReconnectAt.Valid {
 			addIssue(Issue{AccountID: &accountID, Platform: a.Platform, Field: "account_ids", Message: a.DisplayName + " needs reconnecting before it can be posted to"})
 			continue
@@ -172,6 +177,7 @@ func (s *Service) CreatePost(ctx context.Context, userID uuid.UUID, in CreatePos
 	row, err := qtx.CreatePost(ctx, db.CreatePostParams{
 		UserID:         userID,
 		Text:           in.Text,
+		FirstComment:   nilIfBlank(comment),
 		ScheduledAt:    scheduledAt,
 		IdempotencyKey: in.IdempotencyKey,
 		RequestHash:    hash,
@@ -205,6 +211,9 @@ func (s *Service) CreatePost(ctx context.Context, userID uuid.UUID, in CreatePos
 			AccountID: uuid.NullUUID{UUID: a.ID, Valid: true},
 			Platform:  a.Platform,
 			Options:   encodeOptions(options[a.ID]),
+			// Only where the platform takes a comment: elsewhere the post
+			// goes alone, as the stamp said before it was sent.
+			CommentStatus: s.commentStatus(a.Platform, comment),
 		})
 		if err != nil {
 			return PostView{}, fmt.Errorf("create target: %w", err)
@@ -252,6 +261,29 @@ func (s *Service) replay(ctx context.Context, userID uuid.UUID, key string, hash
 	return views[0], true, nil
 }
 
+// commentStatus is what a new target's comment starts as: pending when the
+// post has a comment and the platform takes one, otherwise none.
+func (s *Service) commentStatus(platform, comment string) *string {
+	if comment == "" {
+		return nil
+	}
+	pub, ok := s.registry.Get(publisher.Platform(platform))
+	if !ok || pub.Rules().MaxCommentLength == 0 {
+		return nil
+	}
+	if _, ok := pub.(publisher.Commenter); !ok {
+		return nil
+	}
+	return new("pending")
+}
+
+func nilIfBlank(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
 // cleanOptions trims every value and drops the empty ones, and the accounts
 // left with none: a field the author cleared is a field left out.
 func cleanOptions(in map[uuid.UUID]map[string]string) map[uuid.UUID]map[string]string {
@@ -288,6 +320,7 @@ func requestHash(in CreatePostInput) []byte {
 	}
 	b, _ := json.Marshal(struct {
 		Text        string      `json:"text"`
+		Comment     string      `json:"first_comment,omitempty"`
 		MediaIDs    []uuid.UUID `json:"media_ids"`
 		AccountIDs  []uuid.UUID `json:"account_ids"`
 		Assisted    []string    `json:"assisted,omitempty"`
@@ -295,7 +328,7 @@ func requestHash(in CreatePostInput) []byte {
 		// omitempty keeps the digest of a post without options what it was
 		// before options existed, so a retry across that deploy still matches.
 		Options map[uuid.UUID]map[string]string `json:"options,omitempty"`
-	}{in.Text, in.MediaIDs, in.AccountIDs, in.Assisted, scheduledAt, cleanOptions(in.Options)})
+	}{in.Text, strings.TrimSpace(in.FirstComment), in.MediaIDs, in.AccountIDs, in.Assisted, scheduledAt, cleanOptions(in.Options)})
 	sum := sha256.Sum256(b)
 	return sum[:]
 }
@@ -536,7 +569,7 @@ func (s *Service) ReschedulePost(ctx context.Context, userID, postID uuid.UUID, 
 		return PostView{}, fmt.Errorf("reschedule: %w", err)
 	}
 	for _, old := range targets {
-		target, err := qtx.CreatePostTarget(ctx, db.CreatePostTargetParams{PostID: postID, AccountID: old.AccountID, Platform: old.Platform, Options: old.Options})
+		target, err := qtx.CreatePostTarget(ctx, db.CreatePostTargetParams{PostID: postID, AccountID: old.AccountID, Platform: old.Platform, Options: old.Options, CommentStatus: old.CommentStatus})
 		if err != nil {
 			return PostView{}, fmt.Errorf("reschedule: create target: %w", err)
 		}

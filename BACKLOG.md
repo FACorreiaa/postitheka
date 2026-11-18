@@ -122,7 +122,7 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | --- | --- | --- | --- |
 | **P0 · Foundations** | 6/6 | **Met** | Nothing |
 | **P1 · First stranger** | 4/12 (2 built, unverified) | Not met | Not deployed; no real sign-in |
-| **P2 · Platforms** | 0/17 (13 built, unverified; RDT-001 dropped; BRAND-002 and POST-002 open) | Not met | Needs P1 deployed; X needs credits; Meta and TikTok need review; Spaces and first comment not built |
+| **P2 · Platforms** | 0/17 (13 built, unverified; RDT-001 dropped; BRAND-002 and POST-002 open) | Not met | Needs P1 deployed; X needs credits; Meta and TikTok need review; Spaces not built; first comment built for Discord only |
 | **P3 · iOS** | 1/6 (2 built, unverified) | Not met | IOS-002 needs AUTH-001; nothing tested on a device |
 
 Strangers who have published a post: **0**.
@@ -155,7 +155,7 @@ Strangers who have published a post: **0**.
 | X-002 | Built, unverified | `publisher.Refresher`, `PublishWorker.refresh` (row lock, re-check, seal, then publish); `TestTokenRefresh` (three concurrent posts refresh once and publish with the new token, revoked grant fails asking for reconnect, transient failure stays pending); mutation-checked; Threads implements it | Never run against a real platform |
 | ACC-001 | Built, unverified | `migrations/20261114150000_account_needs_reconnect.sql`, `publisher.Reconnect`, `needs_reconnect` on Account; `TestRefusedCredentialsMarkTheAccount` (a 401 marks only that account, a rejected post does not, queued targets fail without a request, a new post is refused at the door), revoked refresh in `TestTokenRefresh`, reconnect clears it in `TestOAuthConnect`; web stamp and Accounts looked at in a browser at desktop and 375 px with seeded accounts; iOS kit test | Never against a real platform: which answers mean dead credentials is read from each platform's docs. Marks after the first refusal; nothing warns before a token expires. iOS views built, not looked at on a simulator. Web Reconnect button seen, not pressed (it leaves for the platform) |
 | POST-001 | Built, unverified | `PATCH` and `DELETE /v1/posts/{id}`; `TestCancelPostRemovesAnUnsentPost`, `TestReschedulePostMovesAnUnsentPost` (the old job posts nothing, the new one posts once), `TestAPostThatStartedSendingCannotBeCancelledOrMoved`; web Sent checked in a browser at desktop and 375 px against a local server with seeded posts; iOS kit `APITests` | iOS swipe actions and the reschedule sheet built, not looked at on a simulator. Not run against a job firing at the same moment outside a test |
-| POST-002 | Open | Research 2026-11-16 in `docs/platform-research.md` | LinkedIn and X each need one real test call |
+| POST-002 | Built for Discord, unverified | `migrations/20261118120000_first_comment.sql`, `publisher.Commenter`, `jobs.CommentWorker`, `discord.Comment`; `TestFirstCommentFollowsThePublishedPost`, `TestAFailedCommentNeverSendsThePostAgain`, `TestAnInterruptedCommentIsNotSentAgain`, `TestATooLongCommentIsRefusedAtTheDoor`, `TestFirstCommentEndToEnd` (real River client), `TestCommentInAForumGoesIntoThePostsThread`, `TestEveryPlatformThatTakesACommentCanSendOne`; web composer and Sent looked at in a browser at desktop and 375 px with seeded posts; kit `ComposerTests`; iOS composer seen on a simulator | Never posted to a real Discord channel or forum. Threads, Instagram and Facebook next: each needs its new permission and a reconnect. LinkedIn and X each need one real test call first. iOS Sent line not seen on a simulator (it shut down mid-check). WhatsApp and Reddit handoffs carry the post only |
 | BRAND-001 | Built, unverified | `migrations/20261114120000_account_brand.sql`, `PATCH /v1/accounts/{id}`; `TestAccountBrand`; web `brands.test.ts`, kit `BrandsTests`; web looked at in a browser at desktop and 375 px against a local server | iOS built and kit-tested, not looked at in a simulator |
 | BRAND-002 | Open | | Name and storage are OPEN (owner) |
 | LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
@@ -463,6 +463,11 @@ Research done 2026-11-16: "First comment" in `docs/platform-research.md`.
 Then, per platform that allows it: a per-post "first comment" field (a per-target option,
 OPT-001), posted after the post succeeds, as its own step with its own retry, so a failed
 comment never re-sends the post. Sent shows the comment's own outcome.
+
+Built 2026-11-18 for Discord (framework plus the first platform). One comment per post, the same
+for every destination, rather than a per-target option: the owner's use is the same hashtags and
+link everywhere, and one field is what the composer can show without crowding the stamps. The
+handoffs (WhatsApp, Reddit) carry the post only; their stamp says the post goes alone.
 
 **Done when:** a post with a first comment publishes to Discord and one OAuth platform from
 production, and the comment appears under each; a platform that cannot take one says so on its

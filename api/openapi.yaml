@@ -507,6 +507,7 @@ components:
         - max_video_aspect
         - max_video_width
         - options
+        - max_comment_length
       properties:
         max_text_length:
           type: integer
@@ -573,6 +574,11 @@ components:
         max_video_width:
           type: integer
           description: Widest video accepted, in pixels. 0 means no limit.
+        max_comment_length:
+          type: integer
+          description: >-
+            Longest first comment the platform takes, measured as text_counting says. 0 means
+            the platform takes no first comment: a post to it goes out without one.
         options:
           type: array
           description: >
@@ -741,6 +747,13 @@ components:
             $ref: "#/components/schemas/TargetOptions"
         text:
           type: string
+        first_comment:
+          type: string
+          description: >
+            Posted under the post, as a reply from the same account, once the
+            post is out: hashtags and links that would crowd the post itself.
+            Only destinations whose rules have a max_comment_length get it;
+            the others publish the post alone. Blank is the same as none.
         media_ids:
           type: array
           items:
@@ -784,6 +797,9 @@ components:
           format: uuid
         text:
           type: string
+        first_comment:
+          type: string
+          description: Absent when the post has none.
         media_ids:
           type: array
           items:
@@ -838,6 +854,19 @@ components:
           format: date-time
         options:
           $ref: "#/components/schemas/TargetOptions"
+        comment_status:
+          type: string
+          enum: [pending, posting, posted, failed]
+          description: >
+            The first comment's own progress, absent when this target gets
+            none. It waits (pending) until the post is published, then goes
+            out as its own step: a comment that fails never sends the post
+            again. posting means the request is in flight.
+        comment_error:
+          type: string
+          description: Why the comment failed, or why it is waiting to be tried again.
+        comment_url:
+          type: string
 
     Error:
       type: object

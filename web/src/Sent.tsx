@@ -223,6 +223,7 @@ function TargetRow({
             where
           )}
           {t.status === "handed_off" && <span className="reason">Sent from the phone</span>}
+          <CommentLine target={t} />
         </span>
       </li>
     );
@@ -284,6 +285,30 @@ function TargetRow({
         )}
       </span>
     </li>
+  );
+}
+
+/** The first comment's own progress under a published post (POST-002). */
+function CommentLine({ target: t }: { target: Target }) {
+  const s = t.comment_status;
+  if (!s) return null;
+  const why = t.comment_error ? `: ${t.comment_error}` : "";
+  const text = {
+    posted: "First comment posted",
+    pending: why ? `First comment retrying${why}` : "First comment waiting",
+    posting: "Posting the first comment",
+    failed: `First comment not sent${why}`,
+  }[s];
+  return (
+    <span className={s === "failed" ? "reason comment-failed" : "reason"}>
+      {s === "posted" && t.comment_url ? (
+        <a href={t.comment_url} target="_blank" rel="noreferrer">
+          {text}
+        </a>
+      ) : (
+        text
+      )}
+    </span>
   );
 }
 

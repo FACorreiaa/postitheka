@@ -439,6 +439,31 @@ label {
   color: var(--muted);
 }
 
+/* The first comment (POST-002): a smaller sheet under the post, labelled,
+   since unlike the post its purpose is not obvious from the page. */
+.first-comment {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: var(--s-1);
+}
+
+.first-comment textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 0.7rem 1rem;
+  color: var(--ink);
+  font-size: var(--s0);
+  line-height: 1.45;
+  background: var(--sheet);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.first-comment textarea::placeholder {
+  color: var(--muted);
+}
+
 .attachments {
   display: flex;
   flex-wrap: wrap;
@@ -690,6 +715,14 @@ label {
   font-weight: 400;
 }
 
+.stamp-note {
+  margin: 0;
+  padding: 0 0.25rem;
+  color: var(--muted);
+  font-size: var(--s-1);
+  line-height: 1.35;
+}
+
 .stamp-issues {
   margin: 0;
   padding: 0 0.25rem;
@@ -800,7 +833,8 @@ label {
   color: var(--muted);
 }
 
-.target.failed .reason {
+.target.failed .reason,
+.target .reason.comment-failed {
   color: var(--cancel);
 }
 

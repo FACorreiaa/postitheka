@@ -242,6 +242,8 @@ export interface components {
             max_video_aspect: number;
             /** @description Widest video accepted, in pixels. 0 means no limit. */
             max_video_width: number;
+            /** @description Longest first comment the platform takes, measured as text_counting says. 0 means the platform takes no first comment: a post to it goes out without one. */
+            max_comment_length: number;
             /** @description What an author can set for one destination of a post, beyond the post itself. Sent per account in a post's options. */
             options: components["schemas"]["PostOption"][];
         };
@@ -328,6 +330,8 @@ export interface components {
                 [key: string]: components["schemas"]["TargetOptions"];
             };
             text?: string;
+            /** @description Posted under the post, as a reply from the same account, once the post is out: hashtags and links that would crowd the post itself. Only destinations whose rules have a max_comment_length get it; the others publish the post alone. Blank is the same as none. */
+            first_comment?: string;
             /** @description In display order. */
             media_ids?: string[];
             account_ids: string[];
@@ -347,6 +351,8 @@ export interface components {
             /** Format: uuid */
             id: string;
             text: string;
+            /** @description Absent when the post has none. */
+            first_comment?: string;
             media_ids: string[];
             /** Format: date-time */
             scheduled_at: string;
@@ -375,6 +381,14 @@ export interface components {
             /** Format: date-time */
             published_at?: string;
             options?: components["schemas"]["TargetOptions"];
+            /**
+             * @description The first comment's own progress, absent when this target gets none. It waits (pending) until the post is published, then goes out as its own step: a comment that fails never sends the post again. posting means the request is in flight.
+             * @enum {string}
+             */
+            comment_status?: "pending" | "posting" | "posted" | "failed";
+            /** @description Why the comment failed, or why it is waiting to be tried again. */
+            comment_error?: string;
+            comment_url?: string;
         };
         Error: {
             message: string;

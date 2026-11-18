@@ -134,7 +134,10 @@ function Workspace({ onSignOut }: { onSignOut: () => void }) {
   // nothing to refresh, and an idle tab should not keep the server busy.
   // Not handing_off: that waits on a phone, which may never report back, and
   // polling for it would never stop.
-  const inFlight = posts?.some((p) => p.targets.some((t) => t.status === "pending" || t.status === "publishing"));
+  // A first comment follows its post (POST-002), so a published target can still be in flight.
+  const inFlight = posts?.some((p) =>
+    p.targets.some((t) => ["pending", "publishing", "posting"].some((s) => s === t.status || s === t.comment_status)),
+  );
   useEffect(() => {
     if (!inFlight) return undefined;
     const id = setInterval(() => void loadPosts(), 2000);

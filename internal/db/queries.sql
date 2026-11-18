@@ -143,15 +143,16 @@ WHERE m.id = ANY(sqlc.arg(ids)::uuid[])
 RETURNING m.object_key;
 
 -- name: CreatePost :one
-INSERT INTO posts (user_id, text, scheduled_at, idempotency_key, request_hash)
-VALUES ($1, $2, $3, $4, $5)
+INSERT INTO posts (user_id, text, first_comment, scheduled_at, idempotency_key, request_hash)
+VALUES ($1, $2, $3, $4, $5, $6)
 RETURNING *;
 
 -- name: AddPostMedia :exec
 INSERT INTO post_media (post_id, media_id, position) VALUES ($1, $2, $3);
 
 -- name: CreatePostTarget :one
-INSERT INTO post_targets (post_id, account_id, platform, options) VALUES ($1, $2, $3, $4)
+INSERT INTO post_targets (post_id, account_id, platform, options, comment_status)
+VALUES ($1, $2, $3, $4, sqlc.narg(comment_status))
 RETURNING *;
 
 -- name: CreateAssistedTarget :one
@@ -245,12 +246,46 @@ UPDATE post_targets SET status = 'publishing', updated_at = now()
 WHERE id = $1 AND status = 'pending';
 
 -- drafted: the platform holds the post for its author to finish there.
--- name: MarkTargetPublished :exec
+-- Returns the comment's status, so the caller knows whether one follows.
+-- name: MarkTargetPublished :one
 UPDATE post_targets
 SET status = CASE WHEN sqlc.arg(draft)::boolean THEN 'drafted' ELSE 'published' END,
     remote_id = sqlc.narg(remote_id), remote_url = sqlc.narg(remote_url), last_error = NULL,
     published_at = now(), updated_at = now()
+WHERE id = sqlc.arg(id)
+RETURNING comment_status;
+
+-- Everything the comment job needs (POST-002). LEFT JOIN because the account
+-- may have been disconnected since the post went out.
+-- name: GetTargetForComment :one
+SELECT
+    t.id, t.platform, t.status, t.remote_id, t.comment_status, t.account_id,
+    p.user_id, p.first_comment,
+    a.credentials, a.needs_reconnect_at
+FROM post_targets t
+JOIN posts p ON p.id = t.post_id
+LEFT JOIN accounts a ON a.id = t.account_id
+WHERE t.id = $1;
+
+-- The claim before the comment goes out, as MarkTargetPublishing is for the
+-- post: two runs of the same job cannot both get past it.
+-- name: MarkCommentPosting :execrows
+UPDATE post_targets SET comment_status = 'posting', updated_at = now()
+WHERE id = $1 AND comment_status = 'pending';
+
+-- name: MarkCommentPosted :exec
+UPDATE post_targets
+SET comment_status = 'posted', comment_remote_id = sqlc.narg(remote_id), comment_url = sqlc.narg(url),
+    comment_error = NULL, updated_at = now()
 WHERE id = sqlc.arg(id);
+
+-- name: MarkCommentPending :exec
+UPDATE post_targets SET comment_status = 'pending', comment_error = $2, updated_at = now()
+WHERE id = $1;
+
+-- name: MarkCommentFailed :exec
+UPDATE post_targets SET comment_status = 'failed', comment_error = $2, updated_at = now()
+WHERE id = $1;
 
 -- name: MarkTargetPending :exec
 UPDATE post_targets SET status = 'pending', last_error = $2, updated_at = now()

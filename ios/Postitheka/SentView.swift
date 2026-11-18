@@ -175,6 +175,13 @@ private struct TargetRow: View {
                 if let link = target.remote_url.flatMap(URL.init(string:)) {
                     Link("Open", destination: link).font(.caption)
                 }
+                if let line = commentLine(target) {
+                    if target.comment_status == .posted, let link = target.comment_url.flatMap(URL.init(string:)) {
+                        Link(line.text, destination: link).font(.caption)
+                    } else {
+                        Text(line.text).font(.caption).foregroundStyle(line.failed ? Color.red : Color.secondary)
+                    }
+                }
             }
         }
     }

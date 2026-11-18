@@ -176,6 +176,7 @@ type env struct {
 	q       *db.Queries
 	svc     *service.Service
 	worker  *jobs.PublishWorker
+	comment *jobs.CommentWorker
 	workers *river.Workers
 	storage *fakeStorage
 	discord *discordStub
@@ -246,8 +247,10 @@ func setup(t *testing.T, extra ...publisher.Publisher) *env {
 
 	events := &recordedEvents{}
 	worker := jobs.NewPublishWorker(pool, box, registry, storage, events, slog.New(slog.DiscardHandler))
+	comment := jobs.NewCommentWorker(worker)
 	workers := river.NewWorkers()
 	river.AddWorker(workers, worker)
+	river.AddWorker(workers, comment)
 
 	// Not started: tests that want jobs worked start their own client, and
 	// the rest call the worker directly so each outcome is deterministic.
@@ -255,12 +258,15 @@ func setup(t *testing.T, extra ...publisher.Publisher) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Work called directly has no River client in its context to queue a
+	// comment with.
+	worker.Inserter = rc
 
 	svc := service.New(service.Deps{
 		Pool: pool, River: rc, Box: box, Registry: registry, Storage: storage, Discord: discordPub, Analytics: events,
 		PublicURL: "https://postitheka.test",
 	})
-	return &env{pool: pool, q: q, svc: svc, worker: worker, workers: workers, storage: storage, discord: stub, events: events, box: box}
+	return &env{pool: pool, q: q, svc: svc, worker: worker, comment: comment, workers: workers, storage: storage, discord: stub, events: events, box: box}
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

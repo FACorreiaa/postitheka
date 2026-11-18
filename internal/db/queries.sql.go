@@ -87,7 +87,7 @@ SET status = $1,
 FROM posts p
 WHERE t.id = $3 AND p.id = t.post_id AND p.user_id = $4
   AND t.status = 'handing_off'
-RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries, t.options
+RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries, t.options, t.comment_status, t.comment_remote_id, t.comment_url, t.comment_error
 `
 
 type CompleteHandoffParams struct {
@@ -121,6 +121,10 @@ func (q *Queries) CompleteHandoff(ctx context.Context, arg CompleteHandoffParams
 		&i.Interrupted,
 		&i.Retries,
 		&i.Options,
+		&i.CommentStatus,
+		&i.CommentRemoteID,
+		&i.CommentUrl,
+		&i.CommentError,
 	)
 	return i, err
 }
@@ -212,7 +216,7 @@ func (q *Queries) CreateAppleUser(ctx context.Context, arg CreateAppleUserParams
 
 const createAssistedTarget = `-- name: CreateAssistedTarget :one
 INSERT INTO post_targets (post_id, platform, status) VALUES ($1, $2, 'handing_off')
-RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options
+RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options, comment_status, comment_remote_id, comment_url, comment_error
 `
 
 type CreateAssistedTargetParams struct {
@@ -237,6 +241,10 @@ func (q *Queries) CreateAssistedTarget(ctx context.Context, arg CreateAssistedTa
 		&i.Interrupted,
 		&i.Retries,
 		&i.Options,
+		&i.CommentStatus,
+		&i.CommentRemoteID,
+		&i.CommentUrl,
+		&i.CommentError,
 	)
 	return i, err
 }
@@ -319,14 +327,15 @@ func (q *Queries) CreateOAuthState(ctx context.Context, arg CreateOAuthStatePara
 }
 
 const createPost = `-- name: CreatePost :one
-INSERT INTO posts (user_id, text, scheduled_at, idempotency_key, request_hash)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash
+INSERT INTO posts (user_id, text, first_comment, scheduled_at, idempotency_key, request_hash)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash, first_comment
 `
 
 type CreatePostParams struct {
 	UserID         uuid.UUID
 	Text           string
+	FirstComment   *string
 	ScheduledAt    time.Time
 	IdempotencyKey *string
 	RequestHash    []byte
@@ -336,6 +345,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 	row := q.db.QueryRow(ctx, createPost,
 		arg.UserID,
 		arg.Text,
+		arg.FirstComment,
 		arg.ScheduledAt,
 		arg.IdempotencyKey,
 		arg.RequestHash,
@@ -349,20 +359,23 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (Post, e
 		&i.CreatedAt,
 		&i.IdempotencyKey,
 		&i.RequestHash,
+		&i.FirstComment,
 	)
 	return i, err
 }
 
 const createPostTarget = `-- name: CreatePostTarget :one
-INSERT INTO post_targets (post_id, account_id, platform, options) VALUES ($1, $2, $3, $4)
-RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options
+INSERT INTO post_targets (post_id, account_id, platform, options, comment_status)
+VALUES ($1, $2, $3, $4, $5)
+RETURNING id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options, comment_status, comment_remote_id, comment_url, comment_error
 `
 
 type CreatePostTargetParams struct {
-	PostID    uuid.UUID
-	AccountID uuid.NullUUID
-	Platform  string
-	Options   []byte
+	PostID        uuid.UUID
+	AccountID     uuid.NullUUID
+	Platform      string
+	Options       []byte
+	CommentStatus *string
 }
 
 func (q *Queries) CreatePostTarget(ctx context.Context, arg CreatePostTargetParams) (PostTarget, error) {
@@ -371,6 +384,7 @@ func (q *Queries) CreatePostTarget(ctx context.Context, arg CreatePostTargetPara
 		arg.AccountID,
 		arg.Platform,
 		arg.Options,
+		arg.CommentStatus,
 	)
 	var i PostTarget
 	err := row.Scan(
@@ -387,6 +401,10 @@ func (q *Queries) CreatePostTarget(ctx context.Context, arg CreatePostTargetPara
 		&i.Interrupted,
 		&i.Retries,
 		&i.Options,
+		&i.CommentStatus,
+		&i.CommentRemoteID,
+		&i.CommentUrl,
+		&i.CommentError,
 	)
 	return i, err
 }
@@ -652,7 +670,7 @@ func (q *Queries) GetMediaByIDs(ctx context.Context, arg GetMediaByIDsParams) ([
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash FROM posts WHERE id = $1 AND user_id = $2
+SELECT id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash, first_comment FROM posts WHERE id = $1 AND user_id = $2
 `
 
 type GetPostParams struct {
@@ -671,12 +689,13 @@ func (q *Queries) GetPost(ctx context.Context, arg GetPostParams) (Post, error) 
 		&i.CreatedAt,
 		&i.IdempotencyKey,
 		&i.RequestHash,
+		&i.FirstComment,
 	)
 	return i, err
 }
 
 const getPostByIdempotencyKey = `-- name: GetPostByIdempotencyKey :one
-SELECT id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash FROM posts WHERE user_id = $1 AND idempotency_key = $2
+SELECT id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash, first_comment FROM posts WHERE user_id = $1 AND idempotency_key = $2
 `
 
 type GetPostByIdempotencyKeyParams struct {
@@ -695,6 +714,51 @@ func (q *Queries) GetPostByIdempotencyKey(ctx context.Context, arg GetPostByIdem
 		&i.CreatedAt,
 		&i.IdempotencyKey,
 		&i.RequestHash,
+		&i.FirstComment,
+	)
+	return i, err
+}
+
+const getTargetForComment = `-- name: GetTargetForComment :one
+SELECT
+    t.id, t.platform, t.status, t.remote_id, t.comment_status, t.account_id,
+    p.user_id, p.first_comment,
+    a.credentials, a.needs_reconnect_at
+FROM post_targets t
+JOIN posts p ON p.id = t.post_id
+LEFT JOIN accounts a ON a.id = t.account_id
+WHERE t.id = $1
+`
+
+type GetTargetForCommentRow struct {
+	ID               uuid.UUID
+	Platform         string
+	Status           string
+	RemoteID         *string
+	CommentStatus    *string
+	AccountID        uuid.NullUUID
+	UserID           uuid.UUID
+	FirstComment     *string
+	Credentials      []byte
+	NeedsReconnectAt pgtype.Timestamptz
+}
+
+// Everything the comment job needs (POST-002). LEFT JOIN because the account
+// may have been disconnected since the post went out.
+func (q *Queries) GetTargetForComment(ctx context.Context, id uuid.UUID) (GetTargetForCommentRow, error) {
+	row := q.db.QueryRow(ctx, getTargetForComment, id)
+	var i GetTargetForCommentRow
+	err := row.Scan(
+		&i.ID,
+		&i.Platform,
+		&i.Status,
+		&i.RemoteID,
+		&i.CommentStatus,
+		&i.AccountID,
+		&i.UserID,
+		&i.FirstComment,
+		&i.Credentials,
+		&i.NeedsReconnectAt,
 	)
 	return i, err
 }
@@ -744,7 +808,7 @@ func (q *Queries) GetTargetForPublish(ctx context.Context, id uuid.UUID) (GetTar
 }
 
 const getTargetForUser = `-- name: GetTargetForUser :one
-SELECT t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries, t.options FROM post_targets t
+SELECT t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries, t.options, t.comment_status, t.comment_remote_id, t.comment_url, t.comment_error FROM post_targets t
 JOIN posts p ON p.id = t.post_id
 WHERE t.id = $1 AND p.user_id = $2
 `
@@ -771,6 +835,10 @@ func (q *Queries) GetTargetForUser(ctx context.Context, arg GetTargetForUserPara
 		&i.Interrupted,
 		&i.Retries,
 		&i.Options,
+		&i.CommentStatus,
+		&i.CommentRemoteID,
+		&i.CommentUrl,
+		&i.CommentError,
 	)
 	return i, err
 }
@@ -926,7 +994,7 @@ func (q *Queries) ListPostMedia(ctx context.Context, postIds []uuid.UUID) ([]Lis
 }
 
 const listPostTargets = `-- name: ListPostTargets :many
-SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options FROM post_targets
+SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options, comment_status, comment_remote_id, comment_url, comment_error FROM post_targets
 WHERE post_id = ANY($1::uuid[])
 ORDER BY post_id, platform, id
 `
@@ -954,6 +1022,10 @@ func (q *Queries) ListPostTargets(ctx context.Context, postIds []uuid.UUID) ([]P
 			&i.Interrupted,
 			&i.Retries,
 			&i.Options,
+			&i.CommentStatus,
+			&i.CommentRemoteID,
+			&i.CommentUrl,
+			&i.CommentError,
 		); err != nil {
 			return nil, err
 		}
@@ -966,7 +1038,7 @@ func (q *Queries) ListPostTargets(ctx context.Context, postIds []uuid.UUID) ([]P
 }
 
 const listPosts = `-- name: ListPosts :many
-SELECT id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash FROM posts
+SELECT id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash, first_comment FROM posts
 WHERE user_id = $1
 ORDER BY created_at DESC
 LIMIT $2
@@ -994,6 +1066,7 @@ func (q *Queries) ListPosts(ctx context.Context, arg ListPostsParams) ([]Post, e
 			&i.CreatedAt,
 			&i.IdempotencyKey,
 			&i.RequestHash,
+			&i.FirstComment,
 		); err != nil {
 			return nil, err
 		}
@@ -1019,7 +1092,7 @@ func (q *Queries) LockAccountCredentials(ctx context.Context, id uuid.UUID) ([]b
 }
 
 const lockPost = `-- name: LockPost :one
-SELECT id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash FROM posts WHERE id = $1 AND user_id = $2 FOR UPDATE
+SELECT id, user_id, text, scheduled_at, created_at, idempotency_key, request_hash, first_comment FROM posts WHERE id = $1 AND user_id = $2 FOR UPDATE
 `
 
 type LockPostParams struct {
@@ -1040,12 +1113,13 @@ func (q *Queries) LockPost(ctx context.Context, arg LockPostParams) (Post, error
 		&i.CreatedAt,
 		&i.IdempotencyKey,
 		&i.RequestHash,
+		&i.FirstComment,
 	)
 	return i, err
 }
 
 const lockPostTargets = `-- name: LockPostTargets :many
-SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options FROM post_targets WHERE post_id = $1 ORDER BY platform, id FOR UPDATE
+SELECT id, post_id, account_id, platform, status, last_error, remote_id, remote_url, published_at, updated_at, interrupted, retries, options, comment_status, comment_remote_id, comment_url, comment_error FROM post_targets WHERE post_id = $1 ORDER BY platform, id FOR UPDATE
 `
 
 // Locked so that a publish job about to claim one of these targets waits for
@@ -1073,6 +1147,10 @@ func (q *Queries) LockPostTargets(ctx context.Context, postID uuid.UUID) ([]Post
 			&i.Interrupted,
 			&i.Retries,
 			&i.Options,
+			&i.CommentStatus,
+			&i.CommentRemoteID,
+			&i.CommentUrl,
+			&i.CommentError,
 		); err != nil {
 			return nil, err
 		}
@@ -1134,6 +1212,69 @@ func (q *Queries) MarkAccountNeedsReconnect(ctx context.Context, id uuid.UUID) e
 	return err
 }
 
+const markCommentFailed = `-- name: MarkCommentFailed :exec
+UPDATE post_targets SET comment_status = 'failed', comment_error = $2, updated_at = now()
+WHERE id = $1
+`
+
+type MarkCommentFailedParams struct {
+	ID           uuid.UUID
+	CommentError *string
+}
+
+func (q *Queries) MarkCommentFailed(ctx context.Context, arg MarkCommentFailedParams) error {
+	_, err := q.db.Exec(ctx, markCommentFailed, arg.ID, arg.CommentError)
+	return err
+}
+
+const markCommentPending = `-- name: MarkCommentPending :exec
+UPDATE post_targets SET comment_status = 'pending', comment_error = $2, updated_at = now()
+WHERE id = $1
+`
+
+type MarkCommentPendingParams struct {
+	ID           uuid.UUID
+	CommentError *string
+}
+
+func (q *Queries) MarkCommentPending(ctx context.Context, arg MarkCommentPendingParams) error {
+	_, err := q.db.Exec(ctx, markCommentPending, arg.ID, arg.CommentError)
+	return err
+}
+
+const markCommentPosted = `-- name: MarkCommentPosted :exec
+UPDATE post_targets
+SET comment_status = 'posted', comment_remote_id = $1, comment_url = $2,
+    comment_error = NULL, updated_at = now()
+WHERE id = $3
+`
+
+type MarkCommentPostedParams struct {
+	RemoteID *string
+	Url      *string
+	ID       uuid.UUID
+}
+
+func (q *Queries) MarkCommentPosted(ctx context.Context, arg MarkCommentPostedParams) error {
+	_, err := q.db.Exec(ctx, markCommentPosted, arg.RemoteID, arg.Url, arg.ID)
+	return err
+}
+
+const markCommentPosting = `-- name: MarkCommentPosting :execrows
+UPDATE post_targets SET comment_status = 'posting', updated_at = now()
+WHERE id = $1 AND comment_status = 'pending'
+`
+
+// The claim before the comment goes out, as MarkTargetPublishing is for the
+// post: two runs of the same job cannot both get past it.
+func (q *Queries) MarkCommentPosting(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, markCommentPosting, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const markMediaVerified = `-- name: MarkMediaVerified :exec
 UPDATE media SET verified_at = now(), size_bytes = $2, content_type = $3
 WHERE id = $1
@@ -1183,12 +1324,13 @@ func (q *Queries) MarkTargetPending(ctx context.Context, arg MarkTargetPendingPa
 	return err
 }
 
-const markTargetPublished = `-- name: MarkTargetPublished :exec
+const markTargetPublished = `-- name: MarkTargetPublished :one
 UPDATE post_targets
 SET status = CASE WHEN $1::boolean THEN 'drafted' ELSE 'published' END,
     remote_id = $2, remote_url = $3, last_error = NULL,
     published_at = now(), updated_at = now()
 WHERE id = $4
+RETURNING comment_status
 `
 
 type MarkTargetPublishedParams struct {
@@ -1199,14 +1341,17 @@ type MarkTargetPublishedParams struct {
 }
 
 // drafted: the platform holds the post for its author to finish there.
-func (q *Queries) MarkTargetPublished(ctx context.Context, arg MarkTargetPublishedParams) error {
-	_, err := q.db.Exec(ctx, markTargetPublished,
+// Returns the comment's status, so the caller knows whether one follows.
+func (q *Queries) MarkTargetPublished(ctx context.Context, arg MarkTargetPublishedParams) (*string, error) {
+	row := q.db.QueryRow(ctx, markTargetPublished,
 		arg.Draft,
 		arg.RemoteID,
 		arg.RemoteUrl,
 		arg.ID,
 	)
-	return err
+	var comment_status *string
+	err := row.Scan(&comment_status)
+	return comment_status, err
 }
 
 const markTargetPublishing = `-- name: MarkTargetPublishing :execrows
@@ -1273,7 +1418,7 @@ SET status = 'pending', last_error = NULL, interrupted = false, retries = t.retr
 FROM posts p
 WHERE t.id = $1 AND p.id = t.post_id AND p.user_id = $2
   AND t.status = 'failed' AND t.account_id IS NOT NULL
-RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries, t.options
+RETURNING t.id, t.post_id, t.account_id, t.platform, t.status, t.last_error, t.remote_id, t.remote_url, t.published_at, t.updated_at, t.interrupted, t.retries, t.options, t.comment_status, t.comment_remote_id, t.comment_url, t.comment_error
 `
 
 type RetryTargetParams struct {
@@ -1302,6 +1447,10 @@ func (q *Queries) RetryTarget(ctx context.Context, arg RetryTargetParams) (PostT
 		&i.Interrupted,
 		&i.Retries,
 		&i.Options,
+		&i.CommentStatus,
+		&i.CommentRemoteID,
+		&i.CommentUrl,
+		&i.CommentError,
 	)
 	return i, err
 }

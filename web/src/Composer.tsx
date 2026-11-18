@@ -45,6 +45,8 @@ interface Props {
 
 export function Composer({ accounts, platforms, onConnect, onPublished }: Props) {
   const [text, setText] = useState("");
+  // Posted under the post once it is out (POST-002): hashtags and links.
+  const [comment, setComment] = useState("");
   const [files, setFiles] = useState<Attachment[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [scheduleAt, setScheduleAt] = useState("");
@@ -58,10 +60,12 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
   // the post the first press created instead of publishing it twice.
   const attempt = useRef<{ body: string; key: string } | null>(null);
   const textId = useId();
+  const commentId = useId();
 
   const rulesFor = useMemo(() => new Map(platforms.map((p) => [p.platform as string, p.rules])), [platforms]);
   const draft: Draft = {
     text,
+    comment,
     media: files.map((f) => ({ contentType: f.file.type, size: f.file.size, ...f.video })),
   };
 
@@ -172,6 +176,7 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
     setServerIssues([]);
     const body = {
       text,
+      first_comment: comment.trim() || undefined,
       media_ids: files.map((f) => f.mediaId!),
       account_ids: chosen.map((a) => a.id),
       // Only for where the post goes: the server refuses options for an
@@ -203,6 +208,7 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
       onPublished(data);
       files.forEach((f) => URL.revokeObjectURL(f.preview));
       setText("");
+      setComment("");
       setFiles([]);
       setOptions({});
       setScheduleAt("");
@@ -237,6 +243,20 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
         }}
         rows={7}
       />
+
+      <label htmlFor={commentId} className="first-comment">
+        <span>First comment</span>
+        <textarea
+          id={commentId}
+          placeholder="Hashtags and links, posted under the post once it is out"
+          value={comment}
+          onChange={(e) => {
+            setComment(e.target.value);
+            setServerIssues([]);
+          }}
+          rows={2}
+        />
+      </label>
 
       <div className="attachments">
         {files.map((f) => (
@@ -313,6 +333,11 @@ export function Composer({ accounts, platforms, onConnect, onPublished }: Props)
                       on={selected.has(a.id) && !a.needs_reconnect}
                       onToggle={() => toggle(a.id)}
                       onReconnect={onConnect}
+                      note={
+                        comment.trim() !== "" && rules?.max_comment_length === 0
+                          ? "Takes no first comment; the post goes alone."
+                          : undefined
+                      }
                       fields={rules?.options ?? []}
                       values={options[a.id] ?? {}}
                       onField={(key, value) => {
@@ -360,13 +385,15 @@ interface StampProps {
   onToggle: () => void;
   /** Opens Accounts, where an account that needs it is connected again. */
   onReconnect: () => void;
+  /** Said under an affixed stamp, not a problem: what this destination will do differently. */
+  note?: string;
   /** What this platform lets a post set for one destination; shown once affixed. */
   fields: PlatformInfo["rules"]["options"];
   values: Record<string, string>;
   onField: (key: string, value: string) => void;
 }
 
-function Stamp({ account, used, limit, problems: issues, on, onToggle, onReconnect, fields, values, onField }: StampProps) {
+function Stamp({ account, used, limit, problems: issues, on, onToggle, onReconnect, note, fields, values, onField }: StampProps) {
   const over = limit !== undefined && used > limit;
   if (account.needs_reconnect) {
     return (
@@ -407,6 +434,7 @@ function Stamp({ account, used, limit, problems: issues, on, onToggle, onReconne
             <input value={values[f.key] ?? ""} onChange={(e) => onField(f.key, e.target.value)} />
           </label>
         ))}
+      {on && note && <p className="stamp-note">{note}</p>}
       {issues.length > 0 && (
         <ul className="stamp-issues">
           {issues.map((p) => (

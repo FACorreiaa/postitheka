@@ -30,6 +30,18 @@ struct ComposerView: View {
                 }
                 .brandRow()
 
+                // POST-002: hashtags and links go under the post, not in it.
+                Section {
+                    TextField("Hashtags and links", text: $composer.firstComment, axis: .vertical)
+                        .lineLimit(1...4)
+                        .focused($editing)
+                } header: {
+                    Text("First comment")
+                } footer: {
+                    Text("Posted under the post once it is out.")
+                }
+                .brandRow()
+
                 Section("Stamps") {
                     if model.accounts.isEmpty {
                         Text("Connect an account under Accounts to choose where this goes.")
@@ -162,6 +174,9 @@ private struct StampRow: View {
                     if stale {
                         Text("Needs reconnecting. Open Accounts to connect it again.").font(.caption).foregroundStyle(.red)
                     }
+                    if chosen, let note = composer.note(for: account) {
+                        Text(note).font(.caption).foregroundStyle(Color.secondary)
+                    }
                     if chosen {
                         ForEach(problems, id: \.self) { Text($0).font(.caption).foregroundStyle(.red) }
                     }
@@ -195,6 +210,10 @@ private struct AssistedStamp: View {
                     Text(name).foregroundStyle(Brand.cream)
                     Text(ShareSheet.isInstalled(platform) ? hint : "\(name) is not installed on this phone")
                         .font(.caption).foregroundStyle(Color.secondary)
+                    // A handoff carries the post only; there is no comment to hand over.
+                    if chosen && !composer.firstComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Takes no first comment; the post goes alone.").font(.caption).foregroundStyle(Color.secondary)
+                    }
                     if chosen && composer.scheduledAt != nil {
                         Text("Cannot be scheduled: it is handed over now").font(.caption).foregroundStyle(.red)
                     }
