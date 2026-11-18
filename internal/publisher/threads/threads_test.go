@@ -233,7 +233,7 @@ func TestConnect(t *testing.T) {
 	if auth.Host != "threads.com" || auth.Path != "/oauth/authorize" {
 		t.Errorf("authorize URL %s", auth)
 	}
-	for k, want := range map[string]string{"client_id": "app-1", "redirect_uri": redirect, "state": "st-1", "scope": "threads_basic,threads_content_publish", "response_type": "code"} {
+	for k, want := range map[string]string{"client_id": "app-1", "redirect_uri": redirect, "state": "st-1", "scope": "threads_basic,threads_content_publish,threads_manage_replies", "response_type": "code"} {
 		if q.Get(k) != want {
 			t.Errorf("authorize %s = %q, want %q", k, q.Get(k), want)
 		}
@@ -601,5 +601,51 @@ func TestRules(t *testing.T) {
 	issues := publisher.Validate(r, publisher.Post{Text: strings.Repeat("👍", 126)}) // 504 bytes
 	if len(issues) != 1 || issues[0].Field != "text" {
 		t.Errorf("126 emoji: issues %+v, want the text over 500", issues)
+	}
+}
+
+func TestCommentIsAReplyToThePost(t *testing.T) {
+	p, s := newTest(t)
+	s.inProgress = 1
+	res, err := p.Comment(context.Background(), fresh, "m-0", "#launch https://example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created := s.find(http.MethodPost, "/v1.0/"+userID+"/threads")
+	if len(created) != 1 {
+		t.Fatalf("%d containers", len(created))
+	}
+	f := form(t, created[0])
+	if f.Get("media_type") != "TEXT" || f.Get("text") != "#launch https://example.com" || f.Get("reply_to_id") != "m-0" {
+		t.Errorf("reply container %v", f)
+	}
+	// Published only once processed, as a post is.
+	if len(s.find(http.MethodGet, "/v1.0/c-1")) < 2 || len(s.find(http.MethodPost, "/v1.0/"+userID+"/threads_publish")) != 1 {
+		t.Errorf("container not waited on, or not published once")
+	}
+	if res.RemoteID != "m-1" || res.URL != "https://www.threads.com/@ada/post/ABC" {
+		t.Errorf("result %+v", res)
+	}
+}
+
+func TestACommentWithoutAClearAnswerIsNotSentAgain(t *testing.T) {
+	p, s := newTest(t)
+	s.publishMode = "500"
+	s.statusBroken = true
+	_, err := p.Comment(context.Background(), fresh, "m-0", "#tags")
+	if !publisher.IsPermanent(err) || !strings.Contains(err.Error(), "check Threads") {
+		t.Errorf("err %v; want a permanent failure asking to check Threads", err)
+	}
+}
+
+func TestCommentRules(t *testing.T) {
+	p := New("a", "b", nil)
+	var pub publisher.Publisher = p
+	if _, ok := pub.(publisher.Commenter); !ok || p.Rules().MaxCommentLength != 500 {
+		t.Errorf("Threads should comment, up to 500")
+	}
+	issues := publisher.Validate(p.Rules(), publisher.Post{Text: "hi", Comment: strings.Repeat("👍", 126)})
+	if len(issues) != 1 || issues[0].Field != "first_comment" {
+		t.Errorf("126 emoji in the comment: issues %+v, want it over 500", issues)
 	}
 }

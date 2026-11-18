@@ -12,8 +12,8 @@ do not say; never put an unconfirmed number in `Rules()` without checking it.
 |---|---|---|---|---|---|
 | Discord | Server channels | Webhook URL | No review exists | Upload (multipart) | None |
 | LinkedIn | The member's own profile | OAuth 2.0, `w_member_social` | Self-serve ("Share on LinkedIn") | Upload (Images, Videos API) | None. Company Pages need the Community Management API (application) |
-| Threads | The user's profile | OAuth (threads.com), `threads_basic` + `threads_content_publish` | Threads Testers only | Public URL Meta fetches | App Review for strangers |
-| Instagram | Business and Creator accounts | Instagram Login, `instagram_business_basic` + `instagram_business_content_publish` | Role holders only | Public URL (images); upload (video, resumable) | App Review and Business Verification for strangers |
+| Threads | The user's profile | OAuth (threads.com), `threads_basic` + `threads_content_publish` (+ `threads_manage_replies` for the first comment) | Threads Testers only | Public URL Meta fetches | App Review for strangers |
+| Instagram | Business and Creator accounts | Instagram Login, `instagram_business_basic` + `instagram_business_content_publish` (+ `instagram_business_manage_comments` for the first comment) | Role holders only | Public URL (images); upload (video, resumable) | App Review and Business Verification for strangers |
 | X | The user's timeline | OAuth 2.0 PKCE | n/a | Upload (v2 chunked, `media.write`) | Pay-per-use credits |
 | TikTok | Drafts (inbox), or direct posts | Login Kit OAuth v2 | Direct posts private-only, 5 users a day | Upload (chunked); photos by URL from a verified domain | Audit for public posts |
 | Reddit | Subreddits | OAuth 2.0, `submit identity` | Nothing: every client needs approval | Text and links only (no documented media upload) | Approval; commercial agreement |

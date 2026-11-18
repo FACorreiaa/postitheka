@@ -2,7 +2,8 @@
 // or Creator, never a personal one.
 //
 // Access is the Instagram API with Instagram Login (instagram_business_basic,
-// instagram_business_content_publish) with the Instagram app id and secret
+// instagram_business_content_publish, and instagram_business_manage_comments
+// for the first comment) with the Instagram app id and secret
 // from the Meta app's "API setup with Instagram login", which are not the
 // main Meta app's. No Facebook Page is involved. Before App Review only
 // accounts with a role on the app can connect.
@@ -25,6 +26,8 @@
 // https://developers.facebook.com/docs/instagram-platform/content-publishing
 // https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media
 // https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/error-codes
+// Comments (POST-002), checked 2026-11-18:
+// https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-media/comments.md
 package instagram
 
 import (
@@ -50,7 +53,10 @@ const (
 	graphBase   = "https://graph.instagram.com"
 	apiBase     = graphBase + "/v27.0"
 
-	scopes = "instagram_business_basic,instagram_business_content_publish"
+	// instagram_business_manage_comments is what a comment needs (POST-002).
+	// An account connected before it was asked for lacks it until it is
+	// connected again.
+	scopes = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments"
 
 	// refreshAfter is how old a long-lived token gets before it is renewed.
 	// Instagram allows it after a day; a week keeps the calls rare while an
@@ -120,6 +126,11 @@ func (p *Publisher) Rules() publisher.Rules {
 		MinVideoAspect: 0.01,
 		MaxVideoAspect: 10,
 		MaxVideoWidth:  1920,
+
+		// The comments reference (checked 2026-11-18) states no length for a
+		// comment. This is our bound, the caption's, so the composer has one
+		// to show; a comment Instagram refuses fails with its message.
+		MaxCommentLength: 2200,
 	}
 }
 
@@ -320,6 +331,36 @@ func (p *Publisher) Publish(ctx context.Context, raw []byte, post publisher.Post
 		return publisher.Result{}, err
 	}
 	return p.publish(ctx, creds, container)
+}
+
+// Comment posts the first comment on the post (POST-002) with
+// POST /{ig-media-id}/comments. Instagram takes no idempotency key and gives
+// no container to ask afterwards, so an unclear outcome is not retried: the
+// comment may be live, and a second one would sit under the post twice.
+// Instagram documents no address for a comment, so the result has no link.
+func (p *Publisher) Comment(ctx context.Context, raw []byte, postID, text string) (publisher.Result, error) {
+	var creds credentials
+	if err := json.Unmarshal(raw, &creds); err != nil || !creds.valid() {
+		return publisher.Result{}, publisher.Permanent(errors.New("instagram: stored credentials are unreadable"))
+	}
+	if !creds.ExpiresAt.IsZero() && p.now().After(creds.ExpiresAt) {
+		return publisher.Result{}, publisher.Reconnect(ErrExpired)
+	}
+	form := url.Values{"message": {text}, "access_token": {creds.AccessToken}}
+	var out struct {
+		ID string `json:"id"`
+	}
+	err := p.call(ctx, http.MethodPost, apiBase+"/"+url.PathEscape(postID)+"/comments", form, "comment", &out)
+	var api *apiErr
+	switch {
+	case err == nil:
+		return publisher.Result{RemoteID: out.ID}, nil
+	case errors.As(err, &api) && api.status < 500:
+		// Instagram answered and said no: nothing was posted.
+		return publisher.Result{}, err
+	default:
+		return publisher.Result{}, publisher.Permanent(errors.New("instagram: the comment request failed and Instagram did not confirm whether it went out; check Instagram before commenting again"))
+	}
 }
 
 // mediaForm is the container for one file. An image needs no media_type. A

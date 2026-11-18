@@ -33,8 +33,11 @@ func (CommentArgs) InsertOpts() river.InsertOpts {
 	}
 }
 
-// commentTimeout is our allowance for one comment: a single small request.
-const commentTimeout = time.Minute
+// commentTimeout is our allowance for one comment. Instagram and Facebook
+// take one small request, but a Threads reply is a container that must
+// finish processing before it is published, and Threads may take up to its
+// 3-minute processing wait plus the requests either side.
+const commentTimeout = 5 * time.Minute
 
 // CommentWorker shares the publish worker's database, credentials and
 // registry, and its refresh: a comment retried hours after its post may find
