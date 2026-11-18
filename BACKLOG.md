@@ -122,7 +122,7 @@ apps, and lists the decisions still open. Its recommendations are not decisions.
 | --- | --- | --- | --- |
 | **P0 · Foundations** | 6/6 | **Met** | Nothing |
 | **P1 · First stranger** | 4/12 (2 built, unverified) | Not met | Not deployed; no real sign-in |
-| **P2 · Platforms** | 0/17 (13 built, unverified; RDT-001 dropped; BRAND-002 and POST-002 open) | Not met | Needs P1 deployed; X needs credits; Meta and TikTok need review; Spaces not built; first comment built for Discord only |
+| **P2 · Platforms** | 0/17 (13 built, unverified; RDT-001 dropped; BRAND-002 and POST-002 open) | Not met | Needs P1 deployed; X needs credits; Meta and TikTok need review; Spaces not built; first comment built for Discord, Threads, Instagram and Facebook |
 | **P3 · iOS** | 1/6 (2 built, unverified) | Not met | IOS-002 needs AUTH-001; nothing tested on a device |
 
 Strangers who have published a post: **0**.
@@ -155,7 +155,7 @@ Strangers who have published a post: **0**.
 | X-002 | Built, unverified | `publisher.Refresher`, `PublishWorker.refresh` (row lock, re-check, seal, then publish); `TestTokenRefresh` (three concurrent posts refresh once and publish with the new token, revoked grant fails asking for reconnect, transient failure stays pending); mutation-checked; Threads implements it | Never run against a real platform |
 | ACC-001 | Built, unverified | `migrations/20261114150000_account_needs_reconnect.sql`, `publisher.Reconnect`, `needs_reconnect` on Account; `TestRefusedCredentialsMarkTheAccount` (a 401 marks only that account, a rejected post does not, queued targets fail without a request, a new post is refused at the door), revoked refresh in `TestTokenRefresh`, reconnect clears it in `TestOAuthConnect`; web stamp and Accounts looked at in a browser at desktop and 375 px with seeded accounts; iOS kit test | Never against a real platform: which answers mean dead credentials is read from each platform's docs. Marks after the first refusal; nothing warns before a token expires. iOS views built, not looked at on a simulator. Web Reconnect button seen, not pressed (it leaves for the platform) |
 | POST-001 | Built, unverified | `PATCH` and `DELETE /v1/posts/{id}`; `TestCancelPostRemovesAnUnsentPost`, `TestReschedulePostMovesAnUnsentPost` (the old job posts nothing, the new one posts once), `TestAPostThatStartedSendingCannotBeCancelledOrMoved`; web Sent checked in a browser at desktop and 375 px against a local server with seeded posts; iOS kit `APITests` | iOS swipe actions and the reschedule sheet built, not looked at on a simulator. Not run against a job firing at the same moment outside a test |
-| POST-002 | Built for Discord, unverified | `migrations/20261118120000_first_comment.sql`, `publisher.Commenter`, `jobs.CommentWorker`, `discord.Comment`; `TestFirstCommentFollowsThePublishedPost`, `TestAFailedCommentNeverSendsThePostAgain`, `TestAnInterruptedCommentIsNotSentAgain`, `TestATooLongCommentIsRefusedAtTheDoor`, `TestFirstCommentEndToEnd` (real River client), `TestCommentInAForumGoesIntoThePostsThread`, `TestEveryPlatformThatTakesACommentCanSendOne`; web composer and Sent looked at in a browser at desktop and 375 px with seeded posts; kit `ComposerTests`; iOS composer seen on a simulator | Never posted to a real Discord channel or forum. Threads, Instagram and Facebook next: each needs its new permission and a reconnect. LinkedIn and X each need one real test call first. iOS Sent line not seen on a simulator (it shut down mid-check). WhatsApp and Reddit handoffs carry the post only |
+| POST-002 | Built for Discord, Threads, Instagram and Facebook, unverified | `migrations/20261118120000_first_comment.sql`, `publisher.Commenter`, `jobs.CommentWorker`, `discord.Comment`, `threads.Comment`, `instagram.Comment`, `facebook.Comment`; `TestCommentIsAReplyToThePost`, `TestACommentWithoutAClearAnswerIsNotSentAgain` (Threads), `TestCommentGoesUnderThePost`, `TestCommentOutcomes` (Instagram, Facebook), `TestValidateChecksTheFirstComment` (length and links); `TestFirstCommentFollowsThePublishedPost`, `TestAFailedCommentNeverSendsThePostAgain`, `TestAnInterruptedCommentIsNotSentAgain`, `TestATooLongCommentIsRefusedAtTheDoor`, `TestFirstCommentEndToEnd` (real River client), `TestCommentInAForumGoesIntoThePostsThread`, `TestEveryPlatformThatTakesACommentCanSendOne`; web composer and Sent looked at in a browser at desktop and 375 px with seeded posts; kit `ComposerTests`; iOS composer seen on a simulator | Never posted to a real Discord channel or forum, nor to Meta (no Meta app secrets in production yet). Threads, Instagram and Facebook are stub-tested only: each needs its new permission on the Meta app and a connect that grants it; a Facebook comment under a video is unproven. LinkedIn and X each need one real test call first. iOS Sent line not seen on a simulator (it shut down mid-check). WhatsApp and Reddit handoffs carry the post only |
 | BRAND-001 | Built, unverified | `migrations/20261114120000_account_brand.sql`, `PATCH /v1/accounts/{id}`; `TestAccountBrand`; web `brands.test.ts`, kit `BrandsTests`; web looked at in a browser at desktop and 375 px against a local server | iOS built and kit-tested, not looked at in a simulator |
 | BRAND-002 | Open | | Name and storage are OPEN (owner) |
 | LI-001 | Built, unverified | `internal/publisher/linkedin`; `linkedin_test.go` (connect, text, escaping, one and several images, chunked video with processing, error classes, off-host upload URL); local server offers it with placeholder app values | Needs the owner's LinkedIn app to post for real; video limits partly from an ads section of the docs |
@@ -469,6 +469,12 @@ for every destination, rather than a per-target option: the owner's use is the s
 link everywhere, and one field is what the composer can show without crowding the stamps. The
 handoffs (WhatsApp, Reddit) carry the post only; their stamp says the post goes alone.
 
+Built 2026-11-18 for Threads, Instagram and Facebook, against stubs. Each asks for its new
+permission at connect. Meta states no comment length for Instagram or Facebook, so the bound is
+the caption's (2,200) and the post's (5,000); Threads' is a post's 500 characters and 5 links,
+and every comment is held to the platform's link limit where it has one. The comment job's
+allowance went from 1 to 5 minutes for Threads' processing wait.
+
 **Done when:** a post with a first comment publishes to Discord and one OAuth platform from
 production, and the comment appears under each; a platform that cannot take one says so on its
 stamp before publishing.
@@ -496,8 +502,9 @@ nothing, so this cannot post twice; it does upload a forum post's files twice.
 ### META-001 · Meta Business Verification and App Review · L · Owner
 **Needs:** PRV-001 and a deployed build (REL-004). Weeks of waiting, so start as soon as P1
 deploys. One review covers the Threads permissions (`threads_basic`,
-`threads_content_publish`), Instagram's (`instagram_business_basic`,
-`instagram_business_content_publish`) and Pages'. The agent prepares the permissions list, the
+`threads_content_publish`, `threads_manage_replies`), Instagram's (`instagram_business_basic`,
+`instagram_business_content_publish`, `instagram_business_manage_comments`) and Pages' (with
+`pages_manage_engagement` for the first comment, POST-002). The agent prepares the permissions list, the
 use-case text and a screen recording of the flow; the owner submits.
 
 **Done when:** the Meta app is approved for the Threads, Instagram and Pages publishing
@@ -619,7 +626,8 @@ user's Pages and creates one account per chosen Page.
   Upload API. Whether Facebook answers before or after it has fetched the file is not documented;
   the request gets 4 minutes.
 - **Scopes:** `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, the set the photo
-  and video references ask for. The Pages guide lists more; they were left out.
+  and video references ask for, and `pages_manage_engagement` for the first comment (POST-002,
+  2026-11-18). The Pages guide lists more; they were left out.
 - **Limits are ours where Meta states none** (checked 2026-11-15): 5,000 characters, 10 photos,
   video MP4 only and 300 MB. From the reference: photos of 10 MB. Raise them against a Meta page
   that says so, or after a real post.

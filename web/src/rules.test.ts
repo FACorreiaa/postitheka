@@ -124,6 +124,13 @@ describe("first comment", () => {
     expect(problems(takes, { text: "hi", media: [], comment: "#abcdefg" })).toEqual(["First comment is 3 characters over"]);
   });
 
+  it("is held to the platform's link limit where it takes one", () => {
+    const takes = { ...rules, max_comment_length: 500, max_links: 1 };
+    expect(problems(takes, { text: "hi", media: [], comment: "https://a.example https://b.example" })).toEqual([
+      "First comment: at most 1 link",
+    ]);
+  });
+
   it("is no problem where the platform takes none", () => {
     expect(problems(rules, { text: "hi", media: [], comment: "#".repeat(5000) })).toEqual([]);
   });

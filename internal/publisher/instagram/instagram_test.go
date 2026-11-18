@@ -49,6 +49,9 @@ type stub struct {
 	statusBroken bool // status checks fail once a publish has been tried
 	refreshBody  string
 	refreshCode  int
+	// commentMode: "" succeeds; "500" fails without saying whether it went
+	// out; "400" refuses.
+	commentMode string
 }
 
 type recorded struct {
@@ -182,6 +185,15 @@ func (s *stub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			status = "FINISHED"
 		}
 		_, _ = fmt.Fprintf(w, `{"id":%q,"status_code":%q,"status":%q}`, id, status, s.finalError)
+	case r.Method == http.MethodPost && r.URL.Path == "/v27.0/m-1/comments":
+		switch s.commentMode {
+		case "500":
+			s.graphError(w, http.StatusInternalServerError, 2, "Service temporarily unavailable")
+		case "400":
+			s.graphError(w, http.StatusBadRequest, 10, "Application does not have permission for this action")
+		default:
+			_, _ = io.WriteString(w, `{"id":"cm-1"}`)
+		}
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -257,7 +269,7 @@ func TestConnect(t *testing.T) {
 			}
 			for k, want := range map[string]string{
 				"client_id": "app-1", "redirect_uri": redirect, "state": "st-1", "response_type": "code",
-				"scope": "instagram_business_basic,instagram_business_content_publish",
+				"scope": "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_comments",
 			} {
 				if q.Get(k) != want {
 					t.Errorf("authorize %s = %q, want %q", k, q.Get(k), want)
@@ -686,5 +698,40 @@ func TestRules(t *testing.T) {
 		case c.field != "" && (len(issues) != 1 || !strings.HasPrefix(issues[0].Field, c.field)):
 			t.Errorf("%s: issues %+v, want one on %s", name, issues, c.field)
 		}
+	}
+}
+
+func TestCommentGoesUnderThePost(t *testing.T) {
+	p, s := newTest(t)
+	res, err := p.Comment(context.Background(), fresh, "m-1", "#launch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := s.find(http.MethodPost, "/v27.0/m-1/comments")
+	if len(sent) != 1 {
+		t.Fatalf("%d comment requests", len(sent))
+	}
+	if f := form(t, sent[0]); f.Get("message") != "#launch" || f.Get("access_token") != "long-1" || strings.Contains(sent[0].Query, "access_token") {
+		t.Errorf("comment form %v, query %q; want the token in the body only", f, sent[0].Query)
+	}
+	if res.RemoteID != "cm-1" || res.URL != "" || sent[0].Host != "graph.instagram.com" {
+		t.Errorf("result %+v to %s", res, sent[0].Host)
+	}
+}
+
+func TestCommentOutcomes(t *testing.T) {
+	p, s := newTest(t)
+	s.commentMode = "400"
+	if _, err := p.Comment(context.Background(), fresh, "m-1", "#tags"); !publisher.IsPermanent(err) || !strings.Contains(err.Error(), "permission") {
+		t.Errorf("a refusal: %v; want it permanent with Instagram's reason", err)
+	}
+	// No clear answer: the comment may be live, so it is not tried again.
+	s.commentMode = "500"
+	if _, err := p.Comment(context.Background(), fresh, "m-1", "#tags"); !publisher.IsPermanent(err) || !strings.Contains(err.Error(), "check Instagram") {
+		t.Errorf("a 500: %v; want a permanent failure asking to check Instagram", err)
+	}
+	expired := creds(now.Add(-61*24*time.Hour), now.Add(-time.Hour))
+	if _, err := p.Comment(context.Background(), expired, "m-1", "#tags"); !publisher.NeedsReconnect(err) {
+		t.Errorf("an expired token: %v; want reconnect", err)
 	}
 }

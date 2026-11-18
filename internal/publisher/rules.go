@@ -224,6 +224,12 @@ func Validate(rules Rules, post Post) []Issue {
 		if n := rules.count(post.Comment); n > rules.MaxCommentLength {
 			add("first_comment", "%d characters, limit is %d", n, rules.MaxCommentLength)
 		}
+		// A comment is a post of its own on Threads, held to the same links.
+		if rules.MaxLinks > 0 {
+			if n := CountLinks(post.Comment); n > rules.MaxLinks {
+				add("first_comment", "%d links, limit is %d", n, rules.MaxLinks)
+			}
+		}
 	}
 
 	issues = append(issues, rules.optionIssues(post.Options)...)

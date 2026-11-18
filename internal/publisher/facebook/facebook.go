@@ -28,6 +28,8 @@
 // https://developers.facebook.com/docs/graph-api/reference/page/photos/
 // https://developers.facebook.com/docs/graph-api/reference/page/videos/
 // https://developers.facebook.com/docs/video-api/guides/publishing
+// Comments (POST-002), checked 2026-11-18:
+// https://developers.facebook.com/documentation/pages-api/comments-mentions.md
 package facebook
 
 import (
@@ -54,11 +56,14 @@ const (
 	apiBase   = "https://graph.facebook.com/" + version
 	videoBase = "https://graph-video.facebook.com/" + version
 
-	// The three every reference page asks for. The Pages guide lists more
-	// (pages_manage_engagement, pages_read_user_engagement, publish_video);
-	// the photo and video references, which describe the calls made here, do
-	// not, and each extra permission is one more thing App Review must grant.
-	scopes = "pages_show_list,pages_read_engagement,pages_manage_posts"
+	// The three every reference page asks for, and pages_manage_engagement,
+	// which commenting as the Page needs (POST-002). The Pages guides list
+	// more (pages_read_user_engagement for reading people's comments,
+	// publish_video); the calls made here do not use them, and each extra
+	// permission is one more thing App Review must grant. A Page connected
+	// before pages_manage_engagement was asked for lacks it until it is
+	// connected again.
+	scopes = "pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement"
 
 	// mediaURLTTL covers Facebook fetching the file, which for a video can
 	// trail the request by minutes.
@@ -112,6 +117,11 @@ func (p *Publisher) Rules() publisher.Rules {
 		MaxVideoBytes: 300_000_000,
 		MediaTypes:    []string{"image/jpeg", "image/png", "image/gif", "video/mp4"},
 		VideoAlone:    true,
+
+		// The comments guide (checked 2026-11-18) states no length for a
+		// comment. This is our bound, the post's, so the composer has one
+		// to show; a comment Facebook refuses fails with its message.
+		MaxCommentLength: 5000,
 	}
 }
 
@@ -338,6 +348,39 @@ func (p *Publisher) post(ctx context.Context, creds credentials, endpoint string
 		return publisher.Result{}, err
 	default:
 		return publisher.Result{}, publisher.Permanent(fmt.Errorf("facebook: %s: the request failed and Facebook did not confirm whether the post went out; check the Page before posting again", op))
+	}
+}
+
+// Comment posts the first comment under the post (POST-002) with
+// POST /{object-id}/comments with message. The Page token comments as the
+// Page. The guide also asks that the person hold the MODERATE task on the
+// Page as well as CREATE_CONTENT; a Page without it is refused with
+// Facebook's message. The guide speaks of Page post ids; a video post
+// records the video's id instead, so a comment under a video is unproven
+// until a real one has gone out.
+//
+// As for a post, there is no idempotency key, so an unclear outcome is not
+// retried. Facebook gives no documented link for a comment, so the result
+// has none.
+func (p *Publisher) Comment(ctx context.Context, raw []byte, postID, text string) (publisher.Result, error) {
+	var creds credentials
+	if err := json.Unmarshal(raw, &creds); err != nil || !creds.valid() {
+		return publisher.Result{}, publisher.Permanent(errors.New("facebook: stored credentials are unreadable"))
+	}
+	form := url.Values{"message": {text}, "access_token": {creds.AccessToken}}
+	var out struct {
+		ID string `json:"id"`
+	}
+	err := p.call(ctx, http.MethodPost, apiBase+"/"+url.PathEscape(postID)+"/comments", form, "comment", requestTimeout, &out)
+	var api *apiErr
+	switch {
+	case err == nil && out.ID != "":
+		return publisher.Result{RemoteID: out.ID}, nil
+	case errors.As(err, &api) && api.refused:
+		// Facebook answered and said no: nothing was posted.
+		return publisher.Result{}, err
+	default:
+		return publisher.Result{}, publisher.Permanent(errors.New("facebook: the comment request failed and Facebook did not confirm whether it went out; check the post before commenting again"))
 	}
 }
 

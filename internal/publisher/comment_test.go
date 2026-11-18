@@ -21,6 +21,12 @@ func TestValidateChecksTheFirstComment(t *testing.T) {
 		t.Errorf("issues %+v; want one on first_comment", issues)
 	}
 
+	rules.MaxCommentLength, rules.MaxLinks = 500, 1
+	issues = publisher.Validate(rules, publisher.Post{Text: "hi", Comment: "https://a.example https://b.example"})
+	if len(issues) != 1 || issues[0].Field != "first_comment" || issues[0].Message != "2 links, limit is 1" {
+		t.Errorf("issues %+v; want the comment's links over the limit", issues)
+	}
+
 	// A platform that takes no comment publishes the post alone, so a long
 	// comment is no reason to refuse it.
 	rules.MaxCommentLength = 0

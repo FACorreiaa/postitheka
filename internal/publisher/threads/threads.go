@@ -1,8 +1,9 @@
 // Package threads publishes to a user's own Threads profile.
 //
-// Access is the Threads API (threads_basic, threads_content_publish) with the
-// Threads app id and secret, which are not the main Meta app's. Before App
-// Review only the app's Threads testers can connect.
+// Access is the Threads API (threads_basic, threads_content_publish, and
+// threads_manage_replies for the first comment) with the Threads app id and
+// secret, which are not the main Meta app's. Before App Review only the app's
+// Threads testers can connect.
 //
 // A connection exchanges the one-hour token for a long-lived one (60 days).
 // There is no refresh token: the long-lived token refreshes itself once it is
@@ -19,6 +20,8 @@
 // https://developers.facebook.com/docs/threads/posts
 // https://developers.facebook.com/docs/threads/reference/publishing
 // https://developers.facebook.com/docs/threads/troubleshooting
+// Replies (POST-002), checked 2026-11-18:
+// https://developers.facebook.com/documentation/threads/retrieve-and-manage-replies/create-replies.md
 package threads
 
 import (
@@ -42,7 +45,9 @@ const (
 	graphBase = "https://graph.threads.com"
 	apiBase   = graphBase + "/v1.0"
 
-	scopes = "threads_basic,threads_content_publish"
+	// threads_manage_replies is what reply_to_id needs (POST-002). An account
+	// connected before it was asked for lacks it until it is connected again.
+	scopes = "threads_basic,threads_content_publish,threads_manage_replies"
 
 	// refreshAfter is how old a long-lived token gets before it is renewed.
 	// Threads allows it after a day; a week keeps the calls rare while an
@@ -108,6 +113,11 @@ func (p *Publisher) Rules() publisher.Rules {
 		MinVideoAspect: 0.01,
 		MaxVideoAspect: 10,
 		MaxVideoWidth:  1920,
+
+		// A reply is a text post made on the same endpoint with reply_to_id,
+		// so it has a post's 500 characters and 5 links (replies page,
+		// checked 2026-11-18, which sets no limit of its own).
+		MaxCommentLength: 500,
 	}
 }
 
@@ -260,6 +270,28 @@ func (p *Publisher) Publish(ctx context.Context, raw []byte, post publisher.Post
 	default:
 		container, err = p.carousel(ctx, creds, post, media)
 	}
+	if err != nil {
+		return publisher.Result{}, err
+	}
+	if err := p.waitFinished(ctx, creds, container); err != nil {
+		return publisher.Result{}, err
+	}
+	return p.publish(ctx, creds, container)
+}
+
+// Comment posts the first comment as a reply to the post (POST-002): a text
+// container with reply_to_id, processed and published like any post, so it
+// shares Publish's rule for an unclear answer. Replying to one's own post
+// needs only threads_manage_replies; replying to others' would need more.
+func (p *Publisher) Comment(ctx context.Context, raw []byte, postID, text string) (publisher.Result, error) {
+	var creds credentials
+	if err := json.Unmarshal(raw, &creds); err != nil || !creds.valid() {
+		return publisher.Result{}, publisher.Permanent(errors.New("threads: stored credentials are unreadable"))
+	}
+	if !creds.ExpiresAt.IsZero() && p.now().After(creds.ExpiresAt) {
+		return publisher.Result{}, publisher.Reconnect(ErrExpired)
+	}
+	container, err := p.create(ctx, creds, url.Values{"media_type": {"TEXT"}, "text": {text}, "reply_to_id": {postID}})
 	if err != nil {
 		return publisher.Result{}, err
 	}

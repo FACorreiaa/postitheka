@@ -84,8 +84,11 @@ export function problems(rules: Rules, draft: Draft): string[] {
 
   // Only where the platform takes a comment: elsewhere the post goes alone.
   const comment = countText((draft.comment ?? "").trim(), rules.text_counting);
-  if (rules.max_comment_length > 0 && comment > rules.max_comment_length) {
-    out.push(`First comment is ${comment - rules.max_comment_length} characters over`);
+  if (rules.max_comment_length > 0) {
+    if (comment > rules.max_comment_length) out.push(`First comment is ${comment - rules.max_comment_length} characters over`);
+    if (rules.max_links > 0 && countLinks(draft.comment ?? "") > rules.max_links) {
+      out.push(`First comment: at most ${rules.max_links} link${rules.max_links === 1 ? "" : "s"}`);
+    }
   }
 
   // Mirrors Rules.optionIssues in Go, less the unknown key: a form built from

@@ -119,6 +119,8 @@ func (s *stub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_, _ = fmt.Fprintf(w, `{"id":"photo-%d","post_id":"%s_%d"}`, n, pageID, n)
 	case r.Method == http.MethodPost && r.URL.Path == videoPath:
 		_, _ = fmt.Fprintf(w, `{"id":"video-%d"}`, n)
+	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/comments"):
+		_, _ = fmt.Fprintf(w, `{"id":"%s_%d"}`, strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/v27.0/"), "/comments"), n)
 	default:
 		w.WriteHeader(http.StatusNotFound)
 	}
@@ -188,7 +190,7 @@ func TestConnect(t *testing.T) {
 	}
 	for k, want := range map[string]string{
 		"client_id": "app-1", "redirect_uri": redirect, "state": "st-1", "response_type": "code",
-		"scope": "pages_show_list,pages_read_engagement,pages_manage_posts",
+		"scope": "pages_show_list,pages_read_engagement,pages_manage_posts,pages_manage_engagement",
 	} {
 		if q.Get(k) != want {
 			t.Errorf("authorize %s = %q, want %q", k, q.Get(k), want)
@@ -543,7 +545,11 @@ func TestRules(t *testing.T) {
 		"quicktime": {
 			publisher.Post{Media: []publisher.Media{{ContentType: "video/quicktime", Size: 1000}}}, "media",
 		},
-		"text over the cap": {publisher.Post{Text: strings.Repeat("a", 5001)}, "text"},
+		"text over the cap":  {publisher.Post{Text: strings.Repeat("a", 5001)}, "text"},
+		"comment at the cap": {publisher.Post{Text: "hi", Comment: strings.Repeat("a", 5000)}, ""},
+		"comment over the cap": {
+			publisher.Post{Text: "hi", Comment: strings.Repeat("a", 5001)}, "first_comment",
+		},
 	} {
 		issues := publisher.Validate(r, c.post)
 		switch {
@@ -561,4 +567,76 @@ func slicesOf(m publisher.Media, n int) []publisher.Media {
 		out[i] = m
 	}
 	return out
+}
+
+const postPath = "/v27.0/" + pageID + "_7/comments"
+
+func TestCommentGoesUnderThePost(t *testing.T) {
+	p, s := newTest(t)
+	res, err := p.Comment(context.Background(), creds, pageID+"_7", "#launch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := s.find(http.MethodPost, postPath)
+	if len(sent) != 1 {
+		t.Fatalf("%d comment requests", len(sent))
+	}
+	if f := form(t, sent[0]); f.Get("message") != "#launch" || f.Get("access_token") != "page-token-1" || strings.Contains(sent[0].Query, "access_token") {
+		t.Errorf("comment form %v, query %q; want the Page token in the body only", f, sent[0].Query)
+	}
+	if res.RemoteID != pageID+"_7_1" || res.URL != "" || sent[0].Host != "graph.facebook.com" {
+		t.Errorf("result %+v to %s", res, sent[0].Host)
+	}
+}
+
+func TestCommentOutcomes(t *testing.T) {
+	ctx := context.Background()
+	for name, c := range map[string]struct {
+		status int
+		body   string
+		check  func(error) bool
+		want   string
+	}{
+		// Commenting as a person rather than the Page (Pages comments guide).
+		"refused": {
+			400, `{"error":{"message":"(#1705) There was an error posting to this wall","code":1705}}`,
+			publisher.IsPermanent, "1705",
+		},
+		"dead token": {
+			400, `{"error":{"message":"Error validating access token","code":190}}`,
+			publisher.NeedsReconnect, "reconnect",
+		},
+		// No clear answer: the comment may be live, so it is not tried again.
+		"server error": {
+			500, `{"error":{"message":"An unknown error occurred","code":1}}`,
+			publisher.IsPermanent, "check the post before commenting again",
+		},
+		"not Graph": {502, `<html>`, publisher.IsPermanent, "check the post before commenting again"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, s := newTest(t)
+			s.failPath, s.failStatus, s.failBody = postPath, c.status, c.body
+			_, err := p.Comment(ctx, creds, pageID+"_7", "#tags")
+			if err == nil || !c.check(err) || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("got %v, want %q", err, c.want)
+			}
+		})
+	}
+
+	t.Run("rate limited is retried later", func(t *testing.T) {
+		p, s := newTest(t)
+		s.failPath, s.failStatus, s.failBody = postPath, 400, `{"error":{"message":"Application request limit reached","code":4}}`
+		_, err := p.Comment(ctx, creds, pageID+"_7", "#tags")
+		var ra *publisher.RetryAfterError
+		if !errors.As(err, &ra) || publisher.IsPermanent(err) {
+			t.Errorf("got %v, want retry after", err)
+		}
+	})
+
+	t.Run("unreadable credentials", func(t *testing.T) {
+		p, _ := newTest(t)
+		if _, err := p.Comment(ctx, []byte("{}"), pageID+"_7", "#tags"); !publisher.IsPermanent(err) {
+			t.Errorf("got %v, want permanent", err)
+		}
+	})
 }

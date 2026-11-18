@@ -199,6 +199,12 @@ type Publisher interface {
   (`Comment(ctx, credentials, postID, text)`, where `postID` is the `RemoteID` Publish returned)
   and sets `Rules.MaxCommentLength`. A test holds every platform to doing both or neither.
   Discord's comment is the next webhook message, sent into the post's thread in a forum.
+  Threads' is a reply (a text container with `reply_to_id`, processed and published like a
+  post), Instagram's and Facebook's a `POST /{id}/comments` with `message`, Facebook's as the
+  Page. Each Meta comment needs one more permission (`threads_manage_replies`,
+  `instagram_business_manage_comments`, `pages_manage_engagement`), so an account connected
+  before it was asked for must reconnect. The comment job allows 5 minutes, for Threads'
+  processing wait. None of the three gives a link to the comment.
 - `Rules` gives per-file limits (`MaxMediaBytes`, and `MaxVideoBytes` for video when it
   differs), `VideoAlone` for platforms that take a video only on its own, `MaxLinks` for
   platforms that cap distinct links, and `TextCounting` for platforms that count characters
@@ -252,7 +258,8 @@ permanent ("reconnect"); 429 → `Retry-After`, else wait for the daily reset at
 
 ### Threads (built, against a stub)
 
-The user's own profile through the Threads API (`threads_basic`, `threads_content_publish`),
+The user's own profile through the Threads API (`threads_basic`, `threads_content_publish`,
+and `threads_manage_replies` for the first comment),
 with the Threads app id and secret. Authorize on `threads.com`, exchange on
 `graph.threads.com`; no PKCE. The one-hour token is exchanged at once for a long-lived one (60
 days), and `Refresher` renews it a week after each refresh; a refresh that fails while the
