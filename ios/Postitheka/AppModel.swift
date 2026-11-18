@@ -176,9 +176,12 @@ final class AppModel {
         }
     }
 
-    /// True while any target is still on its way, so Sent keeps polling.
+    /// True while any target is still on its way, so Sent keeps polling. A first comment follows
+    /// its post (POST-002), so a published target can still be in flight.
     var hasPending: Bool {
-        posts.contains { $0.targets.contains { $0.status == .pending || $0.status == .publishing } }
+        posts.contains { $0.targets.contains {
+            $0.status == .pending || $0.status == .publishing || $0.comment_status == .pending || $0.comment_status == .posting
+        } }
     }
 
     private func run(_ work: () async throws -> Void) async {

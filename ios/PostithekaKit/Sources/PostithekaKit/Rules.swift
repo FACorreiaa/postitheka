@@ -31,11 +31,14 @@ public struct Draft: Sendable, Equatable {
     public var media: [Media]
     /// What was set for one destination alone, by the keys in its rules' options.
     public var options: [String: String]
+    /// The post's first comment (POST-002), the same for every destination.
+    public var comment: String
 
-    public init(text: String = "", media: [Media] = [], options: [String: String] = [:]) {
+    public init(text: String = "", media: [Media] = [], options: [String: String] = [:], comment: String = "") {
         self.text = text
         self.media = media
         self.options = options
+        self.comment = comment
     }
 }
 
@@ -110,6 +113,12 @@ public func problems(_ rules: Rules, _ draft: Draft) -> [String] {
     let n = countText(draft.text, rules.text_counting)
     if n > rules.max_text_length { out.append("\(n - rules.max_text_length) characters over") }
     if rules.max_links > 0 && countLinks(draft.text) > rules.max_links { out.append("At most \(rules.max_links) link\(rules.max_links == 1 ? "" : "s")") }
+
+    // Only where the platform takes a comment: elsewhere the post goes alone.
+    let comment = countText(draft.comment.trimmingCharacters(in: .whitespacesAndNewlines), rules.text_counting)
+    if rules.max_comment_length > 0 && comment > rules.max_comment_length {
+        out.append("First comment is \(comment - rules.max_comment_length) characters over")
+    }
 
     // Mirrors `Rules.optionIssues` in Go, less the unknown key: a form built
     // from the rules cannot send one.
@@ -196,5 +205,18 @@ extension Platform {
         case .whatsapp: "WhatsApp"
         case .reddit: "Reddit"
         }
+    }
+}
+
+/// One line on a published target's first comment (POST-002), nil when it
+/// gets none. `failed` lines are shown as failures.
+public func commentLine(_ t: Target) -> (text: String, failed: Bool)? {
+    guard let status = t.comment_status else { return nil }
+    let why = t.comment_error.map { ": \($0)" } ?? ""
+    switch status {
+    case .posted: return ("First comment posted", false)
+    case .pending: return (why.isEmpty ? "First comment waiting" : "First comment retrying\(why)", false)
+    case .posting: return ("Posting the first comment", false)
+    case .failed: return ("First comment not sent\(why)", true)
     }
 }

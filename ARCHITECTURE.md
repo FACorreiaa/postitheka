@@ -75,11 +75,12 @@ users ─┬─< api_tokens       token_hash (sha256), last_used_at   (users.app
        ├─< accounts         platform, display_name, credentials (sealed, AAD = id), remote_id, brand, needs_reconnect_at
        ├─< oauth_states     state_hash (sha256), platform, verifier (sealed, AAD = hash), client
        ├─< media            object_key, content_type, size_bytes, verified_at
-       └─< posts            text, scheduled_at, idempotency_key + request_hash
+       └─< posts            text, first_comment, scheduled_at, idempotency_key + request_hash
               ├─< post_media    (post_id, position) → media
               └─< post_targets  account_id → accounts (SET NULL), platform, status,
                                 last_error, remote_id, remote_url, published_at,
-                                options (what the author set for this destination)
+                                options (what the author set for this destination),
+                                comment_status, comment_remote_id, comment_url, comment_error
 ```
 
 - Everything cascades from `users`: deleting a user deletes all of their data.
@@ -124,6 +125,15 @@ users ─┬─< api_tokens       token_hash (sha256), last_used_at   (users.app
 
  failed, account still connected ──POST …/retry──► pending, new job (retry n)   (WEB-001)
 
+ first comment (POST-002), only on a target whose platform takes one:
+ comment pending ──(post published: comment_target job queued in the same tx)──claim──► posting
+     ▲                                                         ├── ok ──────────► posted (comment_url)
+     └── retryable (comment_error says why) ───────────────────┤
+                                                               ├── permanent ───► failed
+                                                               └── attempt 10 ──► failed
+ post drafted (nothing public to comment under) ─────────────────────────────────► failed
+ posting found at job start ──────────────────────────────────────────────────────► failed "interrupted"
+
  assisted target (no job): handing_off ──phone: sent──────► handed_off (published_at)
                                │      └─phone: not sent──► failed
                                └── no report in 1 h ──────► failed "never reported back"
@@ -144,6 +154,14 @@ expire.
 The claim (`MarkTargetPublishing`) is conditional on `pending`, so two runs of one job cannot
 both publish. Outcomes are recorded with a context that survives the job's own timeout. River
 jobs are unique by target id.
+
+A first comment is one per post, the same for every destination (the owner's use: hashtags and
+the link to the app). It is checked at the door against each destination that takes one
+(`Rules.MaxCommentLength`); a destination that takes none publishes the post alone, which the
+composer says on its stamp. Each target that takes it carries its own `comment_status`, and the
+comment goes out in a `comment_target` job of its own, queued in the transaction that marks the
+post published. It has the publish job's claim, interrupted rule and retry budget, and never
+touches the post's own status, so a comment that fails or is retried never sends the post again.
 
 Retry budget: 10 attempts with River's default backoff, which spans roughly a day. Publish time
 limit, per post: 5 minutes plus one second per MiB of attached files, at most 30 minutes
@@ -177,6 +195,10 @@ type Publisher interface {
   refresh token (X) is spent once however many posts go out together. A `Permanent` refresh
   error fails the target with "reconnect the account"; anything else leaves it pending for a
   retry. Nothing was sent to the platform yet, so neither case risks a duplicate.
+- A publisher that can post a first comment under its own post implements `publisher.Commenter`
+  (`Comment(ctx, credentials, postID, text)`, where `postID` is the `RemoteID` Publish returned)
+  and sets `Rules.MaxCommentLength`. A test holds every platform to doing both or neither.
+  Discord's comment is the next webhook message, sent into the post's thread in a forum.
 - `Rules` gives per-file limits (`MaxMediaBytes`, and `MaxVideoBytes` for video when it
   differs), `VideoAlone` for platforms that take a video only on its own, `MaxLinks` for
   platforms that cap distinct links, and `TextCounting` for platforms that count characters

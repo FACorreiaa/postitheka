@@ -163,6 +163,74 @@ struct ComposerTests {
         #expect(c.options.isEmpty)
     }
 
+    @Test func theFirstCommentGoesOutWithThePost() async {
+        let stub = StubTransport([(201, postJSON)])
+        let c = composer(stub)
+        var rules = discordRules
+        rules.max_comment_length = 10
+        c.rules = [.discord: rules]
+        c.text = "hi"
+        c.firstComment = "#tags"
+        #expect(c.note(for: account) == nil)
+        #expect(await c.publish() != nil)
+        let body = stub.sent[0].body.filter { !$0.isWhitespace }
+        #expect(body.contains("\"first_comment\":\"#tags\""))
+        #expect(c.firstComment.isEmpty, "a published post clears the comment too")
+    }
+
+    @Test func aBlankCommentIsNotSent() async {
+        let stub = StubTransport([(201, postJSON)])
+        let c = composer(stub)
+        c.text = "hi"
+        c.firstComment = "   "
+        #expect(await c.publish() != nil)
+        #expect(!stub.sent[0].body.contains("first_comment"))
+    }
+
+    @Test func aCommentOverItsLimitHoldsPublish() {
+        let c = composer(StubTransport([]))
+        var rules = discordRules
+        rules.max_comment_length = 3
+        c.rules = [.discord: rules]
+        c.text = "hi"
+        c.firstComment = "#launch"
+        #expect(c.problems(for: account) == ["First comment is 4 characters over"])
+        #expect(!c.canPublish)
+    }
+
+    @Test func aPlatformWithoutCommentsSaysThePostGoesAlone() {
+        let c = composer(StubTransport([]))
+        c.text = "hi"
+        #expect(c.note(for: account) == nil, "no comment, nothing to say")
+        c.firstComment = String(repeating: "#", count: 5000)
+        #expect(c.note(for: account) == "Takes no first comment; the post goes alone.")
+        #expect(c.problems(for: account).isEmpty, "a comment it will not take is no reason to hold the post")
+    }
+
+    @Test func aChangedCommentGetsANewKey() async {
+        let stub = StubTransport()
+        stub.failNext = true
+        let c = composer(stub)
+        c.text = "hello"
+        c.firstComment = "#a"
+        #expect(await c.publish() == nil)
+        c.firstComment = "#b"
+        stub.enqueue(201, postJSON)
+        #expect(await c.publish() != nil)
+        #expect(keys(stub)[0] != keys(stub)[1])
+    }
+
+    @Test func aTargetSaysHowItsCommentWent() throws {
+        func target(_ json: String) throws -> Target {
+            try JSONDecoder().decode(Target.self, from: Data(#"{"id":"t1","platform":"discord","status":"published"\#(json)}"#.utf8))
+        }
+        #expect(commentLine(try target("")) == nil)
+        #expect(commentLine(try target(#","comment_status":"posted""#))?.text == "First comment posted")
+        #expect(commentLine(try target(#","comment_status":"pending","comment_error":"discord: 502""#))?.text == "First comment retrying: discord: 502")
+        let failed = commentLine(try target(#","comment_status":"failed","comment_error":"discord: 400""#))
+        #expect(failed?.text == "First comment not sent: discord: 400" && failed?.failed == true)
+    }
+
     @Test func anOptionOverItsLimitHoldsPublish() {
         let c = composer(StubTransport([]))
         var rules = discordRules

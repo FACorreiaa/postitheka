@@ -42,6 +42,8 @@ public struct Handoff: Identifiable, Sendable {
 @Observable
 public final class Composer {
     public var text = ""
+    /// Posted under the post once it is out (POST-002): hashtags and links.
+    public var firstComment = ""
     public private(set) var attachments: [Attachment] = []
     public var selected: Set<String> = []
     public var scheduledAt: Date?
@@ -76,7 +78,7 @@ public final class Composer {
     }
 
     public var draft: Draft {
-        Draft(text: text, media: attachments.map { .init(contentType: $0.contentType, size: $0.size, video: $0.video) })
+        Draft(text: text, media: attachments.map { .init(contentType: $0.contentType, size: $0.size, video: $0.video) }, comment: firstComment)
     }
 
     /// The brand last picked. Read `brand` for the one in effect.
@@ -100,6 +102,15 @@ public final class Composer {
         var draft = draft
         draft.options = options[account.id] ?? [:]
         return PostithekaKit.problems(rules, draft)
+    }
+
+    /// Said under a chosen stamp when the post has a first comment that
+    /// `account`'s platform cannot take: the post goes there alone.
+    public func note(for account: Account) -> String? {
+        guard let rules = rules[account.platform], rules.max_comment_length == 0,
+              !firstComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return "Takes no first comment; the post goes alone."
     }
 
     /// What `account`'s platform lets a post set for that destination alone.
@@ -177,7 +188,8 @@ public final class Composer {
         let key = idempotencyKey(mediaIDs: mediaIDs, accountIDs: accountIDs + assisted.map(\.rawValue), options: options)
         do {
             switch try await api.publish(
-                text: text, mediaIDs: mediaIDs, accountIDs: accountIDs, options: options, assisted: assisted, scheduledAt: scheduledAt,
+                text: text, firstComment: firstComment, mediaIDs: mediaIDs, accountIDs: accountIDs, options: options, assisted: assisted,
+                scheduledAt: scheduledAt,
                 idempotencyKey: key
             ) {
             case .created(let post):
@@ -188,6 +200,7 @@ public final class Composer {
                     .map { Handoff(id: $0.id, platform: $0.platform, text: text, files: files) }
                 handTo = []
                 text = ""
+                firstComment = ""
                 attachments = []
                 self.options = [:]
                 scheduledAt = nil
@@ -231,7 +244,7 @@ public final class Composer {
         // post must give the same signature.
         let set = options.sorted { $0.key < $1.key }
             .flatMap { account, values in values.sorted { $0.key < $1.key }.map { "\(account)\u{1}\($0.key)\u{1}\($0.value)" } }
-        let signature = [text, mediaIDs.joined(separator: ","), accountIDs.joined(separator: ","),
+        let signature = [text, firstComment, mediaIDs.joined(separator: ","), accountIDs.joined(separator: ","),
                          scheduledAt.map { String($0.timeIntervalSince1970) } ?? "", set.joined(separator: "\u{2}")].joined(separator: "\u{0}")
         if let attempt, attempt.signature == signature { return attempt.key }
         let key = UUID().uuidString
