@@ -1,5 +1,5 @@
 # Web stage: the composer, built to static files for the Go binary to embed.
-FROM node:26.12.1-alpine AS web
+FROM node:26.13.1-alpine AS web
 WORKDIR /web
 COPY --link web/package.json web/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
