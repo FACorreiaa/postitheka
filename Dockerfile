@@ -30,7 +30,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /app/server ./cmd/server
 
 # Runtime stage.
-FROM alpine:3.20.2
+FROM alpine:3.24.4
 WORKDIR /app
 
 # Certificates for outbound TLS to Discord, X, Meta and R2.
