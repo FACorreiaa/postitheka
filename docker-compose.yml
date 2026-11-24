@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: postgres:17
+    # Same major as production (platform/infra apps/postitheka/data/postgres.yaml).
+    image: postgres:18
     restart: unless-stopped
     container_name: postitheka-postgres
     # Throwaway credentials, local only. They are committed on purpose (secret
@@ -15,7 +16,11 @@ services:
       # and North's without either one being stopped first.
       - "127.0.0.1:5452:5432"
     volumes:
-      - postitheka-postgres-data:/var/lib/postgresql/data
+      # Postgres 18+ images keep data in a major-versioned subdirectory of
+      # /var/lib/postgresql, so the volume mounts there. The volume name carries
+      # the major: a pg17 volume cannot be opened by pg18, and a fresh name
+      # leaves the old one alone instead of crashlooping on it.
+      - postitheka-postgres-data-18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postitheka -d postitheka"]
       interval: 2s
@@ -42,5 +47,5 @@ services:
       - postitheka-s3-data:/data
 
 volumes:
-  postitheka-postgres-data:
+  postitheka-postgres-data-18:
   postitheka-s3-data:
